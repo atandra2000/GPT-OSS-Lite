@@ -1,0 +1,194 @@
+"""MoE FFN for GPT-OSS-Lite: top-2 of 8 routed experts + 1 shared expert."""
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class SwiGLUExpert(nn.Module):
+    """Single SwiGLU expert: W2(silu(W1(x)) * W3(x))."""
+
+    def __init__(self, dim: int, inter_dim: int):
+        super().__init__()
+        self.w1 = nn.Linear(dim, inter_dim, bias=False)
+        self.w2 = nn.Linear(inter_dim, dim, bias=False)
+        self.w3 = nn.Linear(dim, inter_dim, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+
+
+class MoERouter(nn.Module):
+    """Top-k gating network."""
+
+    def __init__(self, d_model: int, n_experts: int, n_activated: int):
+        super().__init__()
+        self.d_model = d_model
+        self.n_experts = n_experts
+        self.n_activated = n_activated
+        self.gate = nn.Linear(d_model, n_experts, bias=False)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        logits = self.gate(x)
+        all_probs_f32 = F.softmax(logits.float(), dim=-1)
+        topk_weights, topk_indices = all_probs_f32.topk(self.n_activated, dim=-1)
+        topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True).clamp(min=1e-6)
+        return topk_indices, topk_weights.to(x.dtype), logits
+
+
+def aux_load_balancing_loss(
+    all_logits: torch.Tensor,
+    n_experts: int,
+    n_activated: int,
+) -> torch.Tensor:
+    """Standard MoE load-balancing loss (Switch Transformer / GShard style)."""
+    probs_f32 = F.softmax(all_logits.float(), dim=-1)
+    N = probs_f32.size(0)
+    topk_idx = probs_f32.topk(n_activated, dim=-1).indices.flatten()
+    f = torch.bincount(topk_idx, minlength=n_experts).to(torch.float32) / float(N * n_activated)
+    P = probs_f32.mean(dim=0)
+    return (n_experts * (f * P).sum()).to(all_logits.dtype)
+
+
+class MoELayer(nn.Module):
+    """GPT-OSS-Lite MoE layer: top-2 routed + 1 shared expert."""
+
+    def __init__(self, cfg: dict):
+        super().__init__()
+        self.d_model = cfg["d_model"]
+        self.ffn_dim = cfg["ffn_dim"]
+        self.n_routed = cfg["n_routed_experts"]
+        self.n_activated = cfg["n_activated_experts"]
+        self.n_shared = cfg["n_shared_experts"]
+        self.router = MoERouter(self.d_model, self.n_routed, self.n_activated)
+        self.experts = nn.ModuleList([
+            SwiGLUExpert(self.d_model, self.ffn_dim) for _ in range(self.n_routed)
+        ])
+        if self.n_shared > 0:
+            self.shared_experts = nn.ModuleList([
+                SwiGLUExpert(self.d_model, self.ffn_dim) for _ in range(self.n_shared)
+            ])
+        else:
+            self.shared_experts = None
+        self._stacked_cache: tuple | None = None
+        self._stacked_version: int = -1
+
+    def _ensure_stacked(self):
+        """Build cached (W1, W2, W3) stacks of shape ``(E, D_or_F, the_other)``."""
+        version = sum(e.w1.weight._version for e in self.experts)
+        if self._stacked_cache is not None and self._stacked_version == version:
+            return self._stacked_cache
+        W1 = torch.stack([e.w1.weight for e in self.experts], dim=0)
+        W2 = torch.stack([e.w2.weight for e in self.experts], dim=0)
+        W3 = torch.stack([e.w3.weight for e in self.experts], dim=0)
+        self._stacked_cache = (W1, W2, W3)
+        self._stacked_version = version
+        return self._stacked_cache
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward returning ``(output (B,T,D), aux_loss scalar)``."""
+        B, T, D = x.shape
+        flat = x.view(-1, D)
+        N = flat.size(0)
+
+        indices, weights, all_logits = self.router(flat)
+        out = self._dispatch_vectorized(flat, indices, weights)
+        aux_loss = aux_load_balancing_loss(all_logits, self.n_routed, self.n_activated)
+        if self.shared_experts is not None:
+            shared_out = sum(e(flat) for e in self.shared_experts)
+            out = out + shared_out
+
+        return out.view(B, T, D), aux_loss
+
+    def _dispatch_vectorized(
+        self,
+        flat: torch.Tensor,
+        indices: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """Vectorized expert dispatch using stacked-expert bmm."""
+        N = flat.size(0)
+        flat_idx = indices.reshape(-1)
+        flat_w = weights.reshape(-1)
+        token_ids = torch.arange(N, device=flat.device).repeat_interleave(indices.size(1))
+
+        order = torch.argsort(flat_idx, stable=True)
+        sorted_token_ids = token_ids[order]
+        sorted_weights = flat_w[order]
+        sorted_expert_ids = flat_idx[order]
+
+        expert_counts = torch.bincount(flat_idx, minlength=self.n_routed)
+        expert_offsets = torch.cat([
+            torch.zeros(1, dtype=expert_counts.dtype, device=flat.device),
+            expert_counts.cumsum(0)[:-1],
+        ])
+
+        W1_stack, W2_stack, W3_stack = self._ensure_stacked()
+
+        out = torch.zeros_like(flat)
+        counts_cpu = expert_counts.tolist()
+        offsets_cpu = expert_offsets.tolist()
+        for e in range(self.n_routed):
+            cnt = counts_cpu[e]
+            if cnt == 0:
+                continue
+            start = offsets_cpu[e]
+            end = start + cnt
+            chunk_tokens = sorted_token_ids[start:end]
+            chunk_weights = sorted_weights[start:end].unsqueeze(-1)
+            expert_in = flat[chunk_tokens]
+            gate = F.linear(expert_in, W1_stack[e])
+            up = F.linear(expert_in, W3_stack[e])
+            expert_out = F.linear(F.silu(gate) * up, W2_stack[e])
+            out = out.index_add(0, chunk_tokens, expert_out * chunk_weights)
+        return out
+
+    def _dispatch_grouped(
+        self,
+        flat: torch.Tensor,
+        indices: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """Grouped dispatch: loop over experts, gather their tokens, run expert, scatter-add back."""
+        N = flat.size(0)
+        out = torch.zeros_like(flat)
+        flat_idx = indices.reshape(-1)
+        flat_w = weights.reshape(-1)
+        token_ids = torch.arange(N, device=flat.device).repeat_interleave(indices.size(1))
+
+        order = torch.argsort(flat_idx, stable=True)
+        sorted_token_ids = token_ids[order]
+        sorted_weights = flat_w[order]
+        sorted_expert_ids = flat_idx[order]
+
+        expert_counts = torch.bincount(flat_idx, minlength=self.n_routed)
+        expert_offsets = torch.cat([
+            torch.zeros(1, dtype=expert_counts.dtype, device=flat.device),
+            expert_counts.cumsum(0)[:-1],
+        ])
+
+        counts_cpu = expert_counts.tolist()
+        offsets_cpu = expert_offsets.tolist()
+        for e in range(self.n_routed):
+            cnt = counts_cpu[e]
+            if cnt == 0:
+                continue
+            start = offsets_cpu[e]
+            end = start + cnt
+            chunk_tokens = sorted_token_ids[start:end]
+            chunk_weights = sorted_weights[start:end].unsqueeze(-1)
+            expert_in = flat[chunk_tokens]
+            expert_out = self.experts[e](expert_in)
+            out = out.index_add(0, chunk_tokens, expert_out * chunk_weights)
+        return out
+
+    def get_routing_stats(self) -> dict:
+        """Return routing statistics for monitoring (expert utilisation etc.)."""
+        if not hasattr(self, "_last_indices"):
+            return {}
+        indices = self._last_indices
+        E = self.n_routed
+        counts = torch.bincount(indices.flatten(), minlength=E).float()
+        return {
+            "expert_counts": counts,
+            "utilisation": (counts > 0).float().mean(),
+        }

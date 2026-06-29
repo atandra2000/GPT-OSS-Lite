@@ -1,0 +1,77 @@
+# configs/pretrain_a100_502m.yaml
+# GPT-OSS-Lite ~502M param (247M active) Chinchilla-optimal pre-training.
+# Designed for 1x A100 80GB SXM. Target: ~16-20 h at 35-40% MFU.
+#
+# Architecture: d_model=768, 12 layers (alternating SWA/full),
+#               GQA 8Q/4KV heads, head_dim=96, 8 routed experts (top-2),
+#               1 shared expert, YaRN 128K extrapolation from 4K training.
+#
+# Stability features:
+#   - 2000-step linear warmup + cosine decay to 5%
+#   - gradient clipping at 1.0
+#   - NaN guard with checkpoint rollback
+#   - weight tying (embed <-> head)
+#   - learned attention-sink bias per head
+#   - auxiliary load-balancing loss (alpha=0.01)
+
+model:
+  vocab_size:              128000
+  d_model:                 768
+  n_layers:                12
+  n_heads:                 8
+  n_kv_heads:              4
+  head_dim:                96
+  ffn_dim:                 1536
+  n_routed_experts:        8
+  n_activated_experts:     2
+  n_shared_experts:        1
+  window_size:             128
+  attention_pattern:       "alternating"
+  sink_bias:               true
+  rope_theta:              100000
+  yarn_scale_factor:       32
+  yarn_original_max_seq_len: 4096
+  yarn_target_seq_len:     131072
+  yarn_beta_fast:          32
+  yarn_beta_slow:          1
+  yarn_mscale:             true
+  yarn_prune_rope_global:  true
+  max_seq_len:             4096
+  eval_max_seq_len:        131072
+  dtype:                   bf16
+  weight_tying:            true
+  rms_norm_eps:            1.0e-5
+  init_std:                0.02
+  attn_impl:               "sdpa"
+
+training:
+  micro_batch_size:              8
+  gradient_accumulation_steps:   4
+  total_steps:                   61000
+  warmup_steps:                  2000
+  lr:                            4.0e-4
+  min_lr_ratio:                  0.05
+  weight_decay:                  0.1
+  beta1:                         0.9
+  beta2:                         0.95
+  grad_clip:                     1.0
+  grad_checkpoint:               true
+  grad_checkpoint_every:         3
+  compile:                       true
+  compile_mode:                  "max-autotune"
+  save_interval:                 2000
+  log_interval:                  50
+  nan_guard:                     true
+  nan_guard_max_consecutive:     5
+  aux_loss_alpha:                0.01
+  save_dir:                      "checkpoints/pretrain_a100"
+
+data:
+  train_data_path:      "data/pretrain_chinchilla"
+  tokenizer:            "llama3"
+  shard_size_tokens:    50000000
+  max_tokens:           8000000000
+  data_mix:             "gptoss-default"
+  # mix: fineweb-edu 0.5 / fineweb 0.2 / the-stack-python 0.15 / openmath 0.1 / arxiv 0.05
+  # Long-context augmentation: 10% of sequences packed to 4096 with
+  # document-boundary awareness (passkey-style inserts for eval readiness)

@@ -1,0 +1,55 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# PyTorch
+*.pt
+*.pth
+*.bin
+
+# Checkpoints and training outputs
+checkpoints/
+results/
+runs/
+wandb/
+logs/
+*.log
+
+# Data (large, regenerable)
+data/raw/
+data/clean/
+data/tokens/
+data/shards/
+data/state/
+data/manifest.json
+data/test_data/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Environment
+.env
+.env.local
