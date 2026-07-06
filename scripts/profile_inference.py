@@ -14,9 +14,13 @@ from models.transformer import GPTOSS, ModelConfig
 def time_fn(fn, n=5, warmup=2):
     for _ in range(warmup):
         fn()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
     t0 = time.perf_counter()
     for _ in range(n):
         fn()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
     return (time.perf_counter() - t0) / n * 1000
 
 
@@ -42,12 +46,11 @@ def main():
         yarn_beta_slow=1,
         yarn_prune_rope_global=True,
     )
-    model = GPTOSS(cfg)
-    if torch.cuda.is_available():
-        model = model.to(memory_format=torch.channels_last)
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = GPTOSS(cfg).to(dev)
     model.eval()
     B, T = 1, 32
-    input_ids = torch.randint(0, cfg.vocab_size, (B, T))
+    input_ids = torch.randint(0, cfg.vocab_size, (B, T), device=dev)
 
     def gen():
         with torch.no_grad():

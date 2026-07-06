@@ -33,7 +33,6 @@ def main():
 
     if torch.cuda.is_available():
         model = GPTOSS(cfg).to("cuda")
-        model = model.to(memory_format=torch.channels_last)
         if cfg.dtype == "bf16":
             model = model.to(torch.bfloat16)
         torch.cuda.reset_peak_memory_stats()
@@ -46,8 +45,6 @@ def main():
         passed = peak_gb < args.threshold_gb
     else:
         model = GPTOSS(cfg)
-        if torch.cuda.is_available():
-            model = model.to(memory_format=torch.channels_last)
         est_gb = estimate_model_memory_gb(
             model,
             seq_len=args.seq_len,

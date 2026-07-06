@@ -91,6 +91,7 @@ class MoELayer(nn.Module):
         N = flat.size(0)
 
         indices, weights, all_logits = self.router(flat)
+        self._last_indices = indices.detach()
         out = self._dispatch_vectorized(flat, indices, weights)
         aux_loss = aux_load_balancing_loss(all_logits, self.n_routed, self.n_activated)
         if self.shared_experts is not None:
@@ -182,10 +183,16 @@ class MoELayer(nn.Module):
         return out
 
     def get_routing_stats(self) -> dict:
-        """Return routing statistics for monitoring (expert utilisation etc.)."""
-        if not hasattr(self, "_last_indices"):
+        """Return routing statistics for monitoring (expert utilisation etc.).
+
+        Returns ``{}`` if :meth:`forward` has not been called yet (no routing
+        has occurred). After a forward pass, ``expert_counts`` holds per-expert
+        token counts and ``utilisation`` is the fraction of experts that
+        received at least one token — the signal for router collapse.
+        """
+        indices = getattr(self, "_last_indices", None)
+        if indices is None:
             return {}
-        indices = self._last_indices
         E = self.n_routed
         counts = torch.bincount(indices.flatten(), minlength=E).float()
         return {

@@ -9,7 +9,7 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch 2.1+](https://img.shields.io/badge/PyTorch-2.1%2B-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-3DDC84?logo=apache&logoColor=white)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-130%20passing-brightgreen?logo=pytest&logoColor=white)](#-verification)
+[![Tests](https://img.shields.io/badge/Tests-190%20passing-brightgreen?logo=pytest&logoColor=white)](#-verification)
 [![GPU: A100 80GB](https://img.shields.io/badge/GPU-A100%2080GB-76B900?logo=nvidia&logoColor=white)](#-hardware)
 [![Code style: black](https://img.shields.io/badge/Code%20Style-black-000000?logo=python&logoColor=white)](https://github.com/psf/black)
 
@@ -147,7 +147,7 @@ pip install -r requirements.txt
 
 ```bash
 python3 -m pytest tests/ -v
-# ✅ 130 tests across 10 files
+# ✅ 190 tests across 10 files
 # Includes: sliding-window correctness, sink bias, YaRN extrapolation,
 # MoE routing, aux loss, gradient flow, checkpoint round-trip, NaN guard
 ```
@@ -260,7 +260,7 @@ GPT-OSS-Lite/
 │   ├── microbench_a100.py
 │   ├── step_time_a100.py
 │   └── launch_a100.sh
-├── tests/                              # 130 tests, 10 files
+├── tests/                              # 190 tests, 10 files
 │   ├── test_attention.py
 │   ├── test_yarn.py
 │   ├── test_moe.py
@@ -298,7 +298,7 @@ Full bit-exact training reproducibility is supported:
 ```bash
 # Full test suite
 python3 -m pytest tests/ -v
-# ✅ 130 tests across 10 files (CPU-friendly)
+# ✅ 190 tests across 10 files (CPU-friendly)
 
 # Headline benchmark
 python3 scripts/kv_cache_benchmark.py
@@ -319,7 +319,7 @@ PRs welcome for:
 Please:
 
 1. Read [`ATTENTION_SINKS.md`](ATTENTION_SINKS.md) before touching `models/attention.py`.
-2. Run `pytest tests/ -v` — all 130 must pass.
+2. Run `pytest tests/ -v` — all 190 must pass.
 3. Run `scripts/kv_cache_benchmark.py` and confirm the 2.0× reduction still holds.
 4. Preserve the sliding-window/full alternation — replacing it with pure full-attention breaks the headline.
 
@@ -327,7 +327,7 @@ Please:
 
 ## ⚠️ Known caveats
 
-- **Full 8B-token pretraining run not yet started** (no GPU on dev machine). The 130-test suite validates all primitives on CPU + tiny shapes.
+- **Full 8B-token pretraining run not yet started** (no GPU on dev machine). The 190-test suite validates all primitives on CPU + tiny shapes.
 - **`passkey_eval.py` requires a trained checkpoint**; it runs as a stub on untrained models.
 - **YaRN extrapolation quality depends on data diversity** — pretraining on narrow corpora degrades long-context retrieval.
 

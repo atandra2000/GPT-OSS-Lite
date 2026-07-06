@@ -26,13 +26,12 @@ def main():
         full = yaml.safe_load(f)
     cfg = ModelConfig(**full["model"])
 
-    model = GPTOSS(cfg)
-    if torch.cuda.is_available():
-        model = model.to(memory_format=torch.channels_last)
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = GPTOSS(cfg).to(dev)
 
     if args.checkpoint and Path(args.checkpoint).exists():
         from safetensors.torch import load_file
-        weights = load_file(args.checkpoint, device="cpu")
+        weights = load_file(args.checkpoint, device=str(dev))
         model.load_state_dict(weights, strict=False)
         print(f"[passkey_eval] Loaded checkpoint from {args.checkpoint}")
     else:
@@ -42,7 +41,7 @@ def main():
         class StubTokenizer:
             def encode(self, s): return s.split()
             def decode(self, ids): return " ".join(str(i) for i in ids)
-        evaluator = PasskeyEvaluator(model, StubTokenizer())
+        evaluator = PasskeyEvaluator(model, StubTokenizer(), device=str(dev))
         prompt = evaluator.build_prompt("12345", context_length=128, passkey_position="middle", seed=0)
         assert "12345" in prompt, "Passkey not in prompt"
         print(f"[passkey_eval] ✅ Stub prompt construction works (prompt length: {len(prompt)} chars).")
@@ -52,6 +51,7 @@ def main():
     print(f"[passkey_eval] Running passkey retrieval at lengths {args.context_lengths}")
     print(f"[passkey_eval] Trials per length: {args.n_trials}")
     print(f"[passkey_eval] Passkey position: {args.position}")
+    print(f"[passkey_eval] Device: {dev}")
 
     class WhitespaceTokenizer:
         def encode(self, s): return s.split()
@@ -59,7 +59,7 @@ def main():
     tokenizer = WhitespaceTokenizer()
 
     from inference.long_context import PasskeyEvaluator
-    evaluator = PasskeyEvaluator(model, tokenizer)
+    evaluator = PasskeyEvaluator(model, tokenizer, device=str(dev))
     results = evaluator.evaluate(
         context_lengths=args.context_lengths,
         n_trials=args.n_trials,

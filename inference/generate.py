@@ -283,6 +283,11 @@ def generate(
     """Token-by-token generation with mixed KV cache; returns ``(B, T + max_new_tokens)``."""
     model.eval()
     dev = input_ids.device
+    # Enforce the model↔input device contract: keep the model on the input's
+    # device so embed/head/matmuls never cross devices. ``.to(dev)`` is a no-op
+    # (no copy) when the model is already on ``dev``, so this is cheap to call
+    # per-generation inside an eval loop (e.g. passkey retrieval).
+    model.to(dev)
     B, T_prompt = input_ids.shape
     cache = MixedKVCache() if use_cache else None
     sink_bias_cache: dict = {}

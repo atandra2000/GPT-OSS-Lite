@@ -199,7 +199,7 @@ existing shards — we only continue from the next shard index.
 ### Full pipeline (one command)
 
 ```bash
-python data/prepare_data.py --stage pretrain
+python3 data/prepare_data.py --stage pretrain
 ```
 
 This downloads → cleans → tokenises → packs. Expect 6–12 hours on
@@ -208,15 +208,15 @@ a single A100 for the full 8 B tokens.
 ### Just one source
 
 ```bash
-python data/scripts/download_raw.py --source fineweb-edu
-python data/scripts/tokenize.py --source fineweb-edu
-python data/scripts/pack_shards.py
+python3 data/scripts/download_raw.py --source fineweb-edu
+python3 data/scripts/tokenize.py --source fineweb-edu
+python3 data/scripts/pack_shards.py
 ```
 
 ### Validate an existing pipeline
 
 ```bash
-python ../tools/data_pipeline_checker.py \
+python3 ../tools/data_pipeline_checker.py \
     --project gpt-oss-lite \
     --data-dir LLM/GPT-OSS-Lite/data
 ```
@@ -237,7 +237,7 @@ OK:         True
 
 ```bash
 rm -rf data/state data/raw data/clean data/tokens data/shards data/manifest.json
-python data/prepare_data.py --stage pretrain
+python3 data/prepare_data.py --stage pretrain
 ```
 
 ---

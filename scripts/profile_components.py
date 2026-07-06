@@ -23,15 +23,19 @@ def time_fn(fn, n=20, warmup=3):
     """Time fn() in ms; average over n runs after warmup."""
     for _ in range(warmup):
         fn()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
     t0 = time.perf_counter()
     for _ in range(n):
         fn()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
     elapsed = (time.perf_counter() - t0) / n * 1000
     return elapsed
 
 
 def main():
-    device = torch.device("cpu")
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     cfg = ModelConfig(
         vocab_size=128,
@@ -54,13 +58,11 @@ def main():
         yarn_beta_slow=1,
         yarn_prune_rope_global=True,
     )
-    model = GPTOSS(cfg)
-    if torch.cuda.is_available():
-        model = model.to(memory_format=torch.channels_last)
+    model = GPTOSS(cfg).to(dev)
     print(f"Total params: {model.num_parameters()/1e6:.2f}M")
 
     B, T = 2, cfg.max_seq_len
-    idx = torch.randint(0, cfg.vocab_size, (B, T))
+    idx = torch.randint(0, cfg.vocab_size, (B, T), device=dev)
 
     def model_forward():
         with torch.no_grad():
@@ -68,24 +70,24 @@ def main():
     t = time_fn(model_forward)
     print(f"[model.forward]      {t:.2f} ms/step")
 
-    attn_win = GPTOSSAttention(cfg.as_dict(), layer_idx=0)
-    x = torch.randn(B, T, cfg.d_model)
+    attn_win = GPTOSSAttention(cfg.as_dict(), layer_idx=0).to(dev)
+    x = torch.randn(B, T, cfg.d_model, device=dev)
     def attn_win_fwd():
         with torch.no_grad():
             attn_win(x)
     t = time_fn(attn_win_fwd)
     print(f"[attn.windowed]      {t:.2f} ms/step")
 
-    attn_full = GPTOSSAttention(cfg.as_dict(), layer_idx=1)
+    attn_full = GPTOSSAttention(cfg.as_dict(), layer_idx=1).to(dev)
     def attn_full_fwd():
         with torch.no_grad():
             attn_full(x)
     t = time_fn(attn_full_fwd)
     print(f"[attn.global]        {t:.2f} ms/step")
 
-    q = torch.randn(B, cfg.n_heads, T, cfg.head_dim)
-    k = torch.randn(B, cfg.n_heads, T, cfg.head_dim)
-    v = torch.randn(B, cfg.n_heads, T, cfg.head_dim)
+    q = torch.randn(B, cfg.n_heads, T, cfg.head_dim, device=dev)
+    k = torch.randn(B, cfg.n_heads, T, cfg.head_dim, device=dev)
+    v = torch.randn(B, cfg.n_heads, T, cfg.head_dim, device=dev)
     def manual_attn():
         manual_causal_attention(q, k, v)
     t = time_fn(manual_attn)
@@ -101,7 +103,7 @@ def main():
     t = time_fn(swa_attn)
     print(f"[swa_attn]           {t:.2f} ms/step")
 
-    moe = MoELayer(cfg.as_dict())
+    moe = MoELayer(cfg.as_dict()).to(dev)
     def moe_fwd():
         with torch.no_grad():
             moe(x)
@@ -117,15 +119,15 @@ def main():
     t = time_fn(moe_dispatch)
     print(f"[moe.dispatch]       {t:.2f} ms/step")
 
-    freqs = torch.randn(T, cfg.head_dim // 2)
-    cos = torch.randn(T, cfg.head_dim // 2)
-    sin = torch.randn(T, cfg.head_dim // 2)
+    freqs = torch.randn(T, cfg.head_dim // 2, device=dev)
+    cos = torch.randn(T, cfg.head_dim // 2, device=dev)
+    sin = torch.randn(T, cfg.head_dim // 2, device=dev)
     def rope_apply():
         apply_rope(q, cos, sin)
     t = time_fn(rope_apply)
     print(f"[apply_rope]         {t:.2f} ms/step")
 
-    k_kv = torch.randn(B, cfg.n_kv_heads, T, cfg.head_dim)
+    k_kv = torch.randn(B, cfg.n_kv_heads, T, cfg.head_dim, device=dev)
     def repeat():
         repeat_kv(k_kv, cfg.n_heads // cfg.n_kv_heads)
     t = time_fn(repeat)

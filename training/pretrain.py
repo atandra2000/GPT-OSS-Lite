@@ -250,8 +250,6 @@ def main(
 
     dev = device()
     model = GPTOSS(model_cfg).to(dev)
-    if dev.type == "cuda":
-        model = model.to(memory_format=torch.channels_last)
     n_params = model.num_parameters()
     n_active = model.num_active_parameters()
     print(f"[model] total params: {n_params / 1e6:.2f}M, active: {n_active / 1e6:.2f}M")

@@ -34,8 +34,6 @@ def main():
 
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = GPTOSS(cfg).to(dev)
-    if dev.type == "cuda":
-        model = model.to(memory_format=torch.channels_last)
     if cfg.dtype == "bf16" and dev.type == "cuda":
         model = model.to(torch.bfloat16)
     if args.compile and dev.type == "cuda":

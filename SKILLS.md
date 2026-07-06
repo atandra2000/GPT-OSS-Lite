@@ -13,11 +13,11 @@ After pulling new code.
 
 **Steps:**
 
-1. **Run the full CPU-friendly test suite (130 tests, ~40s).**
+1. **Run the full CPU-friendly test suite (190 tests, ~40s).**
    ```bash
    python3 -m pytest tests/ -v
    ```
-   Expected: 130 passed (127 original + 3 ring-buffer ordering tests).
+   Expected: 190 passed.
 
 2. **Verify the headline metric is still measured correctly.**
    ```bash

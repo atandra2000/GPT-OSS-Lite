@@ -15,9 +15,13 @@ from training.pretrain import chunked_cross_entropy
 def time_fn(fn, n=20, warmup=3):
     for _ in range(warmup):
         fn()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
     t0 = time.perf_counter()
     for _ in range(n):
         fn()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
     return (time.perf_counter() - t0) / n * 1000
 
 
@@ -43,13 +47,12 @@ def main():
         yarn_beta_slow=1,
         yarn_prune_rope_global=True,
     )
-    model = GPTOSS(cfg)
-    if torch.cuda.is_available():
-        model = model.to(memory_format=torch.channels_last)
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = GPTOSS(cfg).to(dev)
     optim = torch.optim.AdamW(model.parameters(), lr=1e-4)
     B, T = 2, cfg.max_seq_len
-    idx = torch.randint(0, cfg.vocab_size, (B, T))
-    target = torch.randint(0, cfg.vocab_size, (B, T))
+    idx = torch.randint(0, cfg.vocab_size, (B, T), device=dev)
+    target = torch.randint(0, cfg.vocab_size, (B, T), device=dev)
 
     def step():
         optim.zero_grad(set_to_none=True)
@@ -83,13 +86,11 @@ def main():
         yarn_beta_slow=1,
         yarn_prune_rope_global=True,
     )
-    model_big = GPTOSS(cfg_big)
-    if torch.cuda.is_available():
-        model_big = model_big.to(memory_format=torch.channels_last)
+    model_big = GPTOSS(cfg_big).to(dev)
     optim_big = torch.optim.AdamW(model_big.parameters(), lr=1e-4)
     B, T = 2, cfg_big.max_seq_len
-    idx = torch.randint(0, cfg_big.vocab_size, (B, T))
-    target = torch.randint(0, cfg_big.vocab_size, (B, T))
+    idx = torch.randint(0, cfg_big.vocab_size, (B, T), device=dev)
+    target = torch.randint(0, cfg_big.vocab_size, (B, T), device=dev)
 
     def step_big():
         optim_big.zero_grad(set_to_none=True)
