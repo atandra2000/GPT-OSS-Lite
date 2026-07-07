@@ -84,6 +84,7 @@ class CheckpointManager:
             self.delete_checkpoint(step)
 
     def _atomic_save_safetensors(self, state: dict, path: Path) -> None:
+        # dedup shared-storage tensors so safetensors doesn't error on duplicate data_ptr
         seen_ptrs: set = set()
         deduped: dict = {}
         for k, v in state.items():
@@ -93,37 +94,21 @@ class CheckpointManager:
             else:
                 seen_ptrs.add(ptr)
                 deduped[k] = v.contiguous()
-        fd, tmp = tempfile.mkstemp(dir=self.save_dir, suffix=".safetensors.tmp")
-        os.close(fd)
-        try:
-            save_file(deduped, tmp)
-            os.replace(tmp, path)
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-            raise
+        self._atomic_write(path, lambda tmp: save_file(deduped, tmp), suffix=".safetensors.tmp")
 
     def _atomic_save_torch(self, obj, path: Path) -> None:
-        fd, tmp = tempfile.mkstemp(dir=self.save_dir, suffix=".pt.tmp")
-        os.close(fd)
-        try:
-            torch.save(obj, tmp)
-            os.replace(tmp, path)
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-            raise
+        self._atomic_write(path, lambda tmp: torch.save(obj, tmp), suffix=".pt.tmp")
 
     def _atomic_save_json(self, obj: dict, path: Path) -> None:
-        fd, tmp = tempfile.mkstemp(dir=self.save_dir, suffix=".json.tmp")
+        # ponytail: meta is plain JSON types (int/float/bool/str) — no custom default needed
+        self._atomic_write(path, lambda tmp: json.dump(obj, open(tmp, "w"), indent=2), suffix=".json.tmp")
+
+    def _atomic_write(self, path: Path, writer, *, suffix: str) -> None:
+        """Atomic write: tempfile in save_dir → os.replace; unlink tmp on any failure."""
+        fd, tmp = tempfile.mkstemp(dir=self.save_dir, suffix=suffix)
         os.close(fd)
         try:
-            with open(tmp, "w") as f:
-                json.dump(obj, f, indent=2, default=_json_default)
+            writer(tmp)
             os.replace(tmp, path)
         except Exception:
             try:
@@ -144,11 +129,3 @@ class CheckpointManager:
     def _checkpoint_complete(self, step: int) -> bool:
         return all((self.save_dir / n).exists() for n in [
             f"model_step_{step}.safetensors", f"optim_step_{step}.pt", f"meta_step_{step}.json"])
-
-
-def _json_default(obj):
-    if isinstance(obj, torch.Tensor):
-        return obj.tolist()
-    if hasattr(obj, "__dict__"):
-        return obj.__dict__
-    raise TypeError(f"Object of type {type(obj)} is not JSON serialisable")

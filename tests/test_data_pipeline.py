@@ -32,10 +32,8 @@ from shared_data.common import (
     load_state,
     read_json,
     save_state,
-    sha256_bytes,
     sha256_text,
 )
-from shared_data.dedup import BloomFilter, Deduper
 from shared_data.manifest import (
     MANIFEST_VERSION,
     Manifest,
@@ -73,7 +71,7 @@ def workspace(tmp_path, monkeypatch):
 
     We call ``set_data_root(tmp_path)`` to update the path globals in
     ``shared_data.common``, then reload the submodules that capture those
-    constants at import time (``shared_data.dedup`` captures
+    constants at import time (``shared_data.quality_filter`` captures
     ``STATE_ROOT``, etc.) so they re-evaluate against the new root. Without
     this, they would keep writing to the real ``data/state/`` dir.
     """
@@ -81,12 +79,10 @@ def workspace(tmp_path, monkeypatch):
     set_data_root(tmp_path)
     import importlib
     import shared_data.quality_filter
-    import shared_data.dedup
     import shared_data.manifest
     import shared_data.shard_writer
     import shared_data.scripts.pack_shards
     importlib.reload(shared_data.quality_filter)
-    importlib.reload(shared_data.dedup)
     importlib.reload(shared_data.manifest)
     importlib.reload(shared_data.shard_writer)
     importlib.reload(shared_data.scripts.pack_shards)
@@ -133,7 +129,7 @@ class TestCommonIO:
         assert abs(loaded["f"] - 3.14) < 1e-5
 
     def test_state_persistence(self, workspace):
-        clear = common.clear_state
+        clear = lambda stage: (common.STATE_ROOT / f"{stage}.json").unlink(missing_ok=True)
         clear("test_stage")
         assert load_state("test_stage") == {}
         save_state("test_stage", {"k": "v", "n": 42})
@@ -144,10 +140,6 @@ class TestCommonIO:
 
 
 class TestCommonHashing:
-    def test_sha256_bytes_deterministic(self):
-        assert sha256_bytes(b"abc") == sha256_bytes(b"abc")
-        assert sha256_bytes(b"abc") != sha256_bytes(b"abd")
-
     def test_sha256_text_strips_whitespace_evasion(self):
         """Trivial whitespace differences should not evade dedup."""
         a = sha256_text("hello   world")
@@ -257,86 +249,7 @@ class TestQualityFilter:
         assert "length" in s and "duplicate" in s
 
 
-# 3. data/dedup.py — BloomFilter + Deduper
-
-class TestBloomFilter:
-    def test_add_new(self):
-        bf = BloomFilter(capacity=100, error_rate=0.01)
-        assert bf.add("a" * 64) is False   # new
-        assert bf.add("b" * 64) is False   # new
-        assert bf.add("a" * 64) is True    # probably duplicate
-
-    def test_contains(self):
-        bf = BloomFilter(capacity=100, error_rate=0.01)
-        bf.add("a" * 64)
-        assert ("a" * 64) in bf
-        assert ("b" * 64) not in bf
-
-    def test_save_load_roundtrip(self, workspace):
-        bf = BloomFilter(capacity=100, error_rate=0.01)
-        for i in range(50):
-            bf.add(sha256_text(f"doc-{i}"))
-        path = Path(workspace) / "bf.pkl"
-        bf.save(path)
-        bf2 = BloomFilter.load(path)
-        for i in range(50):
-            assert sha256_text(f"doc-{i}") in bf2
-
-    def test_capacity_error_rate_validation(self):
-        with pytest.raises(ValueError):
-            BloomFilter(capacity=0, error_rate=0.01)
-        with pytest.raises(ValueError):
-            BloomFilter(capacity=100, error_rate=1.5)
-
-
-class TestDeduper:
-    def test_two_pass_dedup_drops_duplicates(self, workspace):
-        # 5 unique docs + 3 duplicates of one of them
-        docs = [
-            ("a", "the quick brown fox"),
-            ("b", "jumps over the lazy dog"),
-            ("c", "lorem ipsum dolor sit amet"),
-            ("d", "consectetur adipiscing elit"),
-            ("e", "sed do eiusmod tempor"),
-            ("a-dup", "the quick brown fox"),       # dup of a
-            ("a-dup2", "the quick brown fox  "),    # dup (whitespace normalised)
-            ("c-dup", "lorem ipsum dolor sit amet"),  # dup of c
-        ]
-
-        dedup = Deduper(
-            source_id="test_src",
-            n_buckets=4,
-            bloom_capacity_per_bucket=100,
-            bloom_error_rate=0.01,
-        )
-        s1 = dedup.collect((d for d in docs))
-        assert s1["n_processed"] == 8
-        assert s1["n_unique"] + s1["n_duplicate"] == 8
-
-        out_path = Path(workspace) / "unique.jsonl"
-        s2 = dedup.write_unique((d for d in docs), out_path)
-        assert s2["write_n_kept"] == 5
-        assert s2["write_n_dropped"] == 3
-
-        kept = [json.loads(line) for line in out_path.read_text().splitlines()]
-        assert len(kept) == 5
-        texts = {r["text"] for r in kept}
-        assert "the quick brown fox" in texts
-        assert "lorem ipsum dolor sit amet" in texts
-
-    def test_dedup_resume_is_idempotent(self, workspace):
-        docs = [("d" + str(i), f"unique doc number {i}") for i in range(20)]
-
-        dedup = Deduper(source_id="resume_src", n_buckets=2)
-        s1 = dedup.collect(iter(docs))
-        assert s1["n_processed"] == 20
-
-        out_path = Path(workspace) / "unique.jsonl"
-        s2 = dedup.write_unique(iter(docs), out_path)
-        assert s2["write_n_kept"] == 20
-
-
-# 4. data/shard_writer.py — atomic write, EOS, dtype
+# 3. data/shard_writer.py — atomic write, EOS, dtype
 
 class TestSelectTokenDtype:
     def test_uint8_for_small_vocab(self):
@@ -742,25 +655,26 @@ class TestEndToEndMiniPipeline:
                 text = f"This is synthetic document number {i} " * 3
                 f.write(json.dumps({"id": f"dup-{i}", "text": text}) + "\n")
 
-        # 2) Apply dedup inline (mirror the script's logic) and write
+        # 2) Apply dedup inline (mirror clean.py's set-based logic) and write
         # a smaller clean JSONL
-        from shared_data.dedup import Deduper
-        dedup = Deduper(source_id="synthetic", n_buckets=4,
-                        bloom_capacity_per_bucket=100, bloom_error_rate=0.01)
-        records = [
-            (rec["id"], rec["text"])
-            for rec in (json.loads(l) for l in clean_path.read_text().splitlines())
-        ]
-        dedup.collect(iter(records))
-
+        from shared_data.common import sha256_text
         out_clean = Path(workspace) / "clean" / "synthetic_uniq.jsonl"
-        records2 = [
-            (rec["id"], rec["text"])
-            for rec in (json.loads(l) for l in clean_path.read_text().splitlines())
-        ]
-        s = dedup.write_unique(iter(records2), out_clean)
-        assert s["write_n_kept"] == 50
-        assert s["write_n_dropped"] == 10
+        seen = set()
+        n_kept = 0
+        n_dropped = 0
+        with open(out_clean, "w") as out_f:
+            for line in clean_path.read_text().splitlines():
+                rec = json.loads(line)
+                sha = sha256_text(rec["text"])
+                if sha in seen:
+                    n_dropped += 1
+                else:
+                    seen.add(sha)
+                    out_f.write(json.dumps({"id": rec["id"], "text": rec["text"]},
+                                           ensure_ascii=False) + "\n")
+                    n_kept += 1
+        assert n_kept == 50
+        assert n_dropped == 10
 
         # 3) Tokenise via TokenStream with a toy encoder
         tokens_dir = Path(workspace) / "tokens" / "synthetic"

@@ -252,8 +252,3 @@ class GPTOSSAttention(nn.Module):
         mode = "SWA" if self.is_windowed else "Full"
         n_pruned = f", pruned={self.n_pruned_dims}" if self.n_pruned_dims > 0 else ""
         return f"layer={self.layer_idx} ({mode}{n_pruned}), H={self.n_heads}/{self.n_kv_heads}, D={self.head_dim}, window={self.window_size}"
-
-
-def clear_attention_caches() -> None:
-    """Clear all module-level attention caches."""
-    _SLIDING_WINDOW_MASK_CACHE.clear()
