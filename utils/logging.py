@@ -44,25 +44,6 @@ class TrainingLogger:
         self._loss_window = []
         self._step_start = time.time()
 
-    def save_log(self, filename: str, data: Dict) -> None:
-        with open(filename, "a") as f:
-            f.write(json.dumps(data) + "\n")
-
     def finish(self) -> None:
         if self._wandb is not None:
             self._wandb.finish()
-
-
-_logger: Optional[TrainingLogger] = None
-
-
-def init_logging(log_interval: int = 10, seq_len: int = 1024) -> None:
-    global _logger
-    _logger = TrainingLogger(log_interval=log_interval, seq_len=seq_len)
-
-
-def get_logger() -> TrainingLogger:
-    global _logger
-    if _logger is None:
-        _logger = TrainingLogger()
-    return _logger

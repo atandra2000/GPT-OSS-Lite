@@ -58,11 +58,6 @@ def _get_sliding_window_mask(T: int, window: int, device: torch.device, dtype: t
     return out
 
 
-def build_sliding_window_mask(T: int, window: int, device: torch.device) -> torch.Tensor:
-    """Build a sliding-window additive attention mask of shape ``(T, T)`` (cached)."""
-    return _get_sliding_window_mask(T, window, device, torch.float32)
-
-
 def _build_sink_sliding_window_mask(
     T_q: int,
     T_k: int,

@@ -115,7 +115,7 @@ def main():
     indices, weights, _ = moe.router(flat)
     def moe_dispatch():
         with torch.no_grad():
-            moe._dispatch_grouped(flat, indices, weights)
+            moe._dispatch_vectorized(flat, indices, weights)
     t = time_fn(moe_dispatch)
     print(f"[moe.dispatch]       {t:.2f} ms/step")
 

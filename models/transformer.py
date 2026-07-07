@@ -258,9 +258,6 @@ class GPTOSS(nn.Module):
         self.gradient_checkpointing = True
         self.grad_ckpt_every = every
 
-    def disable_gradient_checkpointing(self) -> None:
-        self.gradient_checkpointing = False
-
     def extra_repr(self) -> str:
         return (
             f"d_model={self.cfg.d_model}, n_layers={self.cfg.n_layers}, "

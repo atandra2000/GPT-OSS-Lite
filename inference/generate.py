@@ -195,17 +195,6 @@ def _attention_for_layer(
     return full_causal_attention(q, k, v, sink_bias=sink_bias)
 
 
-def _attn_forward_with_cache(
-    model: GPTOSS,
-    x: torch.Tensor,
-    positions: torch.Tensor,
-    cache: Optional[MixedKVCache],
-    full_history_for_nocache: Optional[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = None,
-):
-    """Use _attn_forward_layer instead."""
-    raise NotImplementedError("Use _attn_forward_layer instead.")
-
-
 def _attn_forward_layer(
     block,
     layer_idx: int,

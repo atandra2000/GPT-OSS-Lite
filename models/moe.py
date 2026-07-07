@@ -91,7 +91,6 @@ class MoELayer(nn.Module):
         N = flat.size(0)
 
         indices, weights, all_logits = self.router(flat)
-        self._last_indices = indices.detach()
         out = self._dispatch_vectorized(flat, indices, weights)
         aux_loss = aux_load_balancing_loss(all_logits, self.n_routed, self.n_activated)
         if self.shared_experts is not None:
@@ -142,60 +141,3 @@ class MoELayer(nn.Module):
             expert_out = F.linear(F.silu(gate) * up, W2_stack[e])
             out = out.index_add(0, chunk_tokens, expert_out * chunk_weights)
         return out
-
-    def _dispatch_grouped(
-        self,
-        flat: torch.Tensor,
-        indices: torch.Tensor,
-        weights: torch.Tensor,
-    ) -> torch.Tensor:
-        """Grouped dispatch: loop over experts, gather their tokens, run expert, scatter-add back."""
-        N = flat.size(0)
-        out = torch.zeros_like(flat)
-        flat_idx = indices.reshape(-1)
-        flat_w = weights.reshape(-1)
-        token_ids = torch.arange(N, device=flat.device).repeat_interleave(indices.size(1))
-
-        order = torch.argsort(flat_idx, stable=True)
-        sorted_token_ids = token_ids[order]
-        sorted_weights = flat_w[order]
-        sorted_expert_ids = flat_idx[order]
-
-        expert_counts = torch.bincount(flat_idx, minlength=self.n_routed)
-        expert_offsets = torch.cat([
-            torch.zeros(1, dtype=expert_counts.dtype, device=flat.device),
-            expert_counts.cumsum(0)[:-1],
-        ])
-
-        counts_cpu = expert_counts.tolist()
-        offsets_cpu = expert_offsets.tolist()
-        for e in range(self.n_routed):
-            cnt = counts_cpu[e]
-            if cnt == 0:
-                continue
-            start = offsets_cpu[e]
-            end = start + cnt
-            chunk_tokens = sorted_token_ids[start:end]
-            chunk_weights = sorted_weights[start:end].unsqueeze(-1)
-            expert_in = flat[chunk_tokens]
-            expert_out = self.experts[e](expert_in)
-            out = out.index_add(0, chunk_tokens, expert_out * chunk_weights)
-        return out
-
-    def get_routing_stats(self) -> dict:
-        """Return routing statistics for monitoring (expert utilisation etc.).
-
-        Returns ``{}`` if :meth:`forward` has not been called yet (no routing
-        has occurred). After a forward pass, ``expert_counts`` holds per-expert
-        token counts and ``utilisation`` is the fraction of experts that
-        received at least one token — the signal for router collapse.
-        """
-        indices = getattr(self, "_last_indices", None)
-        if indices is None:
-            return {}
-        E = self.n_routed
-        counts = torch.bincount(indices.flatten(), minlength=E).float()
-        return {
-            "expert_counts": counts,
-            "utilisation": (counts > 0).float().mean(),
-        }

@@ -63,17 +63,6 @@ def main():
     t = time_fn(dispatch)
     print(f"_dispatch_vectorized {t:.2f} ms")
 
-    def dispatch_old():
-        with torch.no_grad():
-            moe._dispatch_grouped(flat, indices, weights)
-    t = time_fn(dispatch_old)
-    print(f"_dispatch_grouped    {t:.2f} ms")
-
-    # Test correctness
-    out1 = moe._dispatch_vectorized(flat, indices, weights)
-    out2 = moe._dispatch_grouped(flat, indices, weights)
-    print(f"max diff: {(out1 - out2).abs().max().item():.2e}")
-
 
 if __name__ == "__main__":
     main()
