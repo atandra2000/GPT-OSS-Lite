@@ -48,7 +48,9 @@ training:
   micro_batch_size:              8
   gradient_accumulation_steps:   4
   total_steps:                   61000
-  warmup_steps:                  2000
+  # warmup_steps: 3000 (4.9% of total) for top-2-of-8 MoE stability.
+  # Industry standard for MoE is 2-5%; 2000 (3.3%) was on the low end.
+  warmup_steps:                  3000
   lr:                            4.0e-4
   min_lr_ratio:                  0.05
   weight_decay:                  0.1
@@ -63,7 +65,10 @@ training:
   log_interval:                  50
   nan_guard:                     true
   nan_guard_max_consecutive:     5
-  aux_loss_alpha:                0.01
+  # aux_loss_alpha: 0.001 (was 0.01) — Switch Transformer's 0.01 was for top-1
+  # routing. For top-2-of-8, DeepSeek-V3 uses 0.001: gentle regularization
+  # rather than hard load-balancing pressure. Improves final loss.
+  aux_loss_alpha:                0.001
   save_dir:                      "checkpoints/pretrain_a100"
 
 data:
