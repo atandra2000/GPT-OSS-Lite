@@ -8,7 +8,7 @@
 > **Stack:** PyTorch 2.x, BF16, `torch.compile(max-autotune)`, FA2 via SDPA
 > **Architecture detail:** see `README.md §7`; cross-architecture explainer
 > at `.agents/skills/llm-architecture/SKILL.md §2, §5`; **authoritative
-> sink-bias deep-dive at `ATTENTION_SINKS.md`.**
+> sink-bias deep-dive at `documentation/ATTENTION_SINKS.md`.**
 
 ## 1. Subagent: `gptoss-long-context-engineer`
 
@@ -42,7 +42,7 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
 1. **Always** preserve the sliding-window / full-attention alternation —
    replacing it with pure full-attention breaks the headline metric
    (≥ 1.8× KV-cache reduction at 128K).
-2. **Always** read `ATTENTION_SINKS.md` before answering sink-bias questions.
+2. **Always** read `documentation/ATTENTION_SINKS.md` before answering sink-bias questions.
 3. **Always** verify `test_sliding_window_matches_full` passes after any
    change to `models/attention.py` (`pytest tests/test_attention.py -v`).
 4. **Always** use the standard aux load-balancing loss (not the aux-loss-free

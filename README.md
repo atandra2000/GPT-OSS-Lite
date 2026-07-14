@@ -270,7 +270,7 @@ GPT-OSS-Lite/
 │   ├── test_inference.py
 │   └── test_utils.py
 ├── documentation/                      # full design + implementation docs
-├── ATTENTION_SINKS.md                  # ★ 600-line sink-bias deep-dive
+│   └── ATTENTION_SINKS.md              # ★ 600-line sink-bias deep-dive
 ├── AGENTS.md
 ├── SKILLS.md
 ├── LICENSE                             # Apache 2.0
@@ -318,7 +318,7 @@ PRs welcome for:
 
 Please:
 
-1. Read [`ATTENTION_SINKS.md`](ATTENTION_SINKS.md) before touching `models/attention.py`.
+1. Read [`documentation/ATTENTION_SINKS.md`](documentation/ATTENTION_SINKS.md) before touching `models/attention.py`.
 2. Run `pytest tests/ -v` — all 190 must pass.
 3. Run `scripts/kv_cache_benchmark.py` and confirm the 2.0× reduction still holds.
 4. Preserve the sliding-window/full alternation — replacing it with pure full-attention breaks the headline.
