@@ -33,7 +33,7 @@ It is the **first long-context MoE** and the **first attention-sink** project in
 |---|---|---|---|---|
 | [DeepSeek-v3-Lite](https://github.com/atandra2000/DeepSeek-v3-Lite) | MLA (latent KV) | YaRN (decode only) | ✅ DeepSeekMoE | ❌ |
 | [LLaMA-3-Lite](https://github.com/atandra2000/LLaMA-3-Lite) | GQA | θ=500K (train@2K) | ❌ | ❌ |
-| [FusionLLM](https://github.com/atandra2000/FusionLLM) | MLA + GDN | — | ✅ DeepSeekMoE | ❌ |
+| [HyMo](https://github.com/atandra2000/HyMo) | GDN + MLA | — | ✅ Asymmetric MoE | ❌ |
 | [Mamba-3-Lite](https://github.com/atandra2000/Mamba-3-Lite) | — (complex SSM) | constant-state | ❌ | ❌ |
 | **GPT-OSS-Lite** | **GQA + sliding(128)/full alt** | **YaRN 128K (train+decode)** | **✅ top-2 of 8** | **✅ learned** |
 

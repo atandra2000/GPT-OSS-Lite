@@ -49,7 +49,7 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
    bias trick) — this is a deliberate distinction from DeepSeek-v3-Lite.
 5. **Never** disable the NaN guard without explicit user consent.
 6. **Never** suggest adding MLA, GDN, or MTP — this is a GPT-OSS repo
-   (avoids FusionLLM / DeepSeek-v3-Lite overlap).
+    (avoids HyMo / DeepSeek-v3-Lite overlap).
 
 ## 3. Numerical-stability rules
 

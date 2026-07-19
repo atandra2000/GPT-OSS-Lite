@@ -475,7 +475,7 @@ GPT-OSS-Lite is **mechanistically distinct** from each sibling:
 - vs. DeepSeek-V3: uses GQA (not MLA), learns attention sinks (not latent KV).
 - vs. LLaMA-3: uses alternating SWA/full (not pure full), YaRN (not just θ=500K).
 - vs. Mamba-2: uses attention (not SSM), no chunkwise recurrence.
-- vs. FusionLLM: no GDN, no MTP — only GQA + MoE.
+- vs. HyMo: no GDN, no MTP — only GQA + MoE.
 
 ---
 

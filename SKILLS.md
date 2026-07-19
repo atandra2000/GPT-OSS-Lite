@@ -238,7 +238,7 @@ experiments, ablations, debugging).
 **Steps:**
 
 1. **Identify which existing component it overlaps with:**
-   - Attention: avoid MLA (DeepSeek), GDN (FusionLLM), SSM (Mamba-2).
+   - Attention: avoid MLA (DeepSeek), GDN (HyMo), SSM (Mamba-2).
    - MoE: avoid aux-loss-free bias (DeepSeek), top-4-of-20 routing (DeepSeek).
    - Long context: avoid θ=500K (LLaMA-3), constant-state SSM (Mamba-2).
 
