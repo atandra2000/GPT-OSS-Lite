@@ -69,21 +69,6 @@ class MoELayer(nn.Module):
             ])
         else:
             self.shared_experts = None
-        self._stacked_cache: tuple | None = None
-        self._stacked_version: int = -1
-
-    def _ensure_stacked(self):
-        """Build cached (W1, W2, W3) stacks of shape ``(E, D_or_F, the_other)``."""
-        version = sum(e.w1.weight._version for e in self.experts)
-        if self._stacked_cache is not None and self._stacked_version == version:
-            return self._stacked_cache
-        W1 = torch.stack([e.w1.weight for e in self.experts], dim=0)
-        W2 = torch.stack([e.w2.weight for e in self.experts], dim=0)
-        W3 = torch.stack([e.w3.weight for e in self.experts], dim=0)
-        self._stacked_cache = (W1, W2, W3)
-        self._stacked_version = version
-        return self._stacked_cache
-
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward returning ``(output (B,T,D), aux_loss scalar)``."""
         B, T, D = x.shape
@@ -122,8 +107,6 @@ class MoELayer(nn.Module):
             expert_counts.cumsum(0)[:-1],
         ])
 
-        W1_stack, W2_stack, W3_stack = self._ensure_stacked()
-
         out = torch.zeros_like(flat)
         counts_cpu = expert_counts.tolist()
         offsets_cpu = expert_offsets.tolist()
@@ -136,8 +119,6 @@ class MoELayer(nn.Module):
             chunk_tokens = sorted_token_ids[start:end]
             chunk_weights = sorted_weights[start:end].unsqueeze(-1)
             expert_in = flat[chunk_tokens]
-            gate = F.linear(expert_in, W1_stack[e])
-            up = F.linear(expert_in, W3_stack[e])
-            expert_out = F.linear(F.silu(gate) * up, W2_stack[e])
+            expert_out = self.experts[e](expert_in)
             out = out.index_add(0, chunk_tokens, expert_out * chunk_weights)
         return out

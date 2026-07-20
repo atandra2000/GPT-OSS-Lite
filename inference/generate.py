@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from models.attention import (
     apply_rope,
     full_causal_attention,
-    manual_causal_attention,
     repeat_kv,
     sliding_window_attention,
 )
@@ -171,30 +170,6 @@ class MixedKVCache:
         return self.global_lengths[layer_idx]
 
 
-def _attention_for_layer(
-    attn,
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-) -> torch.Tensor:
-    """Dispatch to the right attention function based on layer type + cfg."""
-    is_windowed = attn.is_windowed
-    window = attn.window_size
-    attn_impl = attn.cfg.get("attn_impl", "sdpa")
-    sink_bias = (
-        attn.sink_bias.clamp(attn._sink_clamp_min, attn._sink_clamp_max)
-        if attn.sink_bias is not None else None
-    )
-    if attn_impl == "manual":
-        return manual_causal_attention(
-            q, k, v, sink_bias=sink_bias,
-            window=window if is_windowed else None,
-        )
-    if is_windowed:
-        return sliding_window_attention(q, k, v, window=window, sink_bias=sink_bias)
-    return full_causal_attention(q, k, v, sink_bias=sink_bias)
-
-
 def _attn_forward_layer(
     block,
     layer_idx: int,
@@ -239,13 +214,7 @@ def _attn_forward_layer(
     else:
         sink_bias_clamped = None
 
-    attn_impl = attn.cfg.get("attn_impl", "sdpa")
-    if attn_impl == "manual":
-        out = manual_causal_attention(
-            q, k_for_q, v_for_q, sink_bias=sink_bias_clamped,
-            window=attn.window_size if attn.is_windowed else None,
-        )
-    elif attn.is_windowed:
+    if attn.is_windowed:
         out = sliding_window_attention(
             q, k_for_q, v_for_q, window=attn.window_size, sink_bias=sink_bias_clamped,
         )

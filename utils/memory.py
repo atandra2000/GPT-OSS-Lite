@@ -49,7 +49,6 @@ def _activation_bytes(
     ffn_dim: int = 0,
     n_heads: int = 0,
     grad_ckpt_every: int = 3,
-    attn_impl: str = "sdpa",
 ) -> int:
     """Estimate activation memory (bytes) for forward + backward."""
     if grad_checkpoint:
@@ -63,11 +62,7 @@ def _activation_bytes(
     if ffn_dim > 0:
         n_active_per_layer = 3
         moe_bytes = n_layers * n_active_per_layer * 3 * seq_len * batch_size * ffn_dim * dtype_bytes * store_factor
-    attn_bytes = 0
-    if attn_impl == "manual" and n_heads > 0 and seq_len > 1:
-        n_full_layers = n_layers // 2
-        attn_bytes = n_full_layers * seq_len * seq_len * batch_size * n_heads * dtype_bytes * store_factor
-    return hidden_bytes + moe_bytes + attn_bytes
+    return hidden_bytes + moe_bytes
 
 
 def _infer_dim_n_layers(model: nn.Module) -> tuple[int, int]:
@@ -105,7 +100,6 @@ def estimate_model_memory_gb(
         grad_checkpoint=grad_checkpoint,
         ffn_dim=ffn_dim, n_heads=n_heads,
         grad_ckpt_every=grad_ckpt_every,
-        attn_impl=getattr(cfg, "attn_impl", "sdpa") if cfg is not None else "sdpa",
     )
     total = params_b + optim_b + kv_b + act_b
     return total / 1024**3 + (overhead_gb if overhead_gb is not None else _detect_overhead_gb())

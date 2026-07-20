@@ -22,7 +22,6 @@ from tqdm import tqdm
 sys.path.append(str(Path(__file__).parent.parent))
 from models.transformer import GPTOSS, ModelConfig
 from utils.checkpoint import CheckpointManager
-from utils.distributed import device
 from utils.logging import TrainingLogger
 from utils.memory import assert_fits_in_available_gpu, estimate_model_memory_gb
 
@@ -256,7 +255,7 @@ def main(
     if micro_bs < 1:
         raise ValueError(f"micro_batch_size must be >= 1, got {micro_bs}")
 
-    dev = device()
+    dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = GPTOSS(model_cfg).to(dev)
     n_params = model.num_parameters()
     n_active = model.num_active_parameters()

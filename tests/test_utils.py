@@ -9,22 +9,12 @@ import torch
 
 from models.transformer import GPTOSS, ModelConfig
 from utils.checkpoint import CheckpointManager
-from utils.distributed import device as get_device
 from utils.logging import TrainingLogger
 from utils.memory import (
     _mixed_kv_cache_bytes,
     assert_fits_in_available_gpu,
     estimate_model_memory_gb,
 )
-
-
-# Distributed helper
-
-def test_distributed_device_returns_torch_device():
-    """distributed.device() must return a torch.device object."""
-    d = get_device()
-    assert isinstance(d, torch.device)
-    assert d.type in ("cpu", "cuda")
 
 
 # Memory estimator
@@ -91,23 +81,6 @@ def test_estimate_with_grad_ckpt_every(small_cfg):
     )
     # every=2 keeps more activations than every=3, so the every=2 estimate is higher.
     assert est_e2 > est_e3, f"every=2 ({est_e2}) should be higher than every=3 ({est_e3})"
-
-
-def test_estimate_manual_attn_more_memory_than_sdpa(small_cfg):
-    """Manual attention stores scores (O(T^2)); SDPA does not."""
-    from dataclasses import replace
-    cfg_base = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
-    model_sdpa = GPTOSS(cfg_base)
-    model_manual = GPTOSS(replace(cfg_base, attn_impl="manual"))
-    seq_len = 512
-    batch_size = 4
-    est_sdpa = estimate_model_memory_gb(
-        model_sdpa, seq_len=seq_len, batch_size=batch_size, grad_checkpoint=True,
-    )
-    est_manual = estimate_model_memory_gb(
-        model_manual, seq_len=seq_len, batch_size=batch_size, grad_checkpoint=True,
-    )
-    assert est_manual > est_sdpa, f"Manual {est_manual} should exceed SDPA {est_sdpa}"
 
 
 def test_assert_fits_in_available_gpu_runs_on_cpu():

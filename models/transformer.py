@@ -1,6 +1,6 @@
 """GPT-OSS-Lite top-level model: embedding + 12 alternating-attention/MoE blocks + head."""
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Optional
 
 import torch
@@ -118,7 +118,7 @@ class ModelConfig:
 
     def as_dict(self) -> dict:
         """Return a shallow copy of the config as a dict (safe for callers)."""
-        return dict(self.__dict__)
+        return asdict(self)
 
 
 class RMSNorm(nn.Module):

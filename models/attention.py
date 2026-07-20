@@ -1,5 +1,6 @@
 """Sliding-window + full attention alternation with learned attention-sink bias."""
 import math
+import functools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -38,15 +39,9 @@ def manual_causal_attention(
         return (attn_weights.to(value_states.dtype) @ value_states)
 
 
-_SLIDING_WINDOW_MASK_CACHE: dict = {}
-
-
+@functools.lru_cache(maxsize=None)
 def _get_sliding_window_mask(T: int, window: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
     """Get a cached sliding-window causal mask of shape ``(T, T)``."""
-    key = (T, window, device, dtype)
-    cached = _SLIDING_WINDOW_MASK_CACHE.get(key)
-    if cached is not None:
-        return cached
     idx = torch.arange(T, device=device)
     outside = idx.unsqueeze(0) - idx.unsqueeze(1) >= window
     causal = idx.unsqueeze(1) - idx.unsqueeze(0) < 0
@@ -54,10 +49,10 @@ def _get_sliding_window_mask(T: int, window: int, device: torch.device, dtype: t
     out = torch.zeros(T, T, device=device, dtype=torch.float32)
     out = out.masked_fill(mask, float("-inf"))
     out = out.to(dtype)
-    _SLIDING_WINDOW_MASK_CACHE[key] = out
     return out
 
 
+@functools.lru_cache(maxsize=None)
 def _get_decode_window_mask(T_k: int, window: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
     """Get a cached decode-time (T_q=1) sliding-window mask of shape ``(1, T_k)``.
 
@@ -70,10 +65,6 @@ def _get_decode_window_mask(T_k: int, window: int, device: torch.device, dtype: 
     Used by the no-sink path in ``sliding_window_attention`` (decode branch
     at lines ~117-122). Saves ~50μs per decode token per layer.
     """
-    key = ("decode", T_k, window, device, dtype)
-    cached = _SLIDING_WINDOW_MASK_CACHE.get(key)
-    if cached is not None:
-        return cached
     # Query position is always (T_k - 1) during decode: the single new token
     # attends to itself and the previous (T_k - 1) cached tokens.
     idx_q = torch.tensor([T_k - 1], device=device, dtype=torch.long)
@@ -82,24 +73,19 @@ def _get_decode_window_mask(T_k: int, window: int, device: torch.device, dtype: 
     out = torch.zeros(1, T_k, device=device, dtype=torch.float32)
     out = out.masked_fill(outside, float("-inf"))
     out = out.to(dtype)
-    _SLIDING_WINDOW_MASK_CACHE[key] = out
     return out
 
 
+@functools.lru_cache(maxsize=None)
 def _build_sink_sliding_window_mask(
     T_q: int,
     T_k: int,
     H: int,
     window: int,
-    sink_bias: torch.Tensor,
     q_device: torch.device,
     q_dtype: torch.dtype,
 ) -> torch.Tensor:
     """Build the cached attention mask for sliding-window + sink bias path."""
-    key = ("sink_swa", T_q, T_k, H, window, q_device, q_dtype)
-    cached = _SLIDING_WINDOW_MASK_CACHE.get(key)
-    if cached is not None:
-        return cached
     if T_q == T_k:
         idx = torch.arange(T_k, device=q_device)
         causal_real = torch.zeros(T_k, T_k, device=q_device, dtype=q_dtype)
@@ -122,7 +108,6 @@ def _build_sink_sliding_window_mask(
             )
     mask = torch.zeros(H, T_q, T_k + 1, device=q_device, dtype=q_dtype)
     mask[:, :, :T_k] = causal_real.unsqueeze(0)
-    _SLIDING_WINDOW_MASK_CACHE[key] = mask
     return mask
 
 
@@ -154,7 +139,7 @@ def sliding_window_attention(
     v_ext = torch.cat([value_states, sink_v], dim=2)
 
     mask = _build_sink_sliding_window_mask(
-        T_q, T_k, H, window, sink_bias, query_states.device, query_states.dtype
+        T_q, T_k, H, window, query_states.device, query_states.dtype
     )
     mask_with_sink = mask.clone()
     sink_col = sink_bias.to(query_states.dtype).unsqueeze(1).expand(H, T_q)
@@ -259,17 +244,10 @@ class GPTOSSAttention(nn.Module):
         else:
             sink_bias_clamped = None
 
-        if self.cfg.get("attn_impl", "sdpa") == "manual":
-            out = manual_causal_attention(
-                query_states, key_states, value_states,
-                sink_bias=sink_bias_clamped,
-                window=self.window_size if self.is_windowed else None,
-            )
+        if self.is_windowed:
+            out = sliding_window_attention(query_states, key_states, value_states, window=self.window_size, sink_bias=sink_bias_clamped)
         else:
-            if self.is_windowed:
-                out = sliding_window_attention(query_states, key_states, value_states, window=self.window_size, sink_bias=sink_bias_clamped)
-            else:
-                out = full_causal_attention(query_states, key_states, value_states, sink_bias=sink_bias_clamped)
+            out = full_causal_attention(query_states, key_states, value_states, sink_bias=sink_bias_clamped)
 
         out = out.transpose(1, 2).contiguous().view(B, T, self.n_heads * self.head_dim)
         return self.o_proj(out)
