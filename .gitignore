@@ -53,3 +53,11 @@ htmlcov/
 # Environment
 .env
 .env.local
+
+# Personal working notes / scratch (not part of the project)
+MISSION.md
+NOTES.md
+RESOURCES.md
+learning-records/
+lessons/
+assets/
