@@ -1,4 +1,4 @@
-"""RoPE helpers: standard apply_rope, YaRN frequency computation, pruned RoPE."""
+"""RoPE helpers: standard apply_rope, YaRN frequency computation."""
 import math
 import torch
 
@@ -27,36 +27,31 @@ def compute_yarn_freqs(
     head_dim: int,
     theta: float,
     scale_factor: float,
-    original_max: int | None = None,
-    target_max: int | None = None,
+    original_max_seq_len: int,
+    target_seq_len: int,
     beta_fast: float = 32.0,
     beta_slow: float = 1.0,
-    original_max_seq_len: int | None = None,
-    target_seq_len: int | None = None,
 ) -> torch.Tensor:
     """Compute YaRN-scaled inverse frequencies for RoPE."""
     if head_dim % 2 != 0:
         raise ValueError(f"head_dim must be even, got {head_dim}")
-    if original_max is None:
-        if original_max_seq_len is None:
-            raise ValueError("Either original_max or original_max_seq_len must be provided.")
-        original_max = original_max_seq_len
-    if target_max is None:
-        if target_seq_len is None:
-            raise ValueError("Either target_max or target_seq_len must be provided.")
-        target_max = target_seq_len
+    if original_max_seq_len <= 0 or target_seq_len <= 0:
+        raise ValueError(
+            f"yarn sequence lengths must be positive, "
+            f"got original={original_max_seq_len}, target={target_seq_len}"
+        )
 
     half = head_dim // 2
     exponents = torch.arange(0, half, dtype=torch.float32) / half
     base = 1.0 / (theta ** exponents)
 
-    low = max(math.floor(half / math.log2(original_max / beta_slow * math.pi)), 0)
-    high = min(math.ceil(half / math.log2(original_max / beta_fast * math.pi)), half - 1)
+    low = max(math.floor(half / math.log2(original_max_seq_len / beta_slow * math.pi)), 0)
+    high = min(math.ceil(half / math.log2(original_max_seq_len / beta_fast * math.pi)), half - 1)
     if high <= low:
         import warnings
         warnings.warn(
             f"YaRN ramp degenerate: low={low}, high={high} (head_dim={head_dim}, "
-            f"original_max={original_max}, beta_fast={beta_fast}, beta_slow={beta_slow}). "
+            f"original_max={original_max_seq_len}, beta_fast={beta_fast}, beta_slow={beta_slow}). "
             f"Falling back to identity (no length extrapolation). Check beta_fast/beta_slow.",
             UserWarning,
             stacklevel=2,
@@ -76,16 +71,3 @@ def compute_yarn_mscale(scale_factor: float) -> float:
     if scale_factor <= 1.0:
         return 1.0
     return 0.1 * math.log(scale_factor) + 1.0
-
-
-def prune_rope(cos: torch.Tensor, sin: torch.Tensor, n_pruned_dims: int) -> tuple[torch.Tensor, torch.Tensor]:
-    """Prune (zero out) the first ``n_pruned_dims`` RoPE dimensions."""
-    if n_pruned_dims <= 0:
-        return cos, sin
-    if n_pruned_dims > cos.shape[-1]:
-        raise ValueError(f"n_pruned_dims ({n_pruned_dims}) exceeds head_dim/2 ({cos.shape[-1]})")
-    cos_pruned = cos.clone()
-    sin_pruned = sin.clone()
-    cos_pruned[..., :n_pruned_dims] = 1.0
-    sin_pruned[..., :n_pruned_dims] = 0.0
-    return cos_pruned, sin_pruned

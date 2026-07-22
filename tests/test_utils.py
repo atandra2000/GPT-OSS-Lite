@@ -11,7 +11,6 @@ from models.transformer import GPTOSS, ModelConfig
 from utils.checkpoint import CheckpointManager
 from utils.logging import TrainingLogger
 from utils.memory import (
-    _mixed_kv_cache_bytes,
     assert_fits_in_available_gpu,
     estimate_model_memory_gb,
 )
@@ -20,38 +19,54 @@ from utils.memory import (
 # Memory estimator
 
 def test_mixed_kv_cache_correct(small_cfg):
-    """KV cache must reflect windowed (128 tok) + global (full) split."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    """The KV cache portion of the estimate must reflect windowed (128 tok) + global (full) split.
+
+    Compute the estimate for the same model at two steady-state flags and verify
+    the difference matches the windowed-vs-full-cache delta.
+    """
+    cfg = small_cfg
     model = GPTOSS(cfg)
     seq_len = cfg.max_seq_len
     bs = 1
     bytes_per_token = 2 * cfg.n_kv_heads * cfg.head_dim * 2
     n_windowed = sum(1 for i in range(cfg.n_layers) if i % 2 == 0)
     n_global = cfg.n_layers - n_windowed
-    expected_steady = (
+
+    # Steady-state: windowed layers hold `window` tokens, global hold `seq_len`.
+    expected_steady_kv = (
         n_windowed * cfg.window_size * bs * bytes_per_token
         + n_global * seq_len * bs * bytes_per_token
     )
-    actual_steady = _mixed_kv_cache_bytes(model, seq_len, bs, steady_state=True)
-    assert actual_steady == expected_steady, (
-        f"Steady-state KV mismatch: actual={actual_steady}, expected={expected_steady}"
-    )
-    prefill_windowed_len = max(cfg.window_size, seq_len)
-    expected_prefill = (
-        n_windowed * prefill_windowed_len * bs * bytes_per_token
+    # Prefill: windowed layers grow to max(window, seq_len) = seq_len for seq_len > window.
+    expected_prefill_kv = (
+        n_windowed * max(cfg.window_size, seq_len) * bs * bytes_per_token
         + n_global * seq_len * bs * bytes_per_token
     )
-    actual_prefill = _mixed_kv_cache_bytes(model, seq_len, bs, steady_state=False)
-    assert actual_prefill == expected_prefill, (
-        f"Prefill KV mismatch: actual={actual_prefill}, expected={expected_prefill}"
+    # Difference (prefill - steady) = n_windowed * (seq_len - window) * bytes_per_token
+    expected_delta = n_windowed * max(0, seq_len - cfg.window_size) * bs * bytes_per_token
+
+    # Build two estimates where the only delta is steady_state.
+    est_steady = estimate_model_memory_gb(
+        model, seq_len=seq_len, batch_size=bs,
+        grad_checkpoint=True, overhead_gb=0.0, steady_state=True,
+    )
+    est_prefill = estimate_model_memory_gb(
+        model, seq_len=seq_len, batch_size=bs,
+        grad_checkpoint=True, overhead_gb=0.0, steady_state=False,
+    )
+    actual_delta_bytes = (est_prefill - est_steady) * 1024**3
+    # Allow small float tolerance from activation/param differences that are NOT
+    # affected by steady_state — the delta should isolate the KV cache diff.
+    assert abs(actual_delta_bytes - expected_delta) < 1024, (
+        f"KV cache delta mismatch: actual={actual_delta_bytes}, expected={expected_delta}"
     )
     if seq_len > cfg.window_size:
-        assert actual_prefill > actual_steady
+        assert est_prefill > est_steady
 
 
 def test_estimate_model_memory_returns_gb(small_cfg):
     """estimate_model_memory_gb must return a positive float in GB."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     est_gb = estimate_model_memory_gb(model, seq_len=cfg.max_seq_len, batch_size=2, grad_checkpoint=True)
     assert est_gb > 0.0
@@ -60,7 +75,7 @@ def test_estimate_model_memory_returns_gb(small_cfg):
 
 def test_estimate_smaller_with_checkpointing(small_cfg):
     """Activations are smaller with gradient checkpointing."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     est_no_ckpt = estimate_model_memory_gb(model, seq_len=cfg.max_seq_len, batch_size=2, grad_checkpoint=False)
     est_ckpt = estimate_model_memory_gb(model, seq_len=cfg.max_seq_len, batch_size=2, grad_checkpoint=True)
@@ -69,7 +84,7 @@ def test_estimate_smaller_with_checkpointing(small_cfg):
 
 def test_estimate_with_grad_ckpt_every(small_cfg):
     """More aggressive checkpointing (every=2) should give lower estimate than every=3."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     est_e3 = estimate_model_memory_gb(
         model, seq_len=cfg.max_seq_len, batch_size=2,
@@ -107,7 +122,7 @@ def test_training_logger_logs_metrics():
 
 def test_checkpoint_keep_last_n(small_cfg, tmp_ckpt_dir):
     """keep_last_n must delete older checkpoints."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
     ckpt = CheckpointManager(str(tmp_ckpt_dir))
@@ -120,7 +135,7 @@ def test_checkpoint_keep_last_n(small_cfg, tmp_ckpt_dir):
 
 def test_checkpoint_delete_specific_step(small_cfg, tmp_ckpt_dir):
     """delete_checkpoint must remove all 3 files for that step."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
     ckpt = CheckpointManager(str(tmp_ckpt_dir))

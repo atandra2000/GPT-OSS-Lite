@@ -1,12 +1,7 @@
 """Profile GPT-OSS-Lite components to identify bottlenecks."""
-import sys
-import time
-from pathlib import Path
-
-sys.path.append(str(Path(__file__).parent.parent))
-
 import torch
 
+from _bootstrap import micro_cfg, time_fn
 from models.attention import (
     GPTOSSAttention,
     full_causal_attention,
@@ -14,50 +9,14 @@ from models.attention import (
     repeat_kv,
     sliding_window_attention,
 )
-from models.moe import MoELayer, MoERouter, SwiGLUExpert, aux_load_balancing_loss
-from models.rotary import apply_rope, compute_yarn_freqs
-from models.transformer import GPTOSS, ModelConfig
-
-
-def time_fn(fn, n=20, warmup=3):
-    """Time fn() in ms; average over n runs after warmup."""
-    for _ in range(warmup):
-        fn()
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
-    t0 = time.perf_counter()
-    for _ in range(n):
-        fn()
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
-    elapsed = (time.perf_counter() - t0) / n * 1000
-    return elapsed
+from models.moe import MoELayer
+from models.rotary import apply_rope
+from models.transformer import GPTOSS
 
 
 def main():
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    cfg = ModelConfig(
-        vocab_size=128,
-        d_model=64,
-        n_layers=4,
-        n_heads=4,
-        n_kv_heads=2,
-        head_dim=16,
-        ffn_dim=128,
-        n_routed_experts=4,
-        n_activated_experts=2,
-        n_shared_experts=1,
-        window_size=8,
-        max_seq_len=128,
-        rope_theta=10000,
-        yarn_scale_factor=2,
-        yarn_original_max_seq_len=128,
-        yarn_target_seq_len=256,
-        yarn_beta_fast=2,
-        yarn_beta_slow=1,
-        yarn_prune_rope_global=True,
-    )
+    cfg = micro_cfg()
     model = GPTOSS(cfg).to(dev)
     print(f"Total params: {model.num_parameters()/1e6:.2f}M")
 
@@ -70,7 +29,7 @@ def main():
     t = time_fn(model_forward)
     print(f"[model.forward]      {t:.2f} ms/step")
 
-    attn_win = GPTOSSAttention(cfg.as_dict(), layer_idx=0).to(dev)
+    attn_win = GPTOSSAttention(cfg, layer_idx=0).to(dev)
     x = torch.randn(B, T, cfg.d_model, device=dev)
     def attn_win_fwd():
         with torch.no_grad():
@@ -78,7 +37,7 @@ def main():
     t = time_fn(attn_win_fwd)
     print(f"[attn.windowed]      {t:.2f} ms/step")
 
-    attn_full = GPTOSSAttention(cfg.as_dict(), layer_idx=1).to(dev)
+    attn_full = GPTOSSAttention(cfg, layer_idx=1).to(dev)
     def attn_full_fwd():
         with torch.no_grad():
             attn_full(x)
@@ -103,7 +62,7 @@ def main():
     t = time_fn(swa_attn)
     print(f"[swa_attn]           {t:.2f} ms/step")
 
-    moe = MoELayer(cfg.as_dict()).to(dev)
+    moe = MoELayer(cfg).to(dev)
     def moe_fwd():
         with torch.no_grad():
             moe(x)

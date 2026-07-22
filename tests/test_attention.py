@@ -1,4 +1,5 @@
 """Sliding-window attention + learned sink bias correctness tests."""
+import dataclasses
 import math
 
 import pytest
@@ -12,6 +13,7 @@ from models.attention import (
     repeat_kv,
     sliding_window_attention,
 )
+from models.transformer import ModelConfig
 
 
 # Sliding-window vs. full causal attention equivalence
@@ -127,20 +129,20 @@ def test_sink_bias_per_head_differs(attn_inputs_tiny):
 
 def test_attention_module_forward_shape(small_cfg, device):
     """GPTOSSAttention must produce same-shape output as input."""
-    cfg = small_cfg
+    cfg = dataclasses.replace(small_cfg)
     layer = GPTOSSAttention(cfg, layer_idx=0).to(device).to(torch.float64)
-    B, T = 2, cfg["max_seq_len"]
-    x = torch.randn(B, T, cfg["d_model"], device=device, dtype=torch.float64)
+    B, T = 2, cfg.max_seq_len
+    x = torch.randn(B, T, cfg.d_model, device=device, dtype=torch.float64)
     out = layer(x)
-    assert out.shape == (B, T, cfg["d_model"])
+    assert out.shape == (B, T, cfg.d_model)
 
 
 def test_attention_module_grad_flow(small_cfg, device):
     """Gradients must flow through Q, KV, O, sink_bias parameters."""
-    cfg = small_cfg
+    cfg = dataclasses.replace(small_cfg)
     layer = GPTOSSAttention(cfg, layer_idx=0).to(device).to(torch.float64)
-    B, T = 1, cfg["max_seq_len"]
-    x = torch.randn(B, T, cfg["d_model"], device=device, dtype=torch.float64, requires_grad=True)
+    B, T = 1, cfg.max_seq_len
+    x = torch.randn(B, T, cfg.d_model, device=device, dtype=torch.float64, requires_grad=True)
     out = layer(x)
     out.sum().backward()
     assert layer.q_proj.weight.grad is not None
@@ -152,32 +154,32 @@ def test_attention_module_grad_flow(small_cfg, device):
 
 def test_attention_module_alternating_pattern(small_cfg, device):
     """Even layers are SWA, odd layers are full attention."""
-    cfg = small_cfg
+    cfg = dataclasses.replace(small_cfg)
     layer_even = GPTOSSAttention(cfg, layer_idx=0)
     layer_odd = GPTOSSAttention(cfg, layer_idx=1)
     assert layer_even.is_windowed is True
     assert layer_odd.is_windowed is False
     # Global layer must have non-zero n_pruned_dims (if prune_rope enabled)
-    assert layer_odd.n_pruned_dims > 0
-    assert layer_even.n_pruned_dims == 0
+    assert layer_odd._n_pruned_dims() > 0
+    assert layer_even._n_pruned_dims() == 0
 
 
 def test_attention_module_sink_learned(small_cfg, device):
     """Sink bias must be a learnable nn.Parameter."""
-    cfg = small_cfg
+    cfg = dataclasses.replace(small_cfg)
     layer = GPTOSSAttention(cfg, layer_idx=0)
     assert isinstance(layer.sink_bias, torch.nn.Parameter)
-    assert layer.sink_bias.shape == (cfg["n_heads"],)
+    assert layer.sink_bias.shape == (cfg.n_heads,)
     # Initialized to 0 (logit=1 → standard softmax denominator)
-    assert torch.allclose(layer.sink_bias.detach(), torch.zeros(cfg["n_heads"]))
+    assert torch.allclose(layer.sink_bias.detach(), torch.zeros(cfg.n_heads))
 
 
 def test_attention_sink_affects_output(small_cfg, device):
     """Changing sink_bias after init must change the output."""
-    cfg = small_cfg
+    cfg = dataclasses.replace(small_cfg)
     layer = GPTOSSAttention(cfg, layer_idx=0).to(device).to(torch.float64)
-    B, T = 1, cfg["max_seq_len"]
-    x = torch.randn(B, T, cfg["d_model"], device=device, dtype=torch.float64)
+    B, T = 1, cfg.max_seq_len
+    x = torch.randn(B, T, cfg.d_model, device=device, dtype=torch.float64)
     out1 = layer(x).clone()
 
     with torch.no_grad():
@@ -199,11 +201,7 @@ def test_repeat_kv_identity():
 
 
 def test_repeat_kv_doubles():
-    """n_rep=2 should double the head dim, replicating each head twice.
-
-    Layout after repeat_kv(x, n_rep=2): y[:, 2h] == y[:, 2h+1] for each
-    original head h.
-    """
+    """n_rep=2 should double the head dim, replicating each head twice."""
     x = torch.randn(2, 4, 16, 32)
     y = repeat_kv(x, n_rep=2)
     assert y.shape == (2, 8, 16, 32)
@@ -233,13 +231,7 @@ def test_sliding_window_matches_full_large(attn_large):
 # Sink bias + sliding window combination (the load-bearing integration)
 
 def test_sink_and_window_compose_zero_bias():
-    """When sink_bias=0, SWA-with-sink must behave similarly to SWA-without-sink.
-
-    With sink_bias=0, the softmax denominator gains exp(0)=1 extra mass per row
-    (a constant 1 added to the denominator), which scales all attention weights
-    by Z/(Z+1) where Z is the original sum of exp(scores). The output is
-    attenuated but the relative distribution of attention is preserved.
-    """
+    """When sink_bias=0, SWA-with-sink must behave similarly to SWA-without-sink."""
     torch.manual_seed(0)
     q = torch.randn(2, 4, 32, 16)
     k = torch.randn(2, 4, 32, 16)
@@ -268,7 +260,7 @@ def test_sink_and_window_compose_high_bias_dampens():
 
 def test_sink_bias_clamped_at_forward(small_cfg, device):
     """GPTOSSAttention must clamp sink_bias before use (preventing BF16 overflow)."""
-    cfg = small_cfg
+    cfg = dataclasses.replace(small_cfg)
     layer = GPTOSSAttention(cfg, layer_idx=0).to(device).to(torch.float64)
     # Set sink_bias to a value beyond the clamp range.
     with torch.no_grad():
@@ -276,6 +268,6 @@ def test_sink_bias_clamped_at_forward(small_cfg, device):
     # Verify the parameter itself is unchanged (clamp is at forward time).
     assert (layer.sink_bias == 1000.0).all()
     # Forward should NOT produce NaN even with this extreme value (clamp to SINK_MAX=15).
-    x = torch.randn(1, cfg["max_seq_len"], cfg["d_model"], device=device, dtype=torch.float64)
+    x = torch.randn(1, cfg.max_seq_len, cfg.d_model, device=device, dtype=torch.float64)
     out = layer(x)
     assert torch.isfinite(out).all(), "Forward produced non-finite output with extreme sink_bias"

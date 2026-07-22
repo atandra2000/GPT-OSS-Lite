@@ -52,13 +52,14 @@ def aux_load_balancing_loss(
 class MoELayer(nn.Module):
     """GPT-OSS-Lite MoE layer: top-2 routed + 1 shared expert."""
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg):
         super().__init__()
-        self.d_model = cfg["d_model"]
-        self.ffn_dim = cfg["ffn_dim"]
-        self.n_routed = cfg["n_routed_experts"]
-        self.n_activated = cfg["n_activated_experts"]
-        self.n_shared = cfg["n_shared_experts"]
+        self.d_model = cfg.d_model
+        self.ffn_dim = cfg.ffn_dim
+        self.n_routed = cfg.n_routed_experts
+        self.n_activated = cfg.n_activated_experts
+        self.n_shared = cfg.n_shared_experts
+        self.moe_dispatch = getattr(cfg, "moe_dispatch", "stacked")
         self.router = MoERouter(self.d_model, self.n_routed, self.n_activated)
         self.experts = nn.ModuleList([
             SwiGLUExpert(self.d_model, self.ffn_dim) for _ in range(self.n_routed)
@@ -76,13 +77,61 @@ class MoELayer(nn.Module):
         N = flat.size(0)
 
         indices, weights, all_logits = self.router(flat)
-        out = self._dispatch_vectorized(flat, indices, weights)
+        if self.moe_dispatch == "triton_grouped":
+            out = self._dispatch_triton(flat, indices, weights)
+        else:
+            out = self._dispatch_vectorized(flat, indices, weights)
         aux_loss = aux_load_balancing_loss(all_logits, self.n_routed, self.n_activated)
         if self.shared_experts is not None:
             shared_out = sum(e(flat) for e in self.shared_experts)
             out = out + shared_out
 
         return out.view(B, T, D), aux_loss
+
+    def _dispatch_triton(
+        self,
+        flat: torch.Tensor,
+        indices: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """Triton-grouped MoE dispatch: one kernel for W1+W3+silu, then W2 in PyTorch."""
+        from .moe_triton import triton_moe_w1w3_silu
+
+        N = flat.size(0)
+        flat_idx = indices.reshape(-1)
+        flat_w = weights.reshape(-1)
+        token_ids = torch.arange(N, device=flat.device).repeat_interleave(indices.size(1))
+
+        order = torch.argsort(flat_idx, stable=True)
+        sorted_token_ids = token_ids[order]
+        sorted_weights = flat_w[order]
+        sorted_expert_ids = flat_idx[order]
+        x_sorted = flat[sorted_token_ids]
+
+        expert_counts = torch.bincount(flat_idx, minlength=self.n_routed)
+        expert_offsets = torch.cat([
+            torch.zeros(1, dtype=expert_counts.dtype, device=flat.device),
+            expert_counts.cumsum(0)[:-1],
+        ])
+
+        W1_stack = torch.stack([e.w1.weight for e in self.experts], dim=0)
+        W3_stack = torch.stack([e.w3.weight for e in self.experts], dim=0)
+        W2_stack = torch.stack([e.w2.weight for e in self.experts], dim=0)
+
+        gated_sorted = triton_moe_w1w3_silu(
+            x_sorted, sorted_expert_ids, expert_counts, expert_offsets,
+            W1_stack, W3_stack,
+        )
+
+        out_sorted = torch.bmm(
+            gated_sorted.unsqueeze(0),
+            W2_stack[sorted_expert_ids],
+        ).squeeze(0)
+
+        out_sorted = out_sorted * sorted_weights.unsqueeze(-1)
+        out = torch.zeros_like(flat)
+        out.index_add_(0, sorted_token_ids, out_sorted)
+        return out
 
     def _dispatch_vectorized(
         self,

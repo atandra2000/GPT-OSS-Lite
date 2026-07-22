@@ -8,6 +8,7 @@ from models.moe import (
     SwiGLUExpert,
     aux_load_balancing_loss,
 )
+from models.transformer import ModelConfig
 
 
 # SwiGLU expert
@@ -112,10 +113,10 @@ def test_moe_layer_shapes(small_cfg):
     """MoELayer forward must return (output, aux_loss) with correct shapes."""
     cfg = small_cfg
     moe = MoELayer(cfg)
-    B, T = 2, cfg["max_seq_len"]
-    x = torch.randn(B, T, cfg["d_model"])
+    B, T = 2, cfg.max_seq_len
+    x = torch.randn(B, T, cfg.d_model)
     out, aux = moe(x)
-    assert out.shape == (B, T, cfg["d_model"])
+    assert out.shape == (B, T, cfg.d_model)
     assert aux.shape == ()
     assert aux >= 0.0
     assert torch.isfinite(aux)
@@ -126,7 +127,7 @@ def test_moe_layer_shared_expert_active(small_cfg):
     cfg = small_cfg
     moe = MoELayer(cfg)
     # Forward pass should use shared expert unconditionally.
-    x = torch.randn(1, 4, cfg["d_model"])
+    x = torch.randn(1, 4, cfg.d_model)
     # If we set shared expert to zero, the output should differ from baseline.
     base_out, _ = moe(x)
     with torch.no_grad():
@@ -141,7 +142,7 @@ def test_moe_layer_grad_flow(small_cfg):
     """Gradients must flow through router, routed experts, and shared expert."""
     cfg = small_cfg
     moe = MoELayer(cfg)
-    x = torch.randn(2, cfg["max_seq_len"], cfg["d_model"], requires_grad=True)
+    x = torch.randn(2, cfg.max_seq_len, cfg.d_model, requires_grad=True)
     out, aux = moe(x)
     (out.sum() + aux).backward()
     # Router
@@ -159,13 +160,13 @@ def test_moe_layer_dispatch_correct(small_cfg):
     cfg = small_cfg
     moe = MoELayer(cfg)
     moe.eval()  # disable any dropout / mode switches
-    B, T = 1, cfg["max_seq_len"]
+    B, T = 1, cfg.max_seq_len
     torch.manual_seed(123)
-    x = torch.randn(B, T, cfg["d_model"])
+    x = torch.randn(B, T, cfg.d_model)
 
     with torch.no_grad():
         # Manually compute the MoE output
-        flat = x.view(-1, cfg["d_model"])
+        flat = x.view(-1, cfg.d_model)
         indices, weights, _ = moe.router(flat)
         # Build expected output
         expected = torch.zeros_like(flat)
@@ -177,24 +178,19 @@ def test_moe_layer_dispatch_correct(small_cfg):
         # Add shared expert
         for s in moe.shared_experts:
             expected = expected + s(flat)
-        expected = expected.view(B, T, cfg["d_model"])
+        expected = expected.view(B, T, cfg.d_model)
 
     actual, _ = moe(x)
     assert torch.allclose(actual, expected, atol=1e-4)
 
 
 def test_moe_layer_routes_to_all_experts_over_batch(small_cfg):
-    """Over a large batch, routing should reach multiple experts (not collapse to one).
-
-    Note: with random initialization and only an aux loss (no bias-update), it's
-    normal for 3-5 experts to dominate initially. We just check that the
-    routing is not collapsed to a single expert.
-    """
+    """Over a large batch, routing should reach multiple experts (not collapse to one)."""
     cfg = small_cfg
     moe = MoELayer(cfg)
     # Large enough batch that some probability mass reaches each expert.
-    x = torch.randn(64, cfg["max_seq_len"], cfg["d_model"])
-    _, _, all_logits = moe.router(x.view(-1, cfg["d_model"]))
+    x = torch.randn(64, cfg.max_seq_len, cfg.d_model)
+    _, _, all_logits = moe.router(x.view(-1, cfg.d_model))
     probs = torch.softmax(all_logits, dim=-1)
     expert_mass = probs.sum(dim=0)
     # At least 2 experts should receive meaningful mass (not collapsed to 1).
@@ -229,7 +225,7 @@ def test_moe_dispatch_is_deterministic(small_cfg):
     cfg = small_cfg
     moe = MoELayer(cfg)
     moe.eval()
-    x = torch.randn(8, cfg["max_seq_len"], cfg["d_model"])
+    x = torch.randn(8, cfg.max_seq_len, cfg.d_model)
     with torch.no_grad():
         out1, _ = moe(x)
         out2, _ = moe(x)

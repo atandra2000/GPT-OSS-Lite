@@ -14,23 +14,15 @@ class YaRNRoPE(nn.Module):
         head_dim: int,
         theta: float = 100000.0,
         scale_factor: float = 32.0,
-        original_max_seq_len: int | None = None,
+        original_max_seq_len: int = 4096,
         target_seq_len: int = 131072,
         beta_fast: float = 32.0,
         beta_slow: float = 1.0,
         mscale: bool = True,
-        original_max: int | None = None,
-        target_max: int | None = None,
     ):
         super().__init__()
         if head_dim % 2 != 0:
             raise ValueError(f"head_dim must be even, got {head_dim}")
-        if original_max_seq_len is None:
-            if original_max is None:
-                raise ValueError("Either original_max_seq_len or original_max must be provided.")
-            original_max_seq_len = original_max
-        if target_max is not None:
-            target_seq_len = target_max
         self.head_dim = head_dim
         self.theta = theta
         self.scale_factor = scale_factor
@@ -42,8 +34,8 @@ class YaRNRoPE(nn.Module):
             head_dim=head_dim,
             theta=theta,
             scale_factor=scale_factor,
-            original_max=original_max_seq_len,
-            target_max=target_seq_len,
+            original_max_seq_len=original_max_seq_len,
+            target_seq_len=target_seq_len,
             beta_fast=beta_fast,
             beta_slow=beta_slow,
         )

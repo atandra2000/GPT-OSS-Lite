@@ -105,7 +105,7 @@ def test_pretrain_dataset_sharded():
 
 def test_checkpoint_round_trip(small_cfg, tmp_ckpt_dir):
     """Save → load must restore weights exactly."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model1 = GPTOSS(cfg)
     optim1 = torch.optim.AdamW(model1.parameters(), lr=1e-3)
 
@@ -129,7 +129,7 @@ def test_checkpoint_round_trip(small_cfg, tmp_ckpt_dir):
 def test_checkpoint_atomicity_no_partial_files(small_cfg, tmp_ckpt_dir):
     """Killing mid-save should not leave partial files."""
     import safetensors
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
     ckpt = CheckpointManager(str(tmp_ckpt_dir))
@@ -145,7 +145,7 @@ def test_checkpoint_atomicity_no_partial_files(small_cfg, tmp_ckpt_dir):
 
 def test_checkpoint_latest_step(small_cfg, tmp_ckpt_dir):
     """latest_step must return the highest completed step."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
     ckpt = CheckpointManager(str(tmp_ckpt_dir))
@@ -162,7 +162,7 @@ def test_checkpoint_latest_step(small_cfg, tmp_ckpt_dir):
 
 def test_aux_loss_accumulated_in_training(small_cfg):
     """Aux loss must be finite and addable to CE loss."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
     idx = torch.randint(0, cfg.vocab_size, (1, cfg.max_seq_len))

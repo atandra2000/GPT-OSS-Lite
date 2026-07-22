@@ -1,4 +1,6 @@
 """GPT-OSS-Lite full-model tests: shape, param count, weight tying, grad flow, overfit."""
+import dataclasses
+
 import pytest
 import torch
 
@@ -9,7 +11,7 @@ from models.transformer import GPTOSS, ModelConfig
 
 def test_forward_shape_small(small_cfg):
     """GPTOSS forward must return (logits, aux_loss) with correct shapes."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     B, T = 2, cfg.max_seq_len
     idx = torch.randint(0, cfg.vocab_size, (B, T))
@@ -22,7 +24,7 @@ def test_forward_shape_small(small_cfg):
 
 def test_forward_returns_aux_loss(small_cfg):
     """Forward must return a non-zero aux loss (from MoE load-balancing)."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     idx = torch.randint(0, cfg.vocab_size, (1, cfg.max_seq_len))
     _, aux_loss = model(idx)
@@ -34,7 +36,7 @@ def test_forward_returns_aux_loss(small_cfg):
 
 def test_param_count_production(model_cfg):
     """Param count for the production config must be ~502M (±5%)."""
-    cfg = ModelConfig(**{k: v for k, v in model_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = model_cfg
     model = GPTOSS(cfg)
     n_params = model.num_parameters()
     # DESIGN §3 target: ~502M total
@@ -43,7 +45,7 @@ def test_param_count_production(model_cfg):
 
 def test_active_params_smaller_than_total(model_cfg):
     """Active params (top-2 + 1 shared) must be significantly smaller than total."""
-    cfg = ModelConfig(**{k: v for k, v in model_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = model_cfg
     model = GPTOSS(cfg)
     total = model.num_parameters()
     active = model.num_active_parameters()
@@ -55,7 +57,7 @@ def test_active_params_smaller_than_total(model_cfg):
 
 def test_param_count_small(small_cfg):
     """Smoke test: small_cfg should have a tiny param count."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     n_params = model.num_parameters()
     # Sanity: small model shouldn't have more than 5M params
@@ -66,7 +68,7 @@ def test_param_count_small(small_cfg):
 
 def test_weight_tying(small_cfg):
     """Embedding and head must share the same parameter (data_ptr equal)."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     cfg.weight_tying = True
     model = GPTOSS(cfg)
     assert model.head.weight.data_ptr() == model.embed.weight.data_ptr()
@@ -74,7 +76,7 @@ def test_weight_tying(small_cfg):
 
 def test_weight_tying_disabled(small_cfg):
     """When weight_tying=False, embed and head must have separate params."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     cfg.weight_tying = False
     model = GPTOSS(cfg)
     assert model.head.weight.data_ptr() != model.embed.weight.data_ptr()
@@ -84,7 +86,7 @@ def test_weight_tying_disabled(small_cfg):
 
 def test_alternating_layer_pattern(small_cfg):
     """Even layers must be SWA; odd layers must be full attention."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     for i, block in enumerate(model.blocks):
         if i % 2 == 0:
@@ -94,13 +96,13 @@ def test_alternating_layer_pattern(small_cfg):
 
 
 def test_global_layers_have_pruned_rope(small_cfg):
-    """Full-attention layers must have n_pruned_dims > 0 (pruned RoPE)."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
-    cfg.yarn_prune_rope_global = True
+    """Full-attention layers must have non-zero n_pruned_dims (pruned RoPE)."""
+    cfg = small_cfg
+    cfg = dataclasses.replace(cfg, yarn_prune_rope_global=True)
     model = GPTOSS(cfg)
     for i, block in enumerate(model.blocks):
         if i % 2 == 1:  # full attention layer
-            assert block.attn.n_pruned_dims > 0, \
+            assert block.attn._n_pruned_dims() > 0, \
                 f"Full-attention layer {i} should have pruned RoPE"
 
 
@@ -108,7 +110,7 @@ def test_global_layers_have_pruned_rope(small_cfg):
 
 def test_grad_flow_all_params(small_cfg):
     """Backward must populate gradients on all learnable params."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     idx = torch.randint(0, cfg.vocab_size, (1, cfg.max_seq_len))
     logits, aux_loss = model(idx)
@@ -121,7 +123,7 @@ def test_grad_flow_all_params(small_cfg):
 
 def test_two_step_overfit(small_cfg):
     """Loss must decrease on a single batch over 2 optimizer steps (sanity for grad flow)."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
     idx = torch.randint(0, cfg.vocab_size, (2, cfg.max_seq_len))
@@ -143,7 +145,7 @@ def test_two_step_overfit(small_cfg):
 
 def test_gradient_checkpointing_runs(small_cfg):
     """Model with gradient checkpointing enabled must still run forward + backward."""
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     model.enable_gradient_checkpointing(every=2)
     idx = torch.randint(0, cfg.vocab_size, (2, cfg.max_seq_len))
@@ -156,7 +158,7 @@ def test_gradient_checkpointing_runs(small_cfg):
 def test_gradient_checkpointing_actually_checkpoints(small_cfg):
     """Verify gradient checkpointing is INVOKED, not just enabled (the regression C1)."""
     import torch.utils.checkpoint as cp
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     model.enable_gradient_checkpointing(every=1)  # checkpoint every layer
     # Spy on torch.utils.checkpoint.checkpoint to count invocations.
@@ -182,7 +184,7 @@ def test_gradient_checkpointing_actually_checkpoints(small_cfg):
 def test_gradient_checkpointing_skip_layers(small_cfg):
     """every=2 should checkpoint half the layers, not all of them."""
     import torch.utils.checkpoint as cp
-    cfg = ModelConfig(**{k: v for k, v in small_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = small_cfg
     model = GPTOSS(cfg)
     model.enable_gradient_checkpointing(every=2)
     original = cp.checkpoint

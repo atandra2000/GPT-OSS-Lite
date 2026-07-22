@@ -1,4 +1,6 @@
 """Tests for ModelConfig validation + edge cases."""
+import dataclasses
+
 import pytest
 import torch
 
@@ -80,19 +82,18 @@ def test_modelconfig_accepts_scale_factor_one():
     assert cfg.yarn_scale_factor == 1
 
 
-def test_modelconfig_as_dict_isolated_from_dataclass():
-    """Mutating the dict returned by as_dict() must NOT mutate the dataclass."""
-    cfg = ModelConfig()
-    d = cfg.as_dict()
-    d["d_model"] = 9999
-    assert cfg.d_model == 768, "as_dict() must return an isolated copy"
+def test_modelconfig_field_count_is_stable():
+    """ModelConfig has a fixed set of fields; adding fields should be deliberate."""
+    from dataclasses import fields
+    n_fields = len(fields(ModelConfig))
+    assert n_fields == 29, f"Expected 29 fields, got {n_fields}"
 
 
 # Anchor metric: ~502M total / ~247M active (the headline numbers)
 
 def test_anchor_metric_502m_total(model_cfg):
     """Total params must be in [500M, 504M] (production config)."""
-    cfg = ModelConfig(**{k: v for k, v in model_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = model_cfg
     model = GPTOSS(cfg)
     total = model.num_parameters()
     assert 500_000_000 <= total <= 504_000_000, (
@@ -102,7 +103,7 @@ def test_anchor_metric_502m_total(model_cfg):
 
 def test_anchor_metric_247m_active(model_cfg):
     """Active params must be in [244M, 250M] (production config, post-tie-dedup)."""
-    cfg = ModelConfig(**{k: v for k, v in model_cfg.items() if k in ModelConfig.__dataclass_fields__})
+    cfg = model_cfg
     model = GPTOSS(cfg)
     active = model.num_active_parameters()
     assert 244_000_000 <= active <= 250_000_000, (
@@ -143,7 +144,7 @@ def test_active_params_correct_with_tied_weights():
     # Tied total ≈ embed(4096) + 2*attention + 2*moe (active+inactive + shared + router) + norms
     # Tie-naive would double-count the embed/head pair → 4096 extra params.
     # Check: tied total should equal non-tied total minus vocab*d.
-    cfg_no_tie = ModelConfig(**{**{k: v for k, v in cfg.as_dict().items() if k != 'weight_tying'}, 'weight_tying': False})
+    cfg_no_tie = dataclasses.replace(cfg, weight_tying=False)
     model_no_tie = GPTOSS(cfg_no_tie)
     total_no_tie = model_no_tie.num_parameters()
     # tied_total should be smaller than non-tied by exactly vocab*d

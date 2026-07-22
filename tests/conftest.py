@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 import torch
 
+from models.transformer import ModelConfig
+
 
 @pytest.fixture(scope="session")
 def attn_small():
@@ -81,71 +83,71 @@ def attn_inputs_tiny(attn_tiny):
 @pytest.fixture(scope="session")
 def model_cfg():
     """Full model config matching the 502M architecture (production)."""
-    return {
-        "vocab_size":              128000,
-        "d_model":                 768,
-        "n_layers":                12,
-        "n_heads":                 8,
-        "n_kv_heads":              4,
-        "head_dim":                96,
-        "ffn_dim":                 1536,
-        "n_routed_experts":        8,
-        "n_activated_experts":     2,
-        "n_shared_experts":        1,
-        "window_size":             128,
-        "attention_pattern":       "alternating",
-        "sink_bias":               True,
-        "rope_theta":              100000,
-        "yarn_scale_factor":       32,
-        "yarn_original_max_seq_len": 4096,
-        "yarn_target_seq_len":     131072,
-        "yarn_beta_fast":          32,
-        "yarn_beta_slow":          1,
-        "yarn_mscale":             True,
-        "yarn_prune_rope_global":  True,
-        "max_seq_len":             4096,
-        "eval_max_seq_len":        131072,
-        "dtype":                   "bf16",
-        "weight_tying":            True,
-        "rms_norm_eps":            1e-5,
-        "init_std":                0.02,
-        "attn_impl":               "sdpa",
-    }
+    return ModelConfig(
+        vocab_size=128000,
+        d_model=768,
+        n_layers=12,
+        n_heads=8,
+        n_kv_heads=4,
+        head_dim=96,
+        ffn_dim=1536,
+        n_routed_experts=8,
+        n_activated_experts=2,
+        n_shared_experts=1,
+        window_size=128,
+        attention_pattern="alternating",
+        sink_bias=True,
+        rope_theta=100000,
+        yarn_scale_factor=32,
+        yarn_original_max_seq_len=4096,
+        yarn_target_seq_len=131072,
+        yarn_beta_fast=32,
+        yarn_beta_slow=1,
+        yarn_mscale=True,
+        yarn_prune_rope_global=True,
+        max_seq_len=4096,
+        eval_max_seq_len=131072,
+        dtype="bf16",
+        weight_tying=True,
+        rms_norm_eps=1e-5,
+        init_std=0.02,
+        attn_impl="sdpa",
+    )
 
 
 @pytest.fixture(scope="session")
 def small_cfg():
     """Small config for fast component tests (<2s on CPU)."""
-    return {
-        "vocab_size":              256,
-        "d_model":                 64,
-        "n_layers":                4,
-        "n_heads":                 4,
-        "n_kv_heads":              2,
-        "head_dim":                16,
-        "ffn_dim":                 128,
-        "n_routed_experts":        4,
-        "n_activated_experts":     2,
-        "n_shared_experts":        1,
-        "window_size":             32,
-        "attention_pattern":       "alternating",
-        "sink_bias":               True,
-        "rope_theta":              10000,
-        "yarn_scale_factor":       4,
-        "yarn_original_max_seq_len": 128,
-        "yarn_target_seq_len":     512,
-        "yarn_beta_fast":          4,
-        "yarn_beta_slow":          1,
-        "yarn_mscale":             True,
-        "yarn_prune_rope_global":  True,
-        "max_seq_len":             128,
-        "eval_max_seq_len":        512,
-        "dtype":                   "bf16",
-        "weight_tying":            True,
-        "rms_norm_eps":            1e-5,
-        "init_std":                0.02,
-        "attn_impl":               "sdpa",
-    }
+    return ModelConfig(
+        vocab_size=256,
+        d_model=64,
+        n_layers=4,
+        n_heads=4,
+        n_kv_heads=2,
+        head_dim=16,
+        ffn_dim=128,
+        n_routed_experts=4,
+        n_activated_experts=2,
+        n_shared_experts=1,
+        window_size=32,
+        attention_pattern="alternating",
+        sink_bias=True,
+        rope_theta=10000,
+        yarn_scale_factor=4,
+        yarn_original_max_seq_len=128,
+        yarn_target_seq_len=512,
+        yarn_beta_fast=4,
+        yarn_beta_slow=1,
+        yarn_mscale=True,
+        yarn_prune_rope_global=True,
+        max_seq_len=128,
+        eval_max_seq_len=512,
+        dtype="bf16",
+        weight_tying=True,
+        rms_norm_eps=1e-5,
+        init_std=0.02,
+        attn_impl="sdpa",
+    )
 
 
 @pytest.fixture()

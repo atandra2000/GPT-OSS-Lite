@@ -55,11 +55,7 @@ def test_kv_cache_reset():
 
 
 def test_kv_cache_windowed_preserves_order_after_rollover():
-    """The ring buffer must preserve the temporal order of the last `window` keys.
-
-    Append 7 distinct (B=1, H=1, T=1, D=2) keys to a window=3 cache. After
-    rollover, the cached tensor should contain keys [5, 6, 7] in that order.
-    """
+    """The ring buffer must preserve the temporal order of the last `window` keys."""
     cache = MixedKVCache()
     for i in range(7):
         k = torch.full((1, 1, 1, 2), float(i + 1))

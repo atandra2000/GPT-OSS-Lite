@@ -16,15 +16,14 @@ class CheckpointManager:
 
     def save(self, model: torch.nn.Module, optimizer: torch.optim.Optimizer, step: int,
              scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
-             extra_meta: Optional[dict] = None, state_dict: Optional[dict] = None) -> None:
-        state = state_dict if state_dict is not None else model.state_dict()
-        self._atomic_save_safetensors(state, self.save_dir / f"model_step_{step}.safetensors")
+             extra_meta: Optional[dict] = None) -> None:
+        self._atomic_save_safetensors(model.state_dict(), self.save_dir / f"model_step_{step}.safetensors")
         self._atomic_save_torch(optimizer.state_dict(), self.save_dir / f"optim_step_{step}.pt")
         if scheduler is not None:
             self._atomic_save_torch(scheduler.state_dict(), self.save_dir / f"sched_step_{step}.pt")
         meta: dict = {"step": step}
         if extra_meta:
-            meta.update({k: v for k, v in extra_meta.items() if k != "step"})
+            meta.update(extra_meta)
         self._atomic_save_json(meta, self.save_dir / f"meta_step_{step}.json")
         logger.info("[checkpoint] saved step %d → %s", step, self.save_dir)
 

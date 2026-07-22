@@ -8,7 +8,6 @@ from models.rotary import (
     apply_rope,
     compute_yarn_freqs,
     compute_yarn_mscale,
-    prune_rope,
 )
 from models.yarn import YaRNRoPE
 
@@ -22,12 +21,7 @@ def test_yarn_freqs_shape(yarn_cfg_small):
 
 
 def test_yarn_freqs_low_high_spread(yarn_cfg_small):
-    """Low-frequency dims should be scaled; high-frequency dims should be unchanged.
-
-    Convention: in RoPE, inv_freq[0] is the HIGHEST frequency (1 / θ^0 = 1),
-    and inv_freq[-1] is the LOWEST frequency. YaRN scales the low-frequency
-    end (large idx) and preserves the high-frequency end (small idx).
-    """
+    """Low-frequency dims should be scaled; high-frequency dims should be unchanged."""
     inv_freq = compute_yarn_freqs(**yarn_cfg_small)
     half = inv_freq.shape[0]
     # Without YaRN scaling, the spread is enormous (1 → tiny).
@@ -105,37 +99,6 @@ def test_yarn_module_position_monotonic(yarn_cfg_small):
     assert max_std > 0.1, f"No high-frequency dim showed visible rotation (max std = {max_std})"
 
 
-# Pruned RoPE
-
-def test_prune_rope_zero_dims():
-    """Pruned RoPE must set first n dims to (1, 0)."""
-    cos = torch.tensor([[1.0, 0.5, 0.5, 0.5, 0.5]])
-    sin = torch.tensor([[0.0, 0.5, 0.5, 0.5, 0.5]])
-    cos_p, sin_p = prune_rope(cos, sin, n_pruned_dims=2)
-    assert torch.allclose(cos_p[0, :2], torch.ones(2))
-    assert torch.allclose(sin_p[0, :2], torch.zeros(2))
-    # Other dims unchanged
-    assert torch.allclose(cos_p[0, 2:], cos[0, 2:])
-    assert torch.allclose(sin_p[0, 2:], sin[0, 2:])
-
-
-def test_prune_rope_no_op_when_zero():
-    """n_pruned_dims=0 must return input unchanged."""
-    cos = torch.randn(4, 8)
-    sin = torch.randn(4, 8)
-    cos_p, sin_p = prune_rope(cos, sin, n_pruned_dims=0)
-    assert torch.equal(cos_p, cos)
-    assert torch.equal(sin_p, sin)
-
-
-def test_prune_rope_invalid_dims():
-    """n_pruned_dims > head_dim/2 must raise."""
-    cos = torch.randn(4, 8)
-    sin = torch.randn(4, 8)
-    with pytest.raises(ValueError):
-        prune_rope(cos, sin, n_pruned_dims=10)
-
-
 def test_yarn_module_pruned_dims(yarn_cfg):
     """YaRN with n_pruned_dims must zero out those dims."""
     rope = YaRNRoPE(**yarn_cfg)
@@ -187,12 +150,12 @@ def test_compute_yarn_freqs_warns_on_degenerate_ramp():
     """Extreme beta_fast/beta_slow must emit a UserWarning (not silently fail)."""
     from models.rotary import compute_yarn_freqs
     # Pick parameters such that high <= low (the degenerate condition).
-    # With original_max=64 and beta_slow=64, the log2 ratio becomes tiny → low >= half.
+    # With original_max_seq_len=8 and beta_slow=64, the log2 ratio becomes tiny → low >= half.
     with pytest.warns(UserWarning, match="YaRN ramp degenerate"):
         # Use small head_dim and large beta_slow to force degenerate ramp
         compute_yarn_freqs(
             head_dim=8, theta=10000, scale_factor=4,
-            original_max=8, target_max=32,
+            original_max_seq_len=8, target_seq_len=32,
             beta_fast=64, beta_slow=64,
         )
 
@@ -205,6 +168,6 @@ def test_compute_yarn_freqs_no_warning_for_normal_params():
         warnings.simplefilter("error")  # treat warnings as errors
         compute_yarn_freqs(
             head_dim=64, theta=10000, scale_factor=4,
-            original_max=128, target_max=512,
+            original_max_seq_len=128, target_seq_len=512,
             beta_fast=4, beta_slow=1,
         )

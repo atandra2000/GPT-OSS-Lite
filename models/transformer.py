@@ -1,6 +1,5 @@
 """GPT-OSS-Lite top-level model: embedding + 12 alternating-attention/MoE blocks + head."""
-import math
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from typing import Optional
 
 import torch
@@ -42,6 +41,7 @@ class ModelConfig:
     rms_norm_eps: float = 1e-5
     init_std: float = 0.02
     attn_impl: str = "sdpa"
+    moe_dispatch: str = "stacked"
 
     def __post_init__(self):
         """Validate config invariants. Fails fast on misconfiguration."""
@@ -116,10 +116,6 @@ class ModelConfig:
                 f"({self.max_seq_len}); eval context will be shorter than training."
             )
 
-    def as_dict(self) -> dict:
-        """Return a shallow copy of the config as a dict (safe for callers)."""
-        return asdict(self)
-
 
 class RMSNorm(nn.Module):
     """Root Mean Square LayerNorm (no bias, no mean subtraction)."""
@@ -140,8 +136,8 @@ class GPTOSSBlock(nn.Module):
     def __init__(self, cfg: ModelConfig, layer_idx: int):
         super().__init__()
         self.layer_idx = layer_idx
-        self.attn = GPTOSSAttention(cfg.as_dict(), layer_idx)
-        self.moe = MoELayer(cfg.as_dict())
+        self.attn = GPTOSSAttention(cfg, layer_idx)
+        self.moe = MoELayer(cfg)
         self.norm1 = RMSNorm(cfg.d_model, cfg.rms_norm_eps)
         self.norm2 = RMSNorm(cfg.d_model, cfg.rms_norm_eps)
 

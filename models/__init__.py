@@ -1,5 +1,5 @@
 """GPT-OSS-Lite model package: from-scratch PyTorch reproduction of GPT-OSS."""
-from models.rotary import apply_rope, compute_yarn_freqs, compute_yarn_mscale, prune_rope
+from models.rotary import apply_rope, compute_yarn_freqs, compute_yarn_mscale
 from models.yarn import YaRNRoPE
 from models.attention import (
     GPTOSSAttention,
@@ -26,7 +26,6 @@ __all__ = [
     "compute_yarn_mscale",
     "full_causal_attention",
     "manual_causal_attention",
-    "prune_rope",
     "repeat_kv",
     "sliding_window_attention",
 ]

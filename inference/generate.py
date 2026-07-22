@@ -5,9 +5,10 @@ import torch
 import torch.nn.functional as F
 
 from models.attention import (
+    SINK_CLAMP_MAX,
+    SINK_CLAMP_MIN,
     apply_rope,
     full_causal_attention,
-    repeat_kv,
     sliding_window_attention,
 )
 from models.transformer import GPTOSS
@@ -186,7 +187,7 @@ def _attn_forward_layer(
     kv = attn.kv_proj(x_norm).view(B, T, 2, attn.n_kv_heads, attn.head_dim)
     k_new = kv[:, :, 0].transpose(1, 2)
     v_new = kv[:, :, 1].transpose(1, 2)
-    cos, sin = attn.yarn(positions, n_pruned_dims=attn.n_pruned_dims)
+    cos, sin = attn.yarn(positions, n_pruned_dims=attn._n_pruned_dims())
     q = apply_rope(q, cos, sin)
     k_new_rot = apply_rope(k_new, cos, sin)
 
@@ -199,16 +200,14 @@ def _attn_forward_layer(
         k_for_q = k_new_rot
         v_for_q = v_new
 
-    k_for_q = repeat_kv(k_for_q, attn.n_rep)
-    v_for_q = repeat_kv(v_for_q, attn.n_rep)
+    k_for_q = k_for_q.repeat_interleave(attn.n_rep, dim=1)
+    v_for_q = v_for_q.repeat_interleave(attn.n_rep, dim=1)
 
     if attn.sink_bias is not None:
         if sink_bias_cache is not None and id(attn) in sink_bias_cache:
             sink_bias_clamped = sink_bias_cache[id(attn)]
         else:
-            sink_bias_clamped = attn.sink_bias.clamp(
-                attn._sink_clamp_min, attn._sink_clamp_max
-            )
+            sink_bias_clamped = attn.sink_bias.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)
             if sink_bias_cache is not None:
                 sink_bias_cache[id(attn)] = sink_bias_clamped
     else:

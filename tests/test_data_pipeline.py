@@ -66,14 +66,10 @@ from shared_data.shard_writer import (
 
 @pytest.fixture()
 def workspace(tmp_path, monkeypatch):
-    """Set the shared_data data root to a temp dir so we don't touch the
-    real data/.
+    """Redirect the shared_data data root to `tmp_path` via `set_data_root` + module reload.
 
-    We call ``set_data_root(tmp_path)`` to update the path globals in
-    ``shared_data.common``, then reload the submodules that capture those
-    constants at import time (``shared_data.quality_filter`` captures
-    ``STATE_ROOT``, etc.) so they re-evaluate against the new root. Without
-    this, they would keep writing to the real ``data/state/`` dir.
+    Without the reload, submodules that capture path globals at import time
+    (`shared_data.quality_filter`, etc.) keep writing to the real `data/state/`.
     """
     from shared_data.common import set_data_root
     set_data_root(tmp_path)
