@@ -29,6 +29,9 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
 - `models/moe.py` — top-2 of 8 routed + 1 shared, standard aux loss,
   grouped dispatch.
 - `models/yarn.py` — YaRN RoPE scaling + pruned RoPE.
+- `models/moe_triton.py` — sanctioned Triton path for fused W1/W3+silu
+  MoE dispatch. Opt-in via `moe_dispatch="triton_grouped"`. Verified
+  end-to-end on a 4 GB GPU (sm_75) via `scripts/e2e_gpu_smoke.py`.
 - Training: BF16 + `torch.compile(max-autotune)` + TF32 + FA2 via SDPA,
   FP32 AdamW master weights + gradient checkpointing (every 3rd layer),
   NaN guard with rollback, aux load-balancing loss (α=0.01), chunked
@@ -39,15 +42,19 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
 
 **Triton kernel contract:**
 
-- **Sanctioned Triton paths:** *(none yet)*. The rule is in place for
-  future additions; the structure mirrors `DeepSeek-v3-Lite/AGENTS.md`.
-- No custom Triton kernels exist in this project today. Until a
-  kernel is added, all hot paths run on `torch.compile` + FA2 only.
-- When a kernel is added: place it in `models/<name>_triton.py`,
+- **Sanctioned Triton paths:**
+  - **`models/moe_triton.py` — fused W1/W3+silu grouped-GEMM.** Opt-in
+    via `moe_dispatch="triton_grouped"` in `ModelConfig`. Fuses the
+    gating (W1), up-projection (W3), silu, and element-wise mul into a
+    single launch; W2 stays in PyTorch. Tile shape
+    `(BLOCK_T=16) × (BLOCK_M=32) × (BLOCK_N=32)`, `num_stages=1`
+    (sm_75 friendly; sm_80 can re-enable `num_stages=2` via the
+    launcher). Autograd backward uses the pure-PyTorch reference path.
+- When adding a new kernel: place it in `models/<name>_triton.py`,
   gate on `import triton` with `try/except ImportError` setting
   `HAS_TRITON = False`, wrap in a `torch.autograd.Function`, add
   `tests/test_<name>_triton.py` with a CPU-runnable pure-PyTorch
-  reference, and add the new path to the sanctioned list in rule #1.
+  reference, and add the new path to the sanctioned list above.
 
 ## 2. Hard rules
 
@@ -55,9 +62,12 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
    sanctioned hot paths.** Bulk of the codebase (attention, MoE
    dispatch, RMSNorm, embeddings, LM head, loss, YaRN, MTP, inference)
    stays raw PyTorch. No HuggingFace Trainer, no Lightning, no
-   high-level wrappers. The sanctioned Triton paths are listed above;
-   currently empty. No new component gets a custom kernel without
-   updating this file and adding a `documentation/<name>.md` plan.
+   high-level wrappers. The sanctioned Triton paths are listed in
+   the "Triton kernel contract" section above; the current sanctioned
+   path is the fused W1/W3+silu MoE grouped-GEMM
+   (`models/moe_triton.py`). No new component gets a custom kernel
+   without updating `AGENTS.md` and adding a `documentation/<name>.md`
+   plan.
 2. **Always** preserve the sliding-window / full-attention alternation
    — replacing it with pure full-attention breaks the headline metric
    (≥ 1.8× KV-cache reduction at 128K).
