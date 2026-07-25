@@ -62,56 +62,76 @@ if HAS_TRITON:
         stride_w1e, stride_w1f, stride_w1d,
         stride_w3e, stride_w3f, stride_w3d,
         stride_ot, stride_of,
-        BLOCK_D: tl.constexpr,
-        BLOCK_F: tl.constexpr,
+        BLOCK_T: tl.constexpr,  # token block
+        BLOCK_M: tl.constexpr,  # reduction (d_model) block
+        BLOCK_N: tl.constexpr,  # output (d_ff) block
         N_EXPERTS: tl.constexpr,
     ):
-        """One program per (expert, token-tile) — fuses W1, W3, silu, mul."""
+        """One program per (expert, token-tile, n-tile) — fuses W1, W3, silu, mul.
+
+        Standard grouped-GEMM tiling: accumulate over BLOCK_M (d_model chunks),
+        parallelize over (token, d_ff). The full W1 / W3 matrix is never
+        materialized in shared memory at once.
+        """
         e = tl.program_id(0)
         t_blk = tl.program_id(1)
+        n_blk = tl.program_id(2)
 
         cnt = tl.load(cnt_ptr + e)
         if cnt == 0:
             return
         off = tl.load(off_ptr + e)
 
-        tok_in_blk = t_blk * BLOCK_D + tl.arange(0, BLOCK_D)
+        tok_in_blk = t_blk * BLOCK_T + tl.arange(0, BLOCK_T)
         tok_mask = tok_in_blk < cnt
 
-        x_row = x_ptr + (off + tok_in_blk)[:, None] * stride_xt
-        x_cols = tl.arange(0, BLOCK_F)
-        x_blk = tl.load(
-            x_row + x_cols[None, :] * stride_xd,
-            mask=tok_mask[:, None] & (x_cols[None, :] < d_model),
-            other=0.0,
-        )
+        n_in_blk = n_blk * BLOCK_N + tl.arange(0, BLOCK_N)
+        n_mask = n_in_blk < d_ff
 
-        w1_row = w1_ptr + e * stride_w1e + tl.arange(0, BLOCK_F)[:, None] * stride_w1f
-        w1_cols = tl.arange(0, BLOCK_D)
-        w1_blk = tl.load(
-            w1_row + w1_cols[None, :] * stride_w1d,
-            mask=(tl.arange(0, BLOCK_F)[:, None] < d_ff)
-                  & (w1_cols[None, :] < d_model),
-            other=0.0,
+        # Pointers for the token / d_model / d_ff slices we will read.
+        # The loop below adds the d_model offset per K-tile.
+        x_row_base = x_ptr + (off + tok_in_blk)[:, None] * stride_xt
+        w1_row_base = (
+            w1_ptr + e * stride_w1e
+            + n_in_blk[:, None] * stride_w1f
         )
-        w3_blk = tl.load(
+        w3_row_base = (
             w3_ptr + e * stride_w3e
-            + tl.arange(0, BLOCK_F)[:, None] * stride_w3f
-            + w1_cols[None, :] * stride_w3d,
-            mask=(tl.arange(0, BLOCK_F)[:, None] < d_ff)
-                  & (w1_cols[None, :] < d_model),
-            other=0.0,
+            + n_in_blk[:, None] * stride_w3f
         )
+        out_row = out_ptr + (off + tok_in_blk)[:, None] * stride_ot + n_in_blk[None, :] * stride_of
 
-        g = tl.dot(tl.trans(x_blk), w1_blk)
-        u = tl.dot(tl.trans(x_blk), w3_blk)
-        silu = g * tl.sigmoid(g)
-        fused = (silu * u).to(out_ptr.dtype.element_ty)
+        # Accumulate g, u in fp32 over the d_model dim (one K-tile per program).
+        g_acc = tl.zeros((BLOCK_T, BLOCK_N), dtype=tl.float32)
+        u_acc = tl.zeros((BLOCK_T, BLOCK_N), dtype=tl.float32)
+        for k0 in range(0, d_model, BLOCK_M):
+            k_offsets = k0 + tl.arange(0, BLOCK_M)
+            k_mask = k_offsets < d_model
+            x_tile = tl.load(
+                x_row_base + k_offsets[None, :] * stride_xd,
+                mask=tok_mask[:, None] & k_mask[None, :],
+                other=0.0,
+            )
+            w1_tile = tl.load(
+                w1_row_base + k_offsets[None, :] * stride_w1d,
+                mask=n_mask[:, None] & k_mask[None, :],
+                other=0.0,
+            )
+            w3_tile = tl.load(
+                w3_row_base + k_offsets[None, :] * stride_w3d,
+                mask=n_mask[:, None] & k_mask[None, :],
+                other=0.0,
+            )
+            g_acc += tl.dot(x_tile, tl.trans(w1_tile), allow_tf32=False)
+            u_acc += tl.dot(x_tile, tl.trans(w3_tile), allow_tf32=False)
 
-        out_row = out_ptr + (off + tok_in_blk)[:, None] * stride_ot
-        out_cols = tl.arange(0, BLOCK_F)
-        out_mask = tok_mask[:, None] & (out_cols[None, :] < d_ff)
-        tl.store(out_row + out_cols[None, :] * stride_of, fused, mask=out_mask)
+        # Cast to fp32 for the silu; sigmoid is fp32/fp64-only in Triton.
+        g32 = g_acc
+        u32 = u_acc
+        silu = g32 * tl.sigmoid(g32)
+        fused = (silu * u32).to(out_ptr.dtype.element_ty)
+
+        tl.store(out_row, fused, mask=tok_mask[:, None] & n_mask[None, :])
 
 
 class _MoEW1W3SiluFunction(torch.autograd.Function):
@@ -138,15 +158,17 @@ class _MoEW1W3SiluFunction(torch.autograd.Function):
                 f"exceeds hard cap ({_MOE_FFN_HARD_CAP} / {_MOE_DMODEL_HARD_CAP})."
             )
 
-        BLOCK_D = triton.next_power_of_2(min(64, max(16, d_model)))
-        BLOCK_F = triton.next_power_of_2(min(128, max(64, d_ff)))
-        BLOCK_D = min(BLOCK_D, _MOE_DMODEL_HARD_CAP)
-        BLOCK_F = min(BLOCK_F, _MOE_FFN_HARD_CAP)
+        # Tile sizes. Keep small enough to fit in 64 KB shared mem on sm_75
+        # (GTX 1650). Production on A100 can grow these via the launcher.
+        BLOCK_T = 16
+        BLOCK_M = 32
+        BLOCK_N = 32
 
         max_tokens = int(counts.max().item()) if counts.numel() else 0
-        n_tiles = (max_tokens + BLOCK_D - 1) // BLOCK_D
+        n_tiles_t = (max_tokens + BLOCK_T - 1) // BLOCK_T
+        n_tiles_n = (d_ff + BLOCK_N - 1) // BLOCK_N
 
-        _moe_w1w3_silu_kernel[(n_experts, n_tiles)](
+        _moe_w1w3_silu_kernel[(n_experts, n_tiles_t, n_tiles_n)](
             x_sorted, expert_ids_sorted, counts, offsets,
             W1_stack, W3_stack, out,
             n_tokens, d_model, d_ff,
@@ -155,9 +177,11 @@ class _MoEW1W3SiluFunction(torch.autograd.Function):
             W1_stack.stride(0), W1_stack.stride(1), W1_stack.stride(2),
             W3_stack.stride(0), W3_stack.stride(1), W3_stack.stride(2),
             out.stride(0), out.stride(1),
-            BLOCK_D=BLOCK_D, BLOCK_F=BLOCK_F,
+            BLOCK_T=BLOCK_T, BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N,
             N_EXPERTS=n_experts,
-            num_warps=4, num_stages=2,
+            # num_stages=1: GTX 1650 (sm_75) has 64 KB shared; num_stages=2 spills.
+            # Production runs on A100 (164 KB) can re-enable num_stages=2 via env.
+            num_warps=4, num_stages=1,
         )
 
         ctx.save_for_backward(
