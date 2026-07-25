@@ -1,0 +1,62 @@
+# Tiny E2E smoke config — fits in 4 GB VRAM (GTX 1650), runs in seconds.
+# Mirrors the production 502M architecture exactly, just at 1/100th the scale.
+# Use this to verify the full pipeline end-to-end on small GPUs.
+
+model:
+  vocab_size:              4096
+  d_model:                 128
+  n_layers:                4
+  n_heads:                 4
+  n_kv_heads:              2
+  head_dim:                32
+  ffn_dim:                 256
+  n_routed_experts:        4
+  n_activated_experts:     2
+  n_shared_experts:        1
+  window_size:             32
+  attention_pattern:       "alternating"
+  sink_bias:               true
+  rope_theta:              10000
+  yarn_scale_factor:       4
+  yarn_original_max_seq_len: 64
+  yarn_target_seq_len:     256
+  yarn_beta_fast:          4
+  yarn_beta_slow:          1
+  yarn_mscale:             true
+  yarn_prune_rope_global:  true
+  max_seq_len:             64
+  eval_max_seq_len:        256
+  dtype:                   bf16
+  weight_tying:            true
+  rms_norm_eps:            1.0e-5
+  init_std:                0.02
+  attn_impl:               "sdpa"
+  moe_dispatch:            "stacked"
+
+training:
+  micro_batch_size:              2
+  gradient_accumulation_steps:   1
+  total_steps:                   5
+  warmup_steps:                  1
+  lr:                            1.0e-3
+  min_lr_ratio:                  0.1
+  weight_decay:                  0.0
+  beta1:                         0.9
+  beta2:                         0.95
+  grad_clip:                     1.0
+  grad_checkpoint:               true
+  grad_checkpoint_every:         2
+  compile:                       false
+  save_interval:                 5
+  log_interval:                  1
+  nan_guard:                     true
+  nan_guard_max_consecutive:     5
+  aux_loss_alpha:                0.01
+  save_dir:                      "checkpoints/gpu_smoke"
+
+data:
+  train_data_path:      "data/pretrain_smoke"
+  tokenizer:            "smoke"
+  shard_size_tokens:    1024
+  max_tokens:           8192
+  data_mix:             "gptoss-default"
