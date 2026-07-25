@@ -99,7 +99,13 @@ def test_estimate_with_grad_ckpt_every(small_cfg):
 
 
 def test_assert_fits_in_available_gpu_runs_on_cpu():
-    """On CPU, assert_fits_in_available_gpu must be a no-op (no exception)."""
+    """On CPU, assert_fits_in_available_gpu must be a no-op (no exception).
+
+    On a machine with a small GPU (e.g. 4 GB), a 1000 GB estimate always trips
+    the guard, so this test only makes sense when the runtime is CPU-only.
+    """
+    if torch.cuda.is_available():
+        pytest.skip("CPU-only assertion test; skipped when CUDA is available")
     assert_fits_in_available_gpu(1000.0)
 
 

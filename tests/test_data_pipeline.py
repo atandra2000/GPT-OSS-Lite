@@ -1,4 +1,8 @@
-"""Tests for the GPT-OSS-Lite data pipeline."""
+"""Tests for the GPT-OSS-Lite data pipeline.
+
+Skipped when the sibling ``shared_data`` package is not importable (e.g. on a
+machine that doesn't have the other CoreProjects repos cloned next to this one).
+"""
 from __future__ import annotations
 
 import json
@@ -15,6 +19,10 @@ import torch
 _LLM_ROOT = Path(__file__).resolve().parents[2]
 if str(_LLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_LLM_ROOT))
+
+# ``shared_data`` ships in a sibling CoreProjects repo (LLaMA-3-Lite by convention).
+# If that repo is missing, the entire data-pipeline test module is not exercisable.
+shared_data_spec = pytest.importorskip("shared_data", reason="shared_data not importable on this machine")
 
 import shared_data.common as common
 from shared_data.common import (
