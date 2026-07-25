@@ -123,10 +123,23 @@ class MoELayer(nn.Module):
             W1_stack, W3_stack,
         )
 
-        out_sorted = torch.bmm(
-            gated_sorted.unsqueeze(0),
-            W2_stack[sorted_expert_ids],
-        ).squeeze(0)
+        # W2 stays in PyTorch. The gated activations are sorted by expert, so
+        # we can loop per expert — same pattern as the stacked reference path
+        # but operating on the Triton-produced gated tensor.
+        # Output width is d_model (W2's output dim), not d_ff.
+        out_sorted = torch.empty(
+            gated_sorted.size(0), W2_stack.size(1),
+            dtype=gated_sorted.dtype, device=gated_sorted.device,
+        )
+        counts_cpu = expert_counts.tolist()
+        offsets_cpu = expert_offsets.tolist()
+        for e in range(self.n_routed):
+            cnt = counts_cpu[e]
+            if cnt == 0:
+                continue
+            start = offsets_cpu[e]
+            end = start + cnt
+            out_sorted[start:end] = gated_sorted[start:end] @ W2_stack[e].T
 
         out_sorted = out_sorted * sorted_weights.unsqueeze(-1)
         out = torch.zeros_like(flat)
