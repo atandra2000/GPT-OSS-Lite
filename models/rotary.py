@@ -4,12 +4,18 @@ import torch
 
 
 def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
-    """Apply rotary position embeddings to ``x``."""
+    """Apply rotary position embeddings to ``x``.
+
+    Preserves the input dtype — if ``x`` is bf16, the result is bf16. We cast
+    ``cos``/``sin`` to ``x.dtype`` before the multiply to avoid type-promotion
+    that would otherwise push activations to fp32 and break SDPA's mixed-dtype
+    requirement (q/k/v must share a dtype).
+    """
     T = x.size(-2)
     half = x.size(-1) // 2
 
-    cos_full = cos.repeat_interleave(2, dim=-1)
-    sin_full = sin.repeat_interleave(2, dim=-1)
+    cos_full = cos.repeat_interleave(2, dim=-1).to(x.dtype)
+    sin_full = sin.repeat_interleave(2, dim=-1).to(x.dtype)
 
     x_pairs = x.unflatten(-1, (-1, 2))
     x_swapped = x_pairs.flip(-1)
