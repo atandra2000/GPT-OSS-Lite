@@ -45,6 +45,11 @@ self-contained deep-dive on one subsystem, cross-linked to its neighbours.
   dispatch, and the cached `(W1, W2, W3)` weight stacks invalidated via
   `tensor._version`. Includes the aux-loss derivation and active-parameter
   accounting.
+- [`moe_triton.md`](moe_triton.md) — **The sanctioned Triton kernel.**
+  The fused W1/W3+silu grouped-GEMM kernel in `models/moe_triton.py`:
+  algorithm, launch geometry, numerical choices, hard caps, and test
+  surface. Required reading before touching the only sanctioned
+  custom kernel in the project.
 - [`rotary.md`](rotary.md) — RoPE fundamentals: why rotation in the complex
   plane encodes *relative* position for free, the half-dim convention, the
   fused two-op `apply_rope` implementation, the YaRN frequency table
