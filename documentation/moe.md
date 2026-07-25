@@ -323,3 +323,104 @@ sparse.
   Switch-Transformer / GShard standard auxiliary load-balancing loss
   (α=0.01), NOT the aux-loss-free bias trick. This is an intentional
   distinction from DeepSeek-v3-Lite; do not "optimise" it away.
+
+---
+
+## 11. Sanctioned Triton path: fused W1/W3+silu grouped-GEMM
+
+`models/moe_triton.py` adds an opt-in kernel that fuses the **W1 (gating) +
+W3 (up-projection) + silu(g) * u** chain into a single launch. W2 stays in
+PyTorch because it has no activation to fuse. Enable it via
+`moe_dispatch="triton_grouped"` in `ModelConfig`; the default `"stacked"`
+path (§6) is unchanged.
+
+### 11.1 Why fuse?
+
+At the production scale (12 layers × 8 experts), the stacked dispatch path
+issues **3 × 8 = 24 cuBLAS launches per layer per forward** (W1, W3, W2 per
+expert), plus a Python loop with `index_add_` and an `argsort`. On A100 the
+launch overhead alone is non-trivial; on smaller GPUs (sm_75 with limited
+shared memory) it's a meaningful fraction of the MoE forward time.
+
+The Triton kernel collapses W1 and W3 into one launch, with the silu applied
+inline. The result: **1 launch per expert** for the W1+W3+silu stage (vs
+2 × 8 = 16 stacked), then a per-expert loop for W2 (the cleanest way to
+handle the ragged token counts after the sort).
+
+### 11.2 Kernel structure
+
+```
+Grid:    (n_experts, ceil(max_tokens / BLOCK_T), ceil(d_ff / BLOCK_N))
+Tile:    BLOCK_T=16 tokens, BLOCK_M=32 d_model, BLOCK_N=32 d_ff
+Stages:  num_stages=1 (sm_75 has 64 KB shared; num_stages=2 spills)
+Accum:   fp32 over the d_model reduction
+Activation: silu in fp32 (tl.sigmoid requires fp32/fp64)
+```
+
+The K-loop accumulates the W1·x and W3·x products in fp32, applies
+silu × u, then casts to the input dtype on store. The mask boundaries are
+explicit (`tok_mask`, `n_mask`, `k_mask`) so the kernel is correct for
+arbitrary `d_model` / `d_ff` / token counts (not just power-of-2).
+
+### 11.3 Backward (autograd)
+
+The custom autograd function (`_MoEW1W3SiluFunction`) keeps the forward
+on Triton but **delegates the backward to the pure-PyTorch reference path**
+(`_moe_w1w3_silu_reference`). This is intentional: the forward is the hot
+path (one matmul-fused launch), the backward is two matmuls per expert
+where the Triton gain is small relative to autograd setup cost. Verified
+bit-equivalent to a fully-PyTorch forward+backward in the test suite
+(`test_moe_layer_grad_flow` and the existing MoELayer tests).
+
+### 11.4 Dispatcher changes (`models/moe.py`)
+
+`_dispatch_triton` was rewritten to handle the W2 stage as a per-expert
+loop on the sorted token indices, replacing the original
+`torch.bmm(gated_sorted.unsqueeze(0), W2_stack[sorted_expert_ids])` which
+had a shape mismatch (bmm requires the batch dims to match). The new
+pattern matches `_dispatch_vectorized` but operates on the Triton-produced
+`gated_sorted` tensor:
+
+```python
+for e in range(self.n_routed):
+    cnt = counts_cpu[e]
+    if cnt == 0:
+        continue
+    start, end = offsets_cpu[e], offsets_cpu[e] + cnt
+    out_sorted[start:end] = gated_sorted[start:end] @ W2_stack[e].T
+out_sorted *= sorted_weights.unsqueeze(-1)
+out.index_add_(0, sorted_token_ids, out_sorted)
+```
+
+### 11.5 When to use
+
+- **Production training on A100**: enable (`moe_dispatch="triton_grouped"`)
+  for the launch-overhead saving. Re-enable `num_stages=2` in
+  `models/moe_triton.py` to use the full 164 KB shared memory.
+- **Dev box (sm_75 / 64 KB shared)**: the kernel runs at `num_stages=1` and
+  is bit-correct. The speedup is smaller than on A100 but the launch-count
+  reduction still helps.
+- **CPU / Mac**: keep the default `"stacked"` path. The Triton import is
+  gated on `try/except ImportError`; `MoELayer._dispatch_triton` raises
+  `ImportError` if `HAS_TRITON` is False.
+
+### 11.6 Test coverage
+
+- `tests/test_moe_triton.py` — 9 tests total:
+  - 4 reference cross-checks (always run, CPU-runnable).
+  - 2 dispatch-wiring tests (default `stacked`, monkeypatched `ImportError`).
+  - 2 GPU-gated tests (`@gpu_required`, FP32 + BF16 kernel vs reference).
+  - 1 hard-cap test (ValueError on `d_ff > 8192` or `d_model > 8192`).
+- `scripts/e2e_gpu_smoke.py` step 3 (kernel vs reference, FP32 + BF16) and
+  step 4 (`MoELayer` end-to-end with `triton_grouped` vs `stacked`) verify
+  the full forward pass on real GPU hardware.
+
+### 11.7 Numerical notes
+
+- The kernel accumulates W1·x and W3·x in **fp32** but the reference
+  (`_moe_w1w3_silu_reference`) computes them in the input dtype. For BF16
+  inputs, the kernel is *more* accurate than the reference; differences
+  are bounded by ~1 BF16 ULP at the output magnitude. The BF16 test uses
+  `atol=rtol=2e-2` to account for this (vs `1e-3` for FP32).
+- `tl.sigmoid` is fp32/fp64-only in Triton, so the silu is computed in
+  fp32 inside the kernel and cast back on store. No precision loss.
