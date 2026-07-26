@@ -8,10 +8,9 @@ import torch.nn.functional as F
 
 from models.attention import (
     GPTOSSAttention,
-    full_causal_attention,
+    causal_attention,
     manual_causal_attention,
     repeat_kv,
-    sliding_window_attention,
 )
 from models.transformer import ModelConfig
 
@@ -28,7 +27,7 @@ def test_sliding_window_matches_full_small(attn_inputs_small, attn_small):
     full = manual_causal_attention(q, k, v)
 
     # Sliding-window attention via SDPA
-    sw = sliding_window_attention(q, k, v, window=window)
+    sw = causal_attention(q, k, v, window=window)
 
     # For positions where full causal mask fits in window (t < window), they must match.
     # The positions t >= window should differ (SW restricts to last `window` keys).
@@ -224,7 +223,7 @@ def test_sliding_window_matches_full_large(attn_large):
     k = torch.randn(B, H, T, D)
     v = torch.randn(B, H, T, D)
     full = manual_causal_attention(q, k, v)
-    sw = sliding_window_attention(q, k, v, window=window)
+    sw = causal_attention(q, k, v, window=window)
     assert torch.allclose(full[:, :, :window], sw[:, :, :window], atol=1e-5)
 
 
@@ -237,8 +236,8 @@ def test_sink_and_window_compose_zero_bias():
     k = torch.randn(2, 4, 32, 16)
     v = torch.randn(2, 4, 32, 16)
     sink_zero = torch.zeros(4)
-    out_no_sink = sliding_window_attention(q, k, v, window=8, sink_bias=None)
-    out_zero_sink = sliding_window_attention(q, k, v, window=8, sink_bias=sink_zero)
+    out_no_sink = causal_attention(q, k, v, window=8, sink_bias=None)
+    out_zero_sink = causal_attention(q, k, v, window=8, sink_bias=sink_zero)
     # The magnitude should be reduced (by factor Z/(Z+1)) but the sign preserved.
     # Verify output_damped == output_normal * (something < 1, > 0).
     # Magnitudes ratio should be in (0, 1).
@@ -252,8 +251,8 @@ def test_sink_and_window_compose_high_bias_dampens():
     k = torch.randn(1, 2, 16, 8)
     v = torch.randn(1, 2, 16, 8)
     sink_high = torch.full((2,), 20.0)
-    out_normal = sliding_window_attention(q, k, v, window=8, sink_bias=None)
-    out_damped = sliding_window_attention(q, k, v, window=8, sink_bias=sink_high)
+    out_normal = causal_attention(q, k, v, window=8, sink_bias=None)
+    out_damped = causal_attention(q, k, v, window=8, sink_bias=sink_high)
     # With huge sink, exp(20) dominates → attention mass goes to sink → output ≈ 0.
     assert out_damped.abs().max() < out_normal.abs().max() * 0.5
 

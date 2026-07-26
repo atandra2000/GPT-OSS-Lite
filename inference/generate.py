@@ -8,8 +8,8 @@ from models.attention import (
     SINK_CLAMP_MAX,
     SINK_CLAMP_MIN,
     apply_rope,
-    full_causal_attention,
-    sliding_window_attention,
+    causal_attention,
+    repeat_kv,
 )
 from models.transformer import GPTOSS
 
@@ -200,8 +200,8 @@ def _attn_forward_layer(
         k_for_q = k_new_rot
         v_for_q = v_new
 
-    k_for_q = k_for_q.repeat_interleave(attn.n_rep, dim=1)
-    v_for_q = v_for_q.repeat_interleave(attn.n_rep, dim=1)
+    k_for_q = repeat_kv(k_for_q, attn.n_rep)
+    v_for_q = repeat_kv(v_for_q, attn.n_rep)
 
     if attn.sink_bias is not None:
         if sink_bias_cache is not None and id(attn) in sink_bias_cache:
@@ -214,11 +214,11 @@ def _attn_forward_layer(
         sink_bias_clamped = None
 
     if attn.is_windowed:
-        out = sliding_window_attention(
+        out = causal_attention(
             q, k_for_q, v_for_q, window=attn.window_size, sink_bias=sink_bias_clamped,
         )
     else:
-        out = full_causal_attention(q, k_for_q, v_for_q, sink_bias=sink_bias_clamped)
+        out = causal_attention(q, k_for_q, v_for_q, sink_bias=sink_bias_clamped)
 
     out = out.transpose(1, 2).contiguous().view(B, T, attn.n_heads * attn.head_dim)
     out = attn.o_proj(out)

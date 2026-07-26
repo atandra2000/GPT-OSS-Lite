@@ -3,10 +3,9 @@ from models.rotary import apply_rope, compute_yarn_freqs, compute_yarn_mscale
 from models.yarn import YaRNRoPE
 from models.attention import (
     GPTOSSAttention,
-    full_causal_attention,
+    causal_attention,
     manual_causal_attention,
     repeat_kv,
-    sliding_window_attention,
 )
 from models.moe import MoELayer, MoERouter, SwiGLUExpert, aux_load_balancing_loss
 from models.transformer import GPTOSS, ModelConfig, RMSNorm
@@ -22,10 +21,8 @@ __all__ = [
     "YaRNRoPE",
     "apply_rope",
     "aux_load_balancing_loss",
+    "causal_attention",
     "compute_yarn_freqs",
     "compute_yarn_mscale",
-    "full_causal_attention",
-    "manual_causal_attention",
     "repeat_kv",
-    "sliding_window_attention",
 ]

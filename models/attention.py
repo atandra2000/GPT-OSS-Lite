@@ -124,15 +124,6 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     return x.reshape(B, H_kv * n_rep, T, D)
 
 
-# Back-compat thin wrappers — production code uses causal_attention directly.
-def sliding_window_attention(q, k, v, window: int = 128, sink_bias=None):
-    return causal_attention(q, k, v, window=window, sink_bias=sink_bias)
-
-
-def full_causal_attention(q, k, v, sink_bias=None):
-    return causal_attention(q, k, v, window=None, sink_bias=sink_bias)
-
-
 class GPTOSSAttention(nn.Module):
     """GPT-OSS attention layer: GQA + YaRN RoPE + learned sink bias + alternating SWA/full."""
 
@@ -196,8 +187,8 @@ class GPTOSSAttention(nn.Module):
         query_states = apply_rope(query_states, cos, sin)
         key_states = apply_rope(key_states, cos, sin)
 
-        key_states = key_states.repeat_interleave(self.n_rep, dim=1)
-        value_states = value_states.repeat_interleave(self.n_rep, dim=1)
+        key_states = repeat_kv(key_states, self.n_rep)
+        value_states = repeat_kv(value_states, self.n_rep)
 
         if self.sink_bias is not None:
             sink_bias_clamped = self.sink_bias.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)

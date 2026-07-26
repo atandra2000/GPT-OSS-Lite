@@ -26,7 +26,6 @@ model:
   n_activated_experts:     2
   n_shared_experts:        1
   window_size:             128
-  attention_pattern:       "alternating"
   sink_bias:               true
   rope_theta:              100000
   yarn_scale_factor:       32
@@ -42,7 +41,6 @@ model:
   weight_tying:            true
   rms_norm_eps:            1.0e-5
   init_std:                0.02
-  attn_impl:               "sdpa"
 
 training:
   micro_batch_size:              8
@@ -65,10 +63,9 @@ training:
   log_interval:                  50
   nan_guard:                     true
   nan_guard_max_consecutive:     5
-  # aux_loss_alpha: 0.001 (was 0.01) — Switch Transformer's 0.01 was for top-1
-  # routing. For top-2-of-8, DeepSeek-V3 uses 0.001: gentle regularization
-  # rather than hard load-balancing pressure. Improves final loss.
-  aux_loss_alpha:                0.001
+  # aux_loss_alpha: 0.01 — Switch Transformer standard for top-k MoE. Distinct
+  # from DeepSeek-v3-Lite's aux-loss-free gate (deliberate per AGENTS.md rule 5).
+  aux_loss_alpha:                0.01
   save_dir:                      "checkpoints/pretrain_a100"
 
 data:

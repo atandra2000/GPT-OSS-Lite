@@ -95,7 +95,6 @@ def model_cfg():
         n_activated_experts=2,
         n_shared_experts=1,
         window_size=128,
-        attention_pattern="alternating",
         sink_bias=True,
         rope_theta=100000,
         yarn_scale_factor=32,
@@ -111,7 +110,6 @@ def model_cfg():
         weight_tying=True,
         rms_norm_eps=1e-5,
         init_std=0.02,
-        attn_impl="sdpa",
     )
 
 
@@ -130,7 +128,6 @@ def small_cfg():
         n_activated_experts=2,
         n_shared_experts=1,
         window_size=32,
-        attention_pattern="alternating",
         sink_bias=True,
         rope_theta=10000,
         yarn_scale_factor=4,
@@ -146,7 +143,6 @@ def small_cfg():
         weight_tying=True,
         rms_norm_eps=1e-5,
         init_std=0.02,
-        attn_impl="sdpa",
     )
 
 

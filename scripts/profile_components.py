@@ -4,10 +4,9 @@ import torch
 from _bootstrap import micro_cfg, time_fn
 from models.attention import (
     GPTOSSAttention,
-    full_causal_attention,
+    causal_attention,
     manual_causal_attention,
     repeat_kv,
-    sliding_window_attention,
 )
 from models.moe import MoELayer
 from models.rotary import apply_rope
@@ -58,7 +57,7 @@ def main():
     print(f"[sdpa_attn]          {t:.2f} ms/step")
 
     def swa_attn():
-        sliding_window_attention(q, k, v, window=cfg.window_size)
+        causal_attention(q, k, v, window=cfg.window_size)
     t = time_fn(swa_attn)
     print(f"[swa_attn]           {t:.2f} ms/step")
 

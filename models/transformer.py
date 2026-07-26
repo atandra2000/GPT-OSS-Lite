@@ -24,7 +24,6 @@ class ModelConfig:
     n_activated_experts: int = 2
     n_shared_experts: int = 1
     window_size: int = 128
-    attention_pattern: str = "alternating"
     sink_bias: bool = True
     rope_theta: int = 100000
     yarn_scale_factor: int = 32
@@ -40,7 +39,6 @@ class ModelConfig:
     weight_tying: bool = True
     rms_norm_eps: float = 1e-5
     init_std: float = 0.02
-    attn_impl: str = "sdpa"
     moe_dispatch: str = "stacked"
 
     def __post_init__(self):

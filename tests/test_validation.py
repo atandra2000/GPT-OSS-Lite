@@ -86,7 +86,7 @@ def test_modelconfig_field_count_is_stable():
     """ModelConfig has a fixed set of fields; adding fields should be deliberate."""
     from dataclasses import fields
     n_fields = len(fields(ModelConfig))
-    assert n_fields == 29, f"Expected 29 fields, got {n_fields}"
+    assert n_fields == 27, f"Expected 27 fields, got {n_fields}"
 
 
 # Anchor metric: ~502M total / ~247M active (the headline numbers)

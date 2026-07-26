@@ -14,7 +14,6 @@ model:
   n_activated_experts:     2
   n_shared_experts:        1
   window_size:             32
-  attention_pattern:       "alternating"
   sink_bias:               true
   rope_theta:              10000
   yarn_scale_factor:       4
@@ -30,7 +29,6 @@ model:
   weight_tying:            true
   rms_norm_eps:            1.0e-5
   init_std:                0.02
-  attn_impl:               "sdpa"
   moe_dispatch:            "stacked"
 
 training:

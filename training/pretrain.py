@@ -53,7 +53,6 @@ class PretrainDataset(Dataset):
     """Packed-token dataset: returns ``(input_ids, target_ids)`` windows."""
 
     _TORCH_SAVE_MAGIC_LEN = 8
-    _LEGACY_DTYPES = (torch.long, torch.int32, torch.int64)
 
     def __init__(self, data_path: str, max_seq_len: int):
         self.max_seq_len = max_seq_len
@@ -230,7 +229,6 @@ def _set_hardware_perf_knobs() -> None:
 def main(
     config_path: str,
     max_steps: Optional[int] = None,
-    dry_run: bool = False,
     seed: Optional[int] = None,
     resume_from: Optional[int] = None,
 ) -> None:
@@ -260,6 +258,8 @@ def main(
     n_params = model.num_parameters()
     n_active = model.num_active_parameters()
     print(f"[model] total params: {n_params / 1e6:.2f}M, active: {n_active / 1e6:.2f}M")
+
+    _amp_dtype = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(model_cfg.dtype, torch.bfloat16)
 
     compile_enabled = train_cfg.get("compile", False) and dev.type == "cuda"
     compile_mode = train_cfg.get("compile_mode", "max-autotune")
@@ -368,7 +368,7 @@ def main(
             input_ids = input_ids.to(dev, non_blocking=True)
             target_ids = target_ids.to(dev, non_blocking=True)
 
-            with autocast(device_type=dev.type, dtype=torch.bfloat16, enabled=(dev.type == "cuda")):
+            with autocast(device_type=dev.type, dtype=_amp_dtype, enabled=(dev.type == "cuda")):
                 logits, aux_loss = model(input_ids)
                 # chunk_size=8192 (was 4096): halves the number of CE kernel
                 # launches from 8 to 4 at (B=8, T=4096). Saves ~20μs/step
@@ -445,14 +445,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GPT-OSS-Lite pre-training")
     parser.add_argument("--config", required=True, type=str, help="Path to YAML config")
     parser.add_argument("--max-steps", type=int, default=None, help="Override total_steps")
-    parser.add_argument("--dry-run", action="store_true", help="Just check config + model builds, don't train")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility")
     parser.add_argument("--resume-from", type=int, default=None, help="Resume from checkpoint step")
     args = parser.parse_args()
     main(
         args.config,
         max_steps=args.max_steps,
-        dry_run=args.dry_run,
         seed=args.seed,
         resume_from=args.resume_from,
     )
