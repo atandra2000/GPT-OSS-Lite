@@ -407,3 +407,5 @@ far worse than a clear error at step 0. On CPU this is a no-op. See
   `documentation/moe.md`).
 - Determinism floor under BF16 is ~1e-4 (BF16 non-determinism); two
   seeded runs should match within that tolerance.
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

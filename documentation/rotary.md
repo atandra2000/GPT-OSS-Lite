@@ -264,3 +264,5 @@ is bounded by `window = 128`, so over-rotation is not a concern. See
   dims by setting `cos=1.0, sin=0.0` (identity rotation), so those
   dimensions receive no positional encoding. Used on global (full-attention)
   layers to reduce over-rotation at 128K.
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

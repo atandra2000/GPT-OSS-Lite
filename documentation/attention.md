@@ -2,7 +2,7 @@
 
 > **Source:** `models/attention.py`
 > **Authoritative companion:** [`ATTENTION_SINKS.md`](ATTENTION_SINKS.md) — the
-> 600-line theoretical deep-dive on the learned sink bias. This file documents the
+> theoretical deep-dive on the learned sink bias. This file documents the
 > *implementation*; that file documents the *idea*. It now lives alongside this
 > file in `documentation/`.
 
@@ -368,3 +368,5 @@ x (B,T,d_model)
 - **Fast T=1 RoPE path**: `YaRNRoPE.forward` special-cases
   `positions.numel() == 1` to skip `torch.outer` and do a single scalar
   multiply — saves a kernel launch per decode step across all 12 layers.
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

@@ -6,7 +6,7 @@
 > **Project:** `LLM/GPT-OSS-Lite/` · **Type:** faithful GPT-OSS reproduction
 > **Scale:** ~502M total / ~247M active · 8.0B tokens planned · 16–20h on A100 80GB
 > **Stack:** PyTorch 2.x, BF16, `torch.compile(max-autotune)`, FA2 via SDPA
-> **Architecture detail:** see `README.md §7`; cross-architecture explainer
+> **Architecture detail:** see `documentation/architecture.md`; cross-architecture explainer
 > at `.agents/skills/llm-architecture/SKILL.md §2, §5`; **authoritative
 > sink-bias deep-dive at `documentation/ATTENTION_SINKS.md`.**
 
@@ -84,7 +84,7 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
    (avoids HyMo / DeepSeek-v3-Lite overlap).
 8. **Never** let a Triton kernel silently fall back to the raw-PyTorch
    path during a default-config training run. The opt-in is explicit
-   (per-kernel config key + `ENABLE_TRITON_KERNELS=1` env-var). If
+   (per-kernel config key, e.g. `moe_dispatch="triton_grouped"`). If
    the kernel fails to compile or throws at runtime, the run must
    surface a clear error, not a silent fallback.
 9. **Always** add a unit test in `tests/` for any new Triton kernel

@@ -13,11 +13,11 @@ After pulling new code.
 
 **Steps:**
 
-1. **Run the full CPU-friendly test suite (190 tests, ~40s).**
+1. **Run the full CPU-friendly test suite (187 tests, ~40s).**
    ```bash
    python3 -m pytest tests/ -v
    ```
-   Expected: 190 passed.
+   Expected: 187 passed.
 
 2. **Verify the headline metric is still measured correctly.**
    ```bash
@@ -150,9 +150,7 @@ retrieval, or unstable training at longer sequences.
 
 4. **Start training.**
    ```bash
-   bash scripts/launch_a100.sh
-   # or directly:
-   python3 training/pretrain.py --config configs/pretrain_a100_502m.yaml
+   python3 training/pretrain.py --config configs/pretrain_a100_502m.yaml --seed 42
    ```
 
 5. **Monitor** via the wandb dashboard (set `WANDB_PROJECT` env var).
@@ -270,10 +268,9 @@ adding more complex optimisations (e.g. CUDA graphs, custom Triton kernels).
    The repo has dedicated scripts under `scripts/`:
    ```bash
    python3 scripts/profile_components.py   # per-component ms/op
-   python3 scripts/profile_step.py         # end-to-end training step
    python3 scripts/profile_inference.py    # generation throughput
-   python3 scripts/profile_longctx.py      # decode-time vs context length
    python3 scripts/profile_moe.py          # MoE dispatch only
+   python3 scripts/step_time_a100.py     # end-to-end training step (GPU)
    ```
 
 2. **Cross-reference with `documentation/OPTIMIZATIONS.md`.** The doc lists

@@ -1,104 +1,134 @@
-# GPT-OSS-Lite Documentation
+# GPT-OSS-Lite — Documentation Index
 
-Index of the design / implementation docs for GPT-OSS-Lite. The code itself is
-kept clean and readable; the *why* — the math, the design rationale, the
-rejected alternatives, the edge cases — lives here. Each file is a
-self-contained deep-dive on one subsystem, cross-linked to its neighbours.
+Educational technical references for every component of this project. Each doc follows a consistent structure: theory, math, implementation walkthrough, invariants, and cross-links.
 
-## How to read these docs
-
-- **New to the codebase?** Start with [`attention.md`](attention.md) and
-  [`moe.md`](moe.md) — they cover the two architectural pillars (sliding-window
-  attention and the MoE FFN). Then [`yarn.md`](yarn.md) for the long-context
-  story, [`training.md`](training.md) for the loop, and
-  [`inference.md`](inference.md) for how the architecture pays off at decode
-  time.
-- **Debugging a numerical issue?** Go straight to
-  [`training.md`](training.md) §3 (stability knobs) and §5 (NaN guard), then
-  [`attention.md`](attention.md) §7.3 (sink-bias clamp).
-- **Tuning for a different GPU?** [`utils.md`](utils.md) §5 (memory
-  estimator) and [`training.md`](training.md) §3 (perf knobs).
-- **Understanding the headline metrics?** [`inference.md`](inference.md)
-  (2× KV cache) and [`yarn.md`](yarn.md) (128K passkey extrapolation).
+**New here?** Start with [foundations.md](foundations.md) → [getting_started.md](getting_started.md) → [architecture.md](architecture.md).
 
 ---
 
-## Architecture & components
+## Learning Path
 
-- [`ATTENTION_SINKS.md`](ATTENTION_SINKS.md) — **★ the authoritative sink-bias
-  deep-dive.** The 600-line theoretical treatment of the learned attention-sink
-  bias (the off-by-one / StreamingLLM trick): why it exists, why GPT-OSS makes it
-  *learned*, the BF16 numerical-stability clamps, and the relationship to
-  streaming long-context attention. **This is the authoritative reference for
-  sink-bias questions**; [`attention.md`](attention.md) supplements it with
-  implementation details but does not duplicate the theory.
-- [`attention.md`](attention.md) — **The load-bearing component.** Sliding-window
-  + full attention alternation, the learned sink bias (off-by-one /
-  StreamingLLM trick), GQA, mask caching, FP32 accumulation in the reference
-  path, `repeat_kv` expand-not-contiguous, the forward-time sink-bias clamp,
-  and the alternating even-SWA / odd-full layer pattern. Includes the math for
-  each attention variant and the rationale for every rejected alternative.
-- [`moe.md`](moe.md) — **The second pillar.** Top-2 of 8 routed + 1 shared
-  SwiGLU expert, the standard Switch/GShard auxiliary load-balancing loss
-  (deliberately *not* the aux-loss-free bias trick — a contrast with
-  DeepSeek-v3-Lite), the router's FP32 softmax, stable-argsort reproducible
-  dispatch, and the cached `(W1, W2, W3)` weight stacks invalidated via
-  `tensor._version`. Includes the aux-loss derivation and active-parameter
-  accounting.
-- [`moe_triton.md`](moe_triton.md) — **The sanctioned Triton kernel.**
-  The fused W1/W3+silu grouped-GEMM kernel in `models/moe_triton.py`:
-  algorithm, launch geometry, numerical choices, hard caps, and test
-  surface. Required reading before touching the only sanctioned
-  custom kernel in the project.
-- [`rotary.md`](rotary.md) — RoPE fundamentals: why rotation in the complex
-  plane encodes *relative* position for free, the half-dim convention, the
-  fused two-op `apply_rope` implementation, the YaRN frequency table
-  (`compute_yarn_freqs`), the `mscale` temperature correction, and `prune_rope`
-  (pruned RoPE on global layers).
-- [`yarn.md`](yarn.md) — **YaRN length extrapolation.** How a 4K-trained model
-  reaches 128K: the per-dimension frequency ramp (interpolate low frequencies,
-  leave high frequencies alone), the mscale softmax correction, pruned RoPE on
-  global layers, the degenerate-ramp `UserWarning`, rotated-K caching for O(T)
-  decode, and the fast T=1 path. Explains the *training-time* YaRN choice
-  (true extrapolation, not decode-only).
-- [`training.md`](training.md) — **The training loop.** BF16 autocast (no
-  `GradScaler`), `torch.compile(max-autotune)`, TF32 + cuDNN knobs, FP32 AdamW
-  master weights, gradient checkpointing every 3rd layer, the NaN-guard state
-  machine with checkpoint rollback, chunked cross-entropy (chunk=4096),
-  `foreach`/`fused` AdamW, `CUBLAS_WORKSPACE_CONFIG`, the warmup→cosine LR
-  schedule, and the full RNG-chain reproducibility story.
-- [`inference.md`](inference.md) — **The decode path.** `MixedKVCache` (ring
-  buffer for windowed layers, exponential-growth buffer for global layers),
-  rotated-K caching (O(T) decode not O(T²)), pre-allocated output, per-call
-  sink-bias clamp cache, the `use_cache=False` correctness replay path, and
-  the 128K `PasskeyEvaluator` (the second headline metric) with its
-  reproducibility design.
-- [`data_pipeline.md`](data_pipeline.md) — **The 8 B-token pipeline.** Four
-  stages (download → clean + dedup → tokenize → pack shards), SHA-256
-  hash-sharded constant-memory dedup, EOS-separated token streams, atomic
-  shard writes, round-robin packing, the manifest schema, mmap zero-copy
-  slices, and `uint32` storage. Includes the five-source mixture table and
-  validation rules.
-- [`utils.md`](utils.md) — **Infrastructure.** `CheckpointManager` (atomic
-  safetensors with shared-tensor dedup for weight tying, `.tmp → os.replace`,
-  complete-checkpoint step discovery), the RNG sibling file, the one-line
-  `distributed` device helper, the sync-free rolling-window `TrainingLogger`
-  with optional WandB, and the two-regime `memory` estimator + pre-flight
-  VRAM check.
-- [`OPTIMIZATIONS.md`](OPTIMIZATIONS.md) — **The perf audit.** Every
-  optimisation applied (problem → fix → impact → risk → test coverage), with
-  a TL;DR results table and CPU vs A100 projected gains. The single source of
-  truth for "why is this line of code written this way."
+| Phase | Read | Learn |
+|---|---|---|
+| 0. Foundations | [foundations.md](foundations.md) | GQA, SWA, sinks, YaRN, Chinchilla |
+| 1. Overview | [getting_started.md](getting_started.md) | Key numbers, smoke tests, pitfalls |
+| 2. Big picture | [architecture.md](architecture.md) | How all components connect |
+| 3. Attention | [ATTENTION_SINKS.md](ATTENTION_SINKS.md), [attention.md](attention.md) | Sinks, SWA/full alt, GQA |
+| 4. MoE | [moe.md](moe.md) | Top-2-of-8, standard aux loss |
+| 5. Long context | [yarn.md](yarn.md), [rotary.md](rotary.md) | YaRN extrapolation, pruned RoPE |
+| 6. Wiring | [transformer.md](transformer.md) | Layer stack, weight tying |
+| 7. Training | [training.md](training.md) | Pretrain loop, NaN guard |
+| 8. Data | [data_pipeline.md](data_pipeline.md) | 8.0B-token corpus |
+| 9. Inference | [inference.md](inference.md) | Mixed KV cache, passkey eval |
+| 10. Ops | [configs.md](configs.md), [scripts.md](scripts.md), [utils.md](utils.md) | YAML, benchmarks, checkpoints |
+| 11. Quality | [testing.md](testing.md) | Test corpus as oracle |
+| 12. Advanced | [triton_kernels.md](triton_kernels.md), [OPTIMIZATIONS.md](OPTIMIZATIONS.md) | Fused MoE kernel, perf audit |
+
+---
+
+## Documentation tiers
+
+| Tier | Files | When to read |
+|---|---|---|
+| **Essential** | [getting_started.md](getting_started.md), [architecture.md](architecture.md), [configs.md](configs.md), [testing.md](testing.md) | First run, debugging, YAML tuning |
+| **Deep dives** | [ATTENTION_SINKS.md](ATTENTION_SINKS.md), [attention.md](attention.md), [moe.md](moe.md), [yarn.md](yarn.md), [foundations.md](foundations.md) | GPT-OSS mechanisms in depth |
+| **Operations** | [training.md](training.md), [data_pipeline.md](data_pipeline.md), [inference.md](inference.md), [scripts.md](scripts.md), [utils.md](utils.md) | Full training run, data, checkpoints |
+| **Advanced** | [triton_kernels.md](triton_kernels.md), [OPTIMIZATIONS.md](OPTIMIZATIONS.md), [transformer.md](transformer.md) | Kernel opt-in, perf, wiring internals |
+
+---
+
+## Component Docs
+
+| File | Component(s) | Source |
+|------|--------------|--------|
+| [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | Sink bias + SWA + YaRN theory | `models/attention.py` |
+| [attention.md](attention.md) | SWA, full, GQA, sink implementation | `models/attention.py` |
+| [moe.md](moe.md) | Top-2 MoE + aux loss | `models/moe.py` |
+| [yarn.md](yarn.md) | YaRN RoPE scaling | `models/yarn.py` |
+| [rotary.md](rotary.md) | RoPE helpers, prune | `models/rotary.py` |
+| [transformer.md](transformer.md) | Top-level wiring | `models/transformer.py` |
+| [training.md](training.md) | Pretrain loop | `training/pretrain.py` |
+| [inference.md](inference.md) | Generate + passkey | `inference/` |
+| [data_pipeline.md](data_pipeline.md) | 8.0B-token pipeline | `data/prepare_data.py` |
+| [utils.md](utils.md) | Checkpoint, memory, logging | `utils/` |
+| [triton_kernels.md](triton_kernels.md) | Fused MoE kernel | `models/moe_triton.py` |
+
+---
+
+## Operations Docs
+
+| File | Purpose |
+|------|---------|
+| [getting_started.md](getting_started.md) | Onboarding, commands, pitfalls |
+| [architecture.md](architecture.md) | System diagram, data flows, file map |
+| [configs.md](configs.md) | YAML key reference |
+| [scripts.md](scripts.md) | Benchmarks, smoke tests, headline metrics |
+| [testing.md](testing.md) | Test suite guide + load-bearing tests |
+
+---
+
+## Configs
+
+| Config | Purpose |
+|---|---|
+| `configs/pretrain_a100_502m.yaml` | Canonical Chinchilla-optimal recipe, ~502M params, 1× A100 80GB |
+
+See [configs.md](configs.md) for every key.
+
+---
+
+## ATTENTION_SINKS reference
+
+**[ATTENTION_SINKS.md](ATTENTION_SINKS.md)** is the single canonical doc for sink bias, sliding-window alternation, and YaRN theory. If prose and code disagree, **`models/attention.py` wins**.
+
+---
+
+## Load-bearing invariants (do not break)
+
+| Invariant | Doc |
+|---|---|
+| Even layers = SWA(128), odd = full | [attention.md](attention.md) |
+| Sink bias clamped `[-10, 15]` at forward | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
+| Standard aux loss (α=0.01), not aux-loss-free | [moe.md](moe.md) |
+| Weight tying — head.weight = embed.weight | [transformer.md](transformer.md) |
+| `moe_dispatch="stacked"` by default | [triton_kernels.md](triton_kernels.md) |
+| NaN guard with checkpoint rollback | [training.md](training.md) |
+| YaRN scale = 32 (128K / 4K) | [yarn.md](yarn.md) |
 
 ---
 
 ## Authoritative top-level references
 
-- [`../AGENTS.md`](../AGENTS.md) — subagent definitions and project rules
-  (numerical-stability / reproducibility / performance; the "do not replace the
-  standard aux loss" rule; the "no MLA/GDN/MTP" rule).
-- [`../SKILLS.md`](../SKILLS.md) — project-local skill workflows (smoke tests,
-  KV-cache benchmark, YaRN debug, pretraining, passkey eval, reproducible runs,
-  profiling).
-- [`../README.md`](../README.md) — the public project summary: headline metrics,
-  quick start, results tables, design-decision table, project structure.
+- [`../AGENTS.md`](../AGENTS.md) — subagent rules and hard constraints
+- [`../SKILLS.md`](../SKILLS.md) — project-local workflows
+- [`../CONTEXT.md`](../CONTEXT.md) — agent working snapshot
+- [`../README.md`](../README.md) — public project summary
+
+---
+
+## Doc size reference
+
+| Doc | ~Lines | Status |
+|---|---|---|
+| ATTENTION_SINKS.md | 542 | Comprehensive |
+| OPTIMIZATIONS.md | 521 | Comprehensive |
+| moe.md | 426 | Comprehensive |
+| training.md | 409 | Comprehensive |
+| utils.md | 390 | Comprehensive |
+| attention.md | 370 | Comprehensive |
+| data_pipeline.md | 353 | Comprehensive |
+| inference.md | 350 | Comprehensive |
+| rotary.md | 266 | Comprehensive |
+| yarn.md | 264 | Comprehensive |
+| getting_started.md | 240 | Comprehensive |
+| architecture.md | 214 | Comprehensive |
+| foundations.md | 149 | Comprehensive |
+| scripts.md | 147 | Comprehensive |
+| configs.md | 131 | Comprehensive |
+| transformer.md | 129 | Comprehensive |
+| testing.md | 107 | Comprehensive |
+| triton_kernels.md | 101 | Comprehensive |
+| **Total** | **5,109** | |
+
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

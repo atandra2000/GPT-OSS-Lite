@@ -351,3 +351,5 @@ python3 -m pytest tests/test_data_pipeline.py -v
   safe default for multi-trillion-token corpora with reserved special
   tokens up to vocab+256). `select_token_dtype(vocab_size)` picks the
   smallest dtype automatically.
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

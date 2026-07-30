@@ -1,7 +1,7 @@
 # Attention Sinks, Sliding-Window Alternation & YaRN — Technical Deep-Dive
 
 > **Author:** Atandra Bharati · **Date:** 2026-06-29
-> **Status:** Filled technical deep-dive (~600 lines)
+> **Status:** Filled technical deep-dive (~540 lines)
 
 This document is the authoritative reference for the three load-bearing
 primitives of GPT-OSS-Lite's attention path:
@@ -10,7 +10,7 @@ primitives of GPT-OSS-Lite's attention path:
 2. **Sliding-window(128) + full attention alternation** (the headline KV-cache trick).
 3. **YaRN RoPE scaling** for 128K length extrapolation from 4K training.
 
-It is the analogue of `LLM/DeepSeek-v3-Lite/MLA.md` (643 lines) and
+It is the analogue of `LLM/DeepSeek-v3-Lite/MLA.md` (~1,400 lines) and
 `LLM/Mamba-2-Lite/SSD.md` for this repo.
 
 ---
@@ -540,3 +540,5 @@ Fits comfortably in A100 80GB (room for batch 32+).
     model for this document).
   - `LLM/Mamba-2-Lite/SSD.md` — the SSD deep-dive.
   - `LLM/LLaMA-3-Lite/architecture.md` — the LLaMA-3 deep-dive.
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

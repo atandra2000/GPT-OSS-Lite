@@ -328,6 +328,8 @@ sparse.
 
 ## 11. Sanctioned Triton path: fused W1/W3+silu grouped-GEMM
 
+See [triton_kernels.md](triton_kernels.md) for the full kernel design doc.
+
 `models/moe_triton.py` adds an opt-in kernel that fuses the **W1 (gating) +
 W3 (up-projection) + silu(g) * u** chain into a single launch. W2 stays in
 PyTorch because it has no activation to fuse. Enable it via
@@ -424,3 +426,5 @@ out.index_add_(0, sorted_token_ids, out_sorted)
   `atol=rtol=2e-2` to account for this (vs `1e-3` for FP32).
 - `tl.sigmoid` is fp32/fp64-only in Triton, so the silu is computed in
   fp32 inside the kernel and cast back on store. No precision loss.
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

@@ -348,3 +348,5 @@ retrieval accuracy — there are no learned weights to retrieve *with*).
   once and stores `k_new_rot` in the cache, so each decode step only
   rotates the single new K rather than recomputing RoPE over the
   growing cache. Decode is O(T) per token, not O(T²).
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

@@ -262,3 +262,5 @@ forward). This means:
   tiny matmul and incurs kernel-launch overhead. The T=1 path reads the
   position as a Python float, multiplies `inv_freq` by it directly, then
   takes `cos`/`sin` — saving one kernel launch per layer per decode step.
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

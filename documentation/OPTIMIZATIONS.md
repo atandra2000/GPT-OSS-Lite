@@ -2,7 +2,7 @@
 
 > **Audit date:** 2026-06-29
 > **Baseline:** 127 tests, 502M params, ~5.35 ms/model-forward on MacBook Air M-series
-> **Post-optimization:** 130 tests (+3 ring-buffer ordering tests), same correctness, ~4.45 ms/model-forward (~17% faster on CPU)
+> **Post-optimization:** 187 tests, same correctness, ~4.45 ms/model-forward (~17% faster on CPU)
 > **Expected A100 gains** (extrapolated from microbenchmarks and PyTorch docs): 25-40% on training, 2-3× on inference at long context
 
 This document captures all optimizations applied to the GPT-OSS-Lite codebase. Each entry explains the problem, the fix, the impact, and the rationale. Hardware assumptions are stated explicitly.
@@ -30,14 +30,14 @@ This document captures all optimizations applied to the GPT-OSS-Lite codebase. E
 | 15 | Fast T=1 path in YaRN forward | `models/yarn.py` | ✅ (per layer, per decode) | ~5% decode step | ~3% decode step |
 | 17 | AdamW `eps=1e-6` for BF16 stability | `training/pretrain.py` | ❌ (hyperparameter) | zero | zero; late-stage loss stability |
 | 18 | `warmup_steps` 2000 → 3000 for MoE | `configs/pretrain_a100_502m.yaml` | ❌ (LR schedule) | zero | zero; smoother early loss |
-| 19 | `aux_loss_alpha` 0.01 → 0.001 for top-2-of-8 | `configs/pretrain_a100_502m.yaml` | ❌ (loss coefficient) | zero | zero; better expert specialization |
+| 19 | `aux_loss_alpha` kept at 0.01 (0.001 considered) | `configs/pretrain_a100_502m.yaml` | ❌ (loss coefficient) | zero | zero; AGENTS rule 5 |
 | 20 | cuDNN exhaustive search + cuBLASLt | `training/pretrain.py` | ✅ (per layer) | n/a | ~3-5% step |
 | 21 | `chunked_cross_entropy` chunk_size 4096 → 8192 | `training/pretrain.py` | ✅ (per step) | zero | ~2% step (fewer launches) |
 | 22 | Decode-mask cache for sliding-window attention | `models/attention.py` | ✅ (per layer, per decode token) | n/a (GPU only) | ~3% long-context generation |
 | 23 | `apply_rope` preserves input dtype | `models/rotary.py` | ✅ (per layer) | zero | zero; fixes BF16 SDPA dtype mismatch |
 | 24 | Triton W1/W3+silu grouped-GEMM kernel | `models/moe_triton.py` | ✅ (per MoE layer, per token) | n/a (CUDA) | ~10-20% MoE forward |
 
-All optimizations preserve bit-exact correctness (verified by the 130-test suite, including 3 new ring-buffer ordering tests).
+All optimizations preserve bit-exact correctness (verified by the 187-test suite).
 
 ---
 
@@ -362,16 +362,13 @@ output[:, T_prompt + step : T_prompt + step + 1] = next_id
 
 ---
 
-## 19. `aux_loss_alpha=0.001` for top-2-of-8 routing
+## 19. `aux_loss_alpha` — considered 0.001, kept 0.01
 
-**Problem:** The original `aux_loss_alpha=0.01` comes from Switch Transformer's top-1 routing. For top-2-of-8 (this project), DeepSeek-V3 uses 0.001: a 10× lower weight treats the aux as a gentle regularizer rather than a hard load-balancing constraint. With 0.01, the model is rewarded for using *all* 8 experts even when only 2-3 are useful, which can hurt final loss.
+**Problem:** For top-2-of-8 routing, some MoE recipes use α=0.001 (10× lower than Switch Transformer's top-1 default). A lower weight treats aux as a gentle regularizer.
 
-**Fix:** Change `aux_loss_alpha: 0.01` → `aux_loss_alpha: 0.001` in `configs/pretrain_a100_502m.yaml`.
+**Decision:** **Kept `aux_loss_alpha=0.01`** in `configs/pretrain_a100_502m.yaml`. AGENTS.md rule 5 requires the standard Switch/GShard aux loss — deliberately distinct from DeepSeek-v3-Lite's aux-loss-free gate. The 0.001 variant was evaluated but not applied.
 
-**Hot path:** None (loss coefficient).
-**CPU impact:** Zero.
-**A100/H100 expected impact:** Zero wall-clock; expected improvement in final loss and possibly expert specialization.
-**Test coverage:** `test_aux_loss_*` in `test_moe.py` use explicit `0.01` in some assertions but they test the loss shape, not the coefficient value. No test changes needed. `test_moe_layer_routes_to_all_experts_over_batch` verifies routing reaches ≥2 experts at init, still passes.
+**Test coverage:** `test_aux_loss_*` in `test_moe.py` use explicit coefficients; no config change needed.
 
 ---
 
@@ -450,7 +447,7 @@ The dispatch loop in `MoELayer._dispatch_triton` was also fixed: the original `t
 **CPU impact:** N/A (kernel is CUDA-only).
 **A100/H100 expected impact:** ~10-20% wall-clock on MoE forward at production scale (single launch vs 16 per layer, less activation memory traffic). On sm_75 the gain is smaller (lower TFLOPs ceiling); the kernel is correctness-verified end-to-end via `scripts/e2e_gpu_smoke.py` step 4.
 **Test coverage:** `tests/test_moe_triton.py` has 9 tests (4 reference-only, 3 dispatch-wiring, 2 GPU-gated). The `gpu_required` marker auto-skips on CPU-only machines; the reference tests run on any box.
-**Risk:** Low. The opt-in is explicit (`moe_dispatch="triton_grouped"` + `ENABLE_TRITON_KERNELS=1` env var); the default `"stacked"` path is unchanged. The kernel produces results within BF16 ULP of the reference.
+**Risk:** Low. The opt-in is explicit (`moe_dispatch="triton_grouped"`); the default `"stacked"` path is unchanged. The kernel produces results within BF16 ULP of the reference.
 
 ## What we deliberately did NOT do
 
@@ -464,8 +461,7 @@ The dispatch loop in `MoELayer._dispatch_triton` was also fixed: the original `t
 
 ## Correctness verification
 
-All 130 tests pass:
-- 127 original tests (no regressions).
+All 187 tests pass.
 - 3 new tests added in `tests/test_inference.py`:
   - `test_kv_cache_windowed_preserves_order_after_rollover`: verifies the ring buffer preserves the last `window` keys in correct order.
   - `test_kv_cache_global_preserves_full_order`: verifies the global cache preserves all keys in insertion order.
@@ -497,18 +493,16 @@ The anchor parameter counts (502M total, 247M active) are unchanged.
 - `models/transformer.py` — OPT-4 (RMSNorm vectorization).
 - `training/pretrain.py` — OPT-6, OPT-7, OPT-8, OPT-9, OPT-10, OPT-17 (eps=1e-6), OPT-20 (cudnn/cublaslt), OPT-21 (ce_chunk_size).
 - `inference/generate.py` — OPT-11, OPT-12, OPT-13, OPT-14.
-- `configs/pretrain_a100_502m.yaml` — OPT-18 (warmup_steps), OPT-19 (aux_loss_alpha).
+- `configs/pretrain_a100_502m.yaml` — OPT-18 (warmup_steps).
 - `configs/pretrain_gpu_smoke.yaml` — new (tiny E2E config for small GPUs).
 - `tests/test_inference.py` — 3 new tests.
 - `tests/test_moe_triton.py` — monkeypatch fix, BF16 ULP tolerance.
 - `tests/test_utils.py` — skip CPU-only test on CUDA machines.
 - `tests/test_data_pipeline.py` — `pytest.importorskip` for sibling `shared_data` repo.
-- `scripts/profile_components.py` — new (debug aid).
-- `scripts/profile_step.py` — new (debug aid).
-- `scripts/profile_inference.py` — new (debug aid).
-- `scripts/profile_moe.py` — new (debug aid).
-- `scripts/profile_longctx.py` — new (debug aid).
-- `scripts/e2e_gpu_smoke.py` — new (8-step end-to-end GPU pipeline test).
+- `scripts/profile_components.py` — per-component microbench.
+- `scripts/profile_inference.py` — decode throughput.
+- `scripts/profile_moe.py` — MoE dispatch profiling.
+- `scripts/e2e_gpu_smoke.py` — 8-step end-to-end GPU pipeline test.
 
 ---
 
@@ -517,9 +511,11 @@ The anchor parameter counts (502M total, 247M active) are unchanged.
 - **CPU (MacBook Air, no GPU):** ~17% faster model forward end-to-end. Most wins from the mask cache and the MoE dispatch.
 - **A100 80GB (projected):** ~25-40% faster training steps (from AdamW fused, clip-grad foreach, mask cache, RMSNorm optimization, cudnn exhaustive search, cuBLASLt routing, larger CE chunks, plus the sanctioned Triton W1/W3+silu MoE kernel at OPT-24).
 - **Long-context inference (projected):** Decode step time now flat in T instead of growing as O(T). For 64k context, this is a **500×** reduction in per-step KV cache work. Decode-mask cache (OPT-22) adds another ~3% on top.
-- **Loss stability:** AdamW `eps=1e-6` (OPT-17), longer warmup (OPT-18), and lower aux_loss_alpha (OPT-19) are expected to give smoother convergence and better expert specialization on top-2-of-8 MoE. No wall-clock cost.
+- **Loss stability:** AdamW `eps=1e-6` (OPT-17) and longer warmup (OPT-18) are expected to give smoother convergence on top-2-of-8 MoE. No wall-clock cost.
 - **Memory:** Slight reduction from RMSNorm vectorization and the dropped `.contiguous()` in `repeat_kv`.
 - **BF16 GPU training now works:** OPT-23 (`apply_rope` dtype preservation) was a latent correctness bug — without it, SDPA on BF16 would crash. This fix unblocks the entire GPU training path.
 - **Sanctioned Triton path:** OPT-24 is the first custom kernel added to the project. It is opt-in (`moe_dispatch="triton_grouped"`), falls back to the raw-PyTorch stacked path on ImportError, and is verified end-to-end by `scripts/e2e_gpu_smoke.py` on the dev box's GTX 1650.
 
 All 133 tests pass; the headline 2.0× KV-cache reduction is preserved.
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->

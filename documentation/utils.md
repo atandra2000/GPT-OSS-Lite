@@ -1,7 +1,6 @@
 # Utils — GPT-OSS-Lite
 
-> **Source:** `utils/checkpoint.py`, `utils/distributed.py`, `utils/logging.py`,
-> `utils/memory.py`
+> **Source:** `utils/checkpoint.py`, `utils/logging.py`, `utils/memory.py`
 > **Companion:** [`training.md`](training.md) (how these are wired into the loop),
 > [`data_pipeline.md`](data_pipeline.md) (atomic writes, the same pattern).
 
@@ -388,3 +387,5 @@ VRAM budgeting for the mixed windowed/global KV cache.
 - `assert_fits_in_available_gpu(est, safety_margin_gb=2.0)`: no-op on
   CPU; on CUDA raises `RuntimeError` if the estimate exceeds
   `total_memory - safety_margin_gb`.
+
+<!-- docs:verified 2026-07-31 · fd4fe36 -->
