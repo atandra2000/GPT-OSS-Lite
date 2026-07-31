@@ -1,20 +1,14 @@
 # GPT-OSS-Lite Documentation — Book Index
 
-> **Start here.** This directory is a textbook-style reference for the GPT-OSS-Lite
-> reproduction: ~502M total parameters, ~247M active, 12-layer alternating
-> sliding-window / full attention, YaRN 128K, top-2-of-8 MoE. For a one-page
+> **Start here.** This directory is the textbook-style reference for GPT-OSS-Lite:
+> a faithful from-scratch PyTorch reproduction of OpenAI's GPT-OSS long-context
+> architecture (~502M total / ~247M active parameters, 12-layer alternating
+> sliding-window / full attention, YaRN 128K, top-2-of-8 MoE). For a one-page
 > project overview see the root [README.md](../README.md).
 
 ---
 
-## Overview
-
-GPT-OSS-Lite is a faithful from-scratch PyTorch implementation of the GPT-OSS
-long-context architecture. The documentation is organized as a **progressive
-book**: foundations and motivation first, then system design, then component
-deep-dives, then operations (training, data, scripts, utilities).
-
-**Headline metrics** (verify with scripts, not prose):
+## Headline metrics
 
 | Metric | Target | Script |
 |--------|--------|--------|
@@ -37,39 +31,31 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 |------|---------|----------|--------------|
 | 0 | Onboarding | [getting_started.md](getting_started.md) | Clone, env, first commands |
 | 1 | Foundations | [foundations.md](foundations.md) | Why decoder-only, GQA, SWA, sinks, YaRN, MoE |
-| 2 | Architecture | [architecture.md](architecture.md) | 12-layer stack, file map, dataflow |
-| 3 | Transformer | [transformer.md](transformer.md) | `GPTOSS`, `GPTOSSBlock`, `ModelConfig` |
-| 4 | Attention | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | SWA/full alternation, sinks, SDPA paths |
-| 4b | Sinks (deep) | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | Learned sink bias — read before tuning sinks |
-| 5 | RoPE / YaRN | [rope_yarn.md](rope_yarn.md) | Position encoding + 128K extrapolation |
-| 6 | MoE | [moe.md](moe.md) | Top-2 routing, aux loss α=0.01 |
-| 6b | Triton (opt-in) | [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) | `moe_dispatch` kernel contract |
-| 7 | Training | [training.md](training.md) | `pretrain.py`, schedules, NaN guard, YAML reference |
-| 7c | Data | [data_pipeline.md](data_pipeline.md) | Shards, tokenization, loader |
+| 2 | Architecture | [architecture.md](architecture.md) | 12-layer stack, `GPTOSS` / `ModelConfig`, file map |
+| 3 | Attention | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | SWA/full alternation, learned sink bias, SDPA paths |
+| 4 | RoPE / YaRN | [rope_yarn.md](rope_yarn.md) | Position encoding + 128K extrapolation |
+| 5 | MoE | [moe.md](moe.md) | Top-2 routing, aux loss α=0.01, Triton opt-in |
+| 6 | Training | [training.md](training.md) | `pretrain.py`, schedules, NaN guard, YAML reference |
+| 7 | Data | [data_pipeline.md](data_pipeline.md) | Shards, tokenization, loader |
 | 8 | Inference | [inference.md](inference.md) | `MixedKVCache`, `generate()` |
 | 9 | Operations | [operations.md](operations.md) | Scripts, utils, OPT-1…24 catalog |
 
 ---
 
-## Doc tiers
+## Agent routing
 
-### Tier 1 — Conceptual (read once)
-
-- [foundations.md](foundations.md) — mathematical and architectural motivation
-- [architecture.md](architecture.md) — system map tying modules together
-
-### Tier 2 — Component reference (read as needed)
-
-- [architecture.md](architecture.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
-- [rope_yarn.md](rope_yarn.md)
-- [moe.md](moe.md) (includes Triton opt-in section)
-
-### Tier 3 — Operations (read when running experiments)
-
-- [getting_started.md](getting_started.md), [training.md](training.md)
-- [data_pipeline.md](data_pipeline.md)
-- [inference.md](inference.md)
-- [operations.md](operations.md)
+| Question type | Read first |
+|---|---|
+| How does this repo implement X? | `models/*.py` + matching chapter |
+| Sink bias / SWA / YaRN theory + impl | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
+| RoPE / YaRN | [rope_yarn.md](rope_yarn.md) |
+| MoE / Triton | [moe.md](moe.md) |
+| YAML / train loop | [training.md](training.md) |
+| Data | [data_pipeline.md](data_pipeline.md) |
+| Inference / KV cache | [inference.md](inference.md) |
+| Scripts / utils / OPT-* | [operations.md](operations.md) |
+| What must not break? | [../AGENTS.md](../AGENTS.md) + [architecture.md](architecture.md) invariants |
+| Onboarding | [getting_started.md](getting_started.md) |
 
 ---
 
@@ -77,7 +63,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 
 | Component | Source | Documentation |
 |-----------|--------|---------------|
-| Top-level model | `models/transformer.py` | [transformer.md](transformer.md) |
+| Top-level model | `models/transformer.py` | [architecture.md](architecture.md) |
 | Attention (SWA + full) | `models/attention.py` | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
 | RoPE helpers | `models/rotary.py` | [rope_yarn.md](rope_yarn.md) |
 | YaRN scaling | `models/yarn.py` | [rope_yarn.md](rope_yarn.md) |
@@ -86,25 +72,9 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | Training loop | `training/pretrain.py` | [training.md](training.md) |
 | Generation | `inference/generate.py` | [inference.md](inference.md) |
 | Long-context eval | `inference/long_context.py` | [inference.md](inference.md) |
-| Checkpoints | `utils/checkpoint.py` | [operations.md](operations.md#b1-checkpointmanager-atomic-safetensors-protocol) |
-| Logging | `utils/logging.py` | [operations.md](operations.md#b2-traininglogger--wandb) |
-| VRAM estimator | `utils/memory.py` | [operations.md](operations.md#b3-estimate_model_memory_gb--mixed-kv-term--assert_fits_in_available_gpu) |
+| Checkpoints / logging / VRAM | `utils/` | [operations.md](operations.md) |
 | Production config | `configs/pretrain_a100_502m.yaml` | [training.md](training.md#part-b--configuration-reference) |
 | Data pipeline | `data/` | [data_pipeline.md](data_pipeline.md) |
-
----
-
-## Cross-cutting topics
-
-| Question | Go to |
-|----------|-------|
-| Why alternating SWA/full? | [foundations.md](foundations.md) §4, [architecture.md](architecture.md) §4 |
-| How does sink bias work? | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
-| What is `moe_dispatch`? | [moe.md](moe.md) (YAML opt-in, not env vars) |
-| Memory at B=8, T=4096? | [operations.md](operations.md#b3-estimate_model_memory_gb--mixed-kv-term--assert_fits_in_available_gpu), `scripts/microbench_a100.py` |
-| All performance knobs? | [operations.md](operations.md#part-c--optimization-catalog-opt-1--opt-24) |
-| How to run benchmarks? | [operations.md](operations.md#part-a--scripts-scripts) |
-| Doc lint / stale patterns? | `scripts/check_docs.py` |
 
 ---
 
@@ -133,25 +103,7 @@ Every chapter file ends with a verification footer:
 
 | Doc | ~Lines | Status |
 |---|---|---|
-| training.md | ~1200 | Comprehensive (loop + YAML encyclopedia) |
-| moe.md | 754 | Comprehensive |
-| data_pipeline.md | 735 | Comprehensive |
-| ATTENTION_SINKS.md | ~1200 | Comprehensive (theory + implementation) |
-| operations.md | ~1600 | Comprehensive |
-| architecture.md | 650 | Comprehensive |
-| moe.md | ~900 | Comprehensive (MoE + Triton contract) |
-| foundations.md | 606 | Comprehensive |
-| inference.md | 549 | Comprehensive |
-| transformer.md | 532 | Comprehensive |
-| rope_yarn.md | ~730 | Comprehensive |
-| getting_started.md | 454 | Comprehensive |
-| **Total** | **10,134** | |
-
-
-
-
-Run `python3 scripts/check_docs.py --update-sizes` to refresh this table and
-add the **Total** row automatically.
+| *(run `python3 scripts/check_docs.py --update-sizes` to regenerate)* | | |
 
 ---
 

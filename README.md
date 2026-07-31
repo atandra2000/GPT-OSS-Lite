@@ -302,7 +302,6 @@ GPT-OSS-Lite/
 │   └── … (16 component + ops docs)
 ├── AGENTS.md
 ├── SKILLS.md
-├── CONTEXT.md
 ├── LICENSE                             # Apache 2.0
 ├── requirements.txt
 └── pytest.ini
