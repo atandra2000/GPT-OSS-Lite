@@ -148,7 +148,7 @@ On failure, prints `documentation/<file>:<line>: <message>` to stderr and exits 
 **Purpose:** Prove the **architectural KV-cache reduction** of the alternating
 sliding-window / full-attention design without loading a model or GPU. This is
 the analytical counterpart to `MixedKVCache` described in
-[architecture.md](architecture.md) §9 and [operations.md](operations.md)
+[architecture.md](architecture.md) §9 and [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24)
 (OPT-11/12).
 
 #### Architecture constants (from `configs/pretrain_a100_502m.yaml`)
@@ -298,7 +298,7 @@ ALL STEPS PASSED
 
 Exit **0** on success; raises `SystemExit(1)` on any failure.
 
-**Related:** [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped), [operations.md](operations.md) (checkpoints).
+**Related:** [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped), [§B.1 CheckpointManager](operations.md#b1-checkpointmanager-atomic-safetensors-protocol).
 
 ---
 
@@ -307,7 +307,7 @@ Exit **0** on success; raises `SystemExit(1)` on any failure.
 #### Component profiler — `profile_components.py`
 
 **Purpose:** Break down forward latency by subsystem on `micro_cfg()` — useful
-when deciding which [operations.md](operations.md) entry to profile next.
+when deciding which [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24) entry to profile next.
 
 ##### Invocation
 
@@ -392,7 +392,7 @@ prompt=128, new=64: 61.3 ms (1044 tok/s)
 
 Decode cost is dominated by per-step `MixedKVCache` updates and MoE forward.
 Longer prompts increase prefill time but decode tok/s should stabilize once the
-cache is warm. See OPT-11/12/13/14/22 in [operations.md](operations.md).
+cache is warm. See OPT-11/12/13/14/22 in [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24).
 
 ---
 
@@ -430,7 +430,7 @@ python3 scripts/microbench_a100.py \
 [microbench] ✅ PASSED: peak < 25.0 GB
 ```
 
-Estimator math is documented in [operations.md](operations.md).
+Estimator math is documented in [§B.3](operations.md#b3-estimate_model_memory_gb-mixed-kv-term-assert_fits_in_available_gpu).
 
 ---
 
@@ -458,7 +458,7 @@ python3 scripts/step_time_a100.py \
 | `--warmup` | 5 | Warmup steps (discarded) |
 | `--compile` | off | Enable `torch.compile(mode="max-autotune")` |
 
-Enables TF32 + cuDNN benchmark (see OPT-20 in [operations.md](operations.md)).
+Enables TF32 + cuDNN benchmark (see [OPT-20](operations.md#opt-20--cudnnbenchmark_limit0-preferred_blas_librarycublaslt)).
 
 ##### Expected output (A100, with `--compile`)
 
@@ -809,7 +809,7 @@ optim_bytes = sum(p.numel() for p in model.parameters()) * 12
 
 Assumes AdamW with FP32 master weights and moments (4 + 4 + 4 bytes per param).
 Matches `eps=1e-6`, `foreach=True`, `fused=True` in [training.md](training.md) —
-see OPT-9/17 in [operations.md](operations.md).
+see [OPT-9](operations.md#opt-9--adamw-foreachtrue-fusedtrue-on-cuda)/[OPT-17](operations.md#opt-17--adamw-eps1e-6-not-1e-8).
 
 #### Activations with gradient checkpointing
 
@@ -1515,7 +1515,7 @@ if use_grad_ckpt and (layer_idx % grad_ckpt_every == 0):
 
 **Files:** `models/transformer.py`, `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`
 
-**Related:** [operations.md](operations.md) §B.3 (activations)
+**Related:** [§B.3](operations.md#b3-estimate_model_memory_gb-mixed-kv-term-assert_fits_in_available_gpu) (activations)
 
 ---
 
@@ -1608,4 +1608,4 @@ After changing `models/attention.py`, always run `test_sliding_window_matches_fu
 | Book index | [README.md](README.md) |
 
 
-<!-- docs:verified 2026-07-31 · 7fe1247 -->
+<!-- docs:verified 2026-07-31 · 263838e -->

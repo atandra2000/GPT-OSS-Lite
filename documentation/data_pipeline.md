@@ -759,6 +759,26 @@ Quality bounds from mixture YAML per source (`min_chars`, `max_chars`).
 
 ---
 
+## How to verify
+
+Shard writer, manifest, and `PretrainDataset` integration:
+
+```bash
+python3 -m pytest tests/test_data_pipeline.py -v
+python3 -m pytest tests/test_training.py -v -k PretrainDataset
+```
+
+After packing, smoke-load the corpus (requires `data/pretrain_chinchilla`):
+
+```bash
+python3 -c "from training.pretrain import PretrainDataset; d=PretrainDataset('data/pretrain_chinchilla', 4096); print(len(d), d[0][0].shape)"
+```
+
+`test_data_pipeline.py` is skipped when the sibling `shared_data` package is not
+importable (CoreProjects layout).
+
+---
+
 ## References
 
 - [`data/prepare_data.py`](../data/prepare_data.py) — project shim
@@ -768,4 +788,4 @@ Quality bounds from mixture YAML per source (`min_chars`, `max_chars`).
 - [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)
 - [training.md](training.md) — DataLoader and batch arithmetic
 
-<!-- docs:verified 2026-07-31 · 7fe1247 -->
+<!-- docs:verified 2026-07-31 · 263838e -->

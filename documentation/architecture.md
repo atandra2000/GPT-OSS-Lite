@@ -1072,4 +1072,4 @@ assert m.num_active_parameters() == 247_106_400
 
 ---
 
-<!-- docs:verified 2026-07-31 · 7fe1247 -->
+<!-- docs:verified 2026-07-31 · 263838e -->

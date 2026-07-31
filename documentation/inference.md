@@ -222,7 +222,8 @@ if positions.numel() == 1:
 Prefill uses the full-sequence `torch.outer` path (`T_prompt` positions). Pruned RoPE on
 global layers (`n_pruned_dims`) zeroes the first 25% of sin/cos dims on both paths.
 YaRN extrapolation parameters (`yarn_scale_factor=32`, `yarn_target_seq_len=131072`) are
-documented in [architecture.md](architecture.md).
+documented in [rope_yarn.md §5](rope_yarn.md#5-production-parameters-θ100k-scale32-target131072) and
+[architecture.md](architecture.md).
 
 ---
 
@@ -349,4 +350,4 @@ oracle). Operational runbook: [operations.md](operations.md).
 
 ---
 
-<!-- docs:verified 2026-07-31 · 7fe1247 -->
+<!-- docs:verified 2026-07-31 · 263838e -->

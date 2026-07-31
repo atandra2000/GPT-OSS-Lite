@@ -108,12 +108,13 @@ Every chapter file ends with a verification footer:
 | ATTENTION_SINKS.md | 1,112 | Comprehensive |
 | architecture.md | 1,075 | Comprehensive |
 | moe.md | 920 | Comprehensive |
-| data_pipeline.md | 771 | Comprehensive |
+| data_pipeline.md | 791 | Comprehensive |
 | rope_yarn.md | 753 | Comprehensive |
 | foundations.md | 630 | Comprehensive |
-| inference.md | 352 | Comprehensive |
+| inference.md | 353 | Comprehensive |
 | getting_started.md | 283 | Comprehensive |
-| **Total** | **8,635** | |
+| **Total** | **8,656** | |
+
 
 
 
@@ -130,4 +131,4 @@ Every chapter file ends with a verification footer:
 
 ---
 
-<!-- docs:verified 2026-07-31 · 7fe1247 -->
+<!-- docs:verified 2026-07-31 · 263838e -->
