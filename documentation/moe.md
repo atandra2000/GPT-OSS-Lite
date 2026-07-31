@@ -9,8 +9,8 @@
 > [`models/moe_triton.py`](../models/moe_triton.py) · integration in
 > [`models/transformer.py`](../models/transformer.py).
 
-> **Related:** [triton_kernels.md](triton_kernels.md) (fused W1/W3+silu dispatch),
-> [training.md](training.md) (aux loss weight α=0.01 in the objective).
+> **Related:** [training.md](training.md) (aux loss weight α=0.01 in the objective),
+> [`AGENTS.md`](../AGENTS.md) (Triton kernel contract §1).
 
 ---
 
@@ -27,18 +27,19 @@
 9. [Function Reference — `aux_load_balancing_loss`](#function-reference--aux_load_balancing_loss)
 10. [Class Reference — `MoELayer`](#class-reference--moelayer)
 11. [Dispatch Paths — Stacked vs Triton Grouped](#dispatch-paths--stacked-vs-triton-grouped)
-12. [Shared Experts](#shared-experts)
-13. [Integration in `GPTOSS`](#integration-in-gptoss)
-14. [Parameter and FLOP Accounting](#parameter-and-flop-accounting)
-15. [Numerical Stability](#numerical-stability)
-16. [Comparison with DeepSeek-v3-Lite](#comparison-with-deepseek-v3-lite)
-17. [Debugging Checklist](#debugging-checklist)
-18. [Appendix A — Worked routing example](#appendix-a--worked-routing-example)
-19. [Appendix B — Dispatch layout diagram](#appendix-b--dispatch-layout-diagram)
-20. [Appendix C — Gradient flow](#appendix-c--gradient-flow)
-21. [Appendix D — Glossary](#appendix-d--glossary)
-22. [Load-Bearing Invariants](#load-bearing-invariants)
-23. [References](#references)
+12. [Sanctioned Triton path (`moe_dispatch="triton_grouped"`)](#sanctioned-triton-path-moe_dispatchtriton_grouped)
+13. [Shared Experts](#shared-experts)
+14. [Integration in `GPTOSS`](#integration-in-gptoss)
+15. [Parameter and FLOP Accounting](#parameter-and-flop-accounting)
+16. [Numerical Stability](#numerical-stability)
+17. [Comparison with DeepSeek-v3-Lite](#comparison-with-deepseek-v3-lite)
+18. [Debugging Checklist](#debugging-checklist)
+19. [Appendix A — Worked routing example](#appendix-a--worked-routing-example)
+20. [Appendix B — Dispatch layout diagram](#appendix-b--dispatch-layout-diagram)
+21. [Appendix C — Gradient flow](#appendix-c--gradient-flow)
+22. [Appendix D — Glossary](#appendix-d--glossary)
+23. [Load-Bearing Invariants](#load-bearing-invariants)
+24. [References](#references)
 
 ---
 
@@ -414,7 +415,7 @@ class MoELayer(nn.Module):
 
 `moe_dispatch` is read from [`ModelConfig.moe_dispatch`](../models/transformer.py)
 (default `"stacked"`). Set `"triton_grouped"` to enable the fused kernel path
-(see [triton_kernels.md](triton_kernels.md)).
+(see [Sanctioned Triton path](#sanctioned-triton-path-moe_dispatchtriton_grouped)).
 
 ### Forward
 
@@ -481,25 +482,10 @@ out.index_add(0, chunk_tokens, expert_out * chunk_weights)
 
 ### Triton grouped dispatch (`moe_dispatch="triton_grouped"`)
 
-Method: [`_dispatch_triton`](../models/moe.py)
-
-1. Sort tokens as above; build `x_sorted = flat[sorted_token_ids]`.
-2. Stack expert weights: `W1_stack`, `W3_stack`, `W2_stack`.
-3. **Triton fused kernel:** `triton_moe_w1w3_silu(...)` → `gated_sorted`
-   (shape `(N×k, d_ff)`), fusing W1, W3, silu, and elementwise multiply.
-4. **PyTorch W2:** per-expert loop on sorted layout:
-   ```python
-   out_sorted[start:end] = gated_sorted[start:end] @ W2_stack[e].T
-   ```
-5. Scale by `sorted_weights`, `index_add_` back to token positions.
-
-**Characteristics:**
-
-- W1/W3+silu fused in one Triton launch; W2 stays in PyTorch (no activation
-  to fuse after W2).
-- Raises `ImportError` if Triton is missing — **no silent fallback** during
-  a `triton_grouped` training run.
-- See [triton_kernels.md](triton_kernels.md) for kernel contract and tiling.
+Method: [`_dispatch_triton`](../models/moe.py) — same sort-by-expert layout as
+stacked, but W1/W3+silu runs through the fused Triton kernel. Raises
+`ImportError` if Triton is missing (**no silent fallback**). Full kernel
+contract: [Sanctioned Triton path](#sanctioned-triton-path-moe_dispatchtriton_grouped).
 
 ### Dispatch path selection
 
@@ -510,7 +496,182 @@ Method: [`_dispatch_triton`](../models/moe.py)
 | Mac / no CUDA Triton | `"stacked"` (required) |
 | Debugging routing correctness | `"stacked"` (easier to breakpoint) |
 
-Set in YAML under `model.moe_dispatch` or in `ModelConfig`.
+Set in YAML under `model.moe_dispatch` or in `ModelConfig`. There is **no**
+environment-variable gate — only the explicit config string.
+
+---
+
+## Sanctioned Triton path (`moe_dispatch="triton_grouped"`)
+
+GPT-OSS-Lite is **raw PyTorch first**. The only sanctioned custom Triton path is
+fused grouped-GEMM for MoE W1/W3+silu in
+[`models/moe_triton.py`](../models/moe_triton.py). It is **opt-in** via
+`ModelConfig.moe_dispatch = "triton_grouped"` (default `"stacked"`). If Triton
+is unavailable and `triton_grouped` is requested, the code **raises
+`ImportError`** — never silently falls back to PyTorch during a configured
+Triton run ([`AGENTS.md`](../AGENTS.md) rule 8).
+
+| File | Entry point | Fuses | Opt-in key |
+|---|---|---|---|
+| [`models/moe_triton.py`](../models/moe_triton.py) | `triton_moe_w1w3_silu` | W1, W3, silu, mul | `moe_dispatch="triton_grouped"` |
+
+### Why fuse W1/W3+silu (not W2)
+
+Stacked dispatch runs four ops per expert chunk: `W1@x`, `W3@x`, `silu(g)*u`,
+`W2@h`. For `B=8`, `T=4096`, top-2 routing yields 65,536 expert slots per
+layer — many small forwards even after sorting.
+
+The fused kernel combines W1 matmul + W3 matmul + silu + multiply into one
+Triton grid per `(expert, token-tile, d_ff-tile)`:
+
+1. Fewer kernel launches (one grid replaces four PyTorch ops per chunk).
+2. Better memory locality — `g` and `u` never materialised as full
+   `(tokens, d_ff)` buffers.
+3. FP32 accumulation on matmul tiles before silu (matches reference numerics).
+
+W2 is **not fused**: down-projection `d_ff → d_model` has different tiling;
+fusing would add complexity for modest gain. Split: Triton up+gate, PyTorch W2.
+
+### Activation and configuration
+
+```yaml
+model:
+  moe_dispatch: "triton_grouped"   # default is "stacked"
+```
+
+```python
+if self.moe_dispatch == "triton_grouped":
+    out = self._dispatch_triton(flat, indices, weights)
+else:
+    out = self._dispatch_vectorized(flat, indices, weights)
+```
+
+### Public API — `triton_moe_w1w3_silu`
+
+```python
+def triton_moe_w1w3_silu(
+    x_sorted: torch.Tensor,           # (n_slots, d_model)
+    expert_ids_sorted: torch.Tensor,  # (n_slots,)
+    counts: torch.Tensor,             # (n_experts,)
+    offsets: torch.Tensor,            # (n_experts,)
+    W1_stack: torch.Tensor,           # (n_experts, d_ff, d_model)
+    W3_stack: torch.Tensor,           # (n_experts, d_ff, d_model)
+) -> torch.Tensor:                    # (n_slots, d_ff) = silu(W1@x) * (W3@x)
+```
+
+`N_slots = N_tokens × k`. W2 is applied outside by `_dispatch_triton`.
+
+### `HAS_TRITON` import policy and hard failure
+
+```python
+try:
+    import triton
+    HAS_TRITON = True
+except ImportError:
+    HAS_TRITON = False
+```
+
+| `HAS_TRITON` | `moe_dispatch` | Result |
+|---|---|---|
+| `False` | `"stacked"` | Normal PyTorch dispatch |
+| `False` | `"triton_grouped"` | **`ImportError`** at first `triton_moe_w1w3_silu` call |
+| `True` | `"stacked"` | Triton never imported by MoE forward |
+| `True` | `"triton_grouped"` | Triton forward kernel runs |
+
+Error intent:
+
+```python
+raise ImportError(
+    "triton_moe_w1w3_silu requires the `triton` package. "
+    "Install with `pip install triton` (Linux + CUDA only). "
+    "For CPU/Mac, use moe_dispatch='stacked' in your config."
+)
+```
+
+### Kernel tiling and launcher
+
+| Constant | Value | Role |
+|---|---|---|
+| `BLOCK_T` | **16** | Tokens per program along expert chunk |
+| `BLOCK_M` | **32** | `d_model` reduction tile (K dimension) |
+| `BLOCK_N` | **32** | `d_ff` output tile |
+
+Grid: `(n_experts, ceil(max_tokens/BLOCK_T), ceil(d_ff/BLOCK_N))`. Programs
+for shorter experts exit early via `tok_mask`. Launcher:
+
+```python
+_moe_w1w3_silu_kernel[(n_experts, n_tiles_t, n_tiles_n)](
+    ..., BLOCK_T=16, BLOCK_M=32, BLOCK_N=32,
+    num_warps=4, num_stages=1,
+)
+```
+
+Matmul tiles use `allow_tf32=False` inside the kernel for test agreement;
+global TF32 still applies to PyTorch W2 outside.
+
+**Hard caps:** `d_ff` and `d_model` must be ≤ 8192 or forward raises
+`ValueError` before launch (defaults 768/1536 are well within).
+
+### Autograd — forward Triton, backward PyTorch reference
+
+`_MoEW1W3SiluFunction` runs Triton in `forward`, saves tensors, and in
+`backward` recomputes via `_moe_w1w3_silu_reference` (pure PyTorch loop over
+experts) with `torch.enable_grad()`. Gradients for `counts`/`offsets`/`ids`
+are `None` (discrete routing metadata). Trade-off: backward slower than a
+fused backward kernel, but MoE backward is dominated by W2 and attention at
+`T=4096`.
+
+### Integration — `MoELayer._dispatch_triton`
+
+```
+1. Sort tokens by expert (stable argsort)
+2. x_sorted = flat[sorted_token_ids]
+3. gated_sorted = triton_moe_w1w3_silu(...)     ← Triton
+4. For each expert e:
+       out_sorted[slice] = gated_sorted[slice] @ W2_e.T   ← PyTorch
+5. out_sorted *= sorted_weights
+6. out.index_add_(0, sorted_token_ids, out_sorted)
+```
+
+Shared experts still use full `SwiGLUExpert.forward` in PyTorch after step 6.
+
+Even with `triton_grouped`, router, aux loss (α=0.01), W2, routing
+`index_add_`, shared experts, attention, RoPE, norms, and loss stay PyTorch.
+
+### Hardware — sm_75 vs sm_80
+
+| GPU | Arch | `num_stages` | Status |
+|---|---|---|---|
+| GTX 1650 | sm_75 | 1 | Verified via [`scripts/e2e_gpu_smoke.py`](../scripts/e2e_gpu_smoke.py) |
+| A100 80GB | sm_80 | 1 (default) | Production target; `num_stages=2` possible via launcher tweak |
+| RTX 5090 | sm_120 | — | Use `stacked` until verified |
+
+Triton requires **Linux + CUDA**. macOS and CPU-only machines must use
+`moe_dispatch="stacked"`.
+
+### When to enable
+
+**Enable** on Linux+CUDA with Triton, sm_75+, and MoE dispatch is a profiling
+hotspot. **Keep `stacked`** on Mac/CPU, when debugging routing/aux loss, or
+when kernel correctness is unverified on your GPU. Default
+[`pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml) leaves
+`moe_dispatch` unset → `"stacked"`. Expected speedup modest (~5–15% on
+MoE-heavy steps); profile before assuming gains.
+
+### How to verify
+
+```bash
+python3 -m pytest tests/test_moe.py tests/test_moe_triton.py -v
+# GPU-only cases:
+pytest -m gpu tests/test_moe_triton.py -v
+```
+
+| Test | CPU? | Purpose |
+|---|---|---|
+| `test_reference_matches_naive_per_expert_loop` | Yes | Reference correctness |
+| `test_triton_moe_raises_when_triton_missing` | Yes | ImportError policy (no fallback) |
+| `test_triton_forward_matches_reference` | GPU | Triton vs reference |
+| `test_moe_triton_grouped_matches_stacked` | GPU | End-to-end dispatch parity |
 
 ---
 
@@ -641,6 +802,7 @@ port `AuxLossFreeGate` into GPT-OSS-Lite without an explicit design change.
 | One expert >80% of tokens | Router collapse | Check aux loss is enabled; increase warmup |
 | `aux_loss` → 0 instantly | α too low or router frozen | Verify `aux_loss_alpha=0.01` |
 | `ImportError: triton` | `triton_grouped` without Triton | Use `moe_dispatch="stacked"` or install Triton |
+| Triton forward mismatch | Kernel vs reference drift | `pytest tests/test_moe_triton.py -v` (GPU for Triton tests) |
 | Routed vs shared imbalance | Data mix too narrow | Broaden web/code fraction |
 | NaN after MoE step | BF16 overflow in attention mask | Check sink bias clamp (attention, not MoE) |
 | Dispatch mismatch | Stable argsort disabled | Ensure `stable=True` in argsort |
@@ -726,6 +888,9 @@ layers.
 | **`P_e`** | Mean soft probability for expert `e` |
 | **SwiGLU** | `W2(silu(W1x) * W3x)` activation |
 | **`moe_dispatch`** | Config key: `"stacked"` or `"triton_grouped"` |
+| **HAS_TRITON** | Module-level flag after import attempt |
+| **Grouped GEMM** | Batched matmul where groups share weights but not batch index |
+| **Sanctioned path** | Kernel listed in AGENTS.md — allowed custom Triton |
 
 ---
 
@@ -736,7 +901,8 @@ layers.
 3. **Shared experts always added** when `n_shared_experts > 0`.
 4. **Aux loss uses FP32 softmax** — do not cast to BF16 inside the loss.
 5. **`triton_grouped` must not silently fall back** — raise on missing Triton.
-6. **Do not replace aux loss with bias-buffer balancing** without project-level
+6. **Triton backward via PyTorch reference** in v1 — do not skip grad tests.
+7. **Do not replace aux loss with bias-buffer balancing** without project-level
    approval (GPT-OSS vs DeepSeek distinction).
 
 ---
@@ -747,8 +913,8 @@ layers.
 - Fedus et al., *Switch Transformers* (2021) — top-k routing + aux loss.
 - Lepikhin et al., *GShard* (2020) — load-balanced MoE at scale.
 - [`models/moe.py`](../models/moe.py) — implementation.
-- [`models/moe_triton.py`](../models/moe_triton.py) — fused kernel.
-- [triton_kernels.md](triton_kernels.md) — kernel contract.
+- [`models/moe_triton.py`](../models/moe_triton.py) — fused kernel (opt-in).
+- [`tests/test_moe_triton.py`](../tests/test_moe_triton.py) — Triton contract tests.
 - [training.md](training.md) — α=0.01 in the training loop.
 
 <!-- docs:verified 2026-07-31 · fa6f918 -->

@@ -43,7 +43,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | 4b | Sinks (deep) | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | Learned sink bias — read before tuning sinks |
 | 5 | RoPE / YaRN | [rope_yarn.md](rope_yarn.md) | Position encoding + 128K extrapolation |
 | 6 | MoE | [moe.md](moe.md) | Top-2 routing, aux loss α=0.01 |
-| 6b | Triton (opt-in) | [triton_kernels.md](triton_kernels.md) | `moe_dispatch` kernel contract |
+| 6b | Triton (opt-in) | [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) | `moe_dispatch` kernel contract |
 | 7 | Training | [training.md](training.md) | `pretrain.py`, schedules, NaN guard |
 | 7b | Config | [configs.md](configs.md) | YAML reference |
 | 7c | Data | [data_pipeline.md](data_pipeline.md) | Shards, tokenization, loader |
@@ -65,7 +65,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 
 - [architecture.md](architecture.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
 - [rope_yarn.md](rope_yarn.md)
-- [moe.md](moe.md), [triton_kernels.md](triton_kernels.md)
+- [moe.md](moe.md) (includes Triton opt-in section)
 
 ### Tier 3 — Operations (read when running experiments)
 
@@ -86,7 +86,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | RoPE helpers | `models/rotary.py` | [rope_yarn.md](rope_yarn.md) |
 | YaRN scaling | `models/yarn.py` | [rope_yarn.md](rope_yarn.md) |
 | MoE FFN | `models/moe.py` | [moe.md](moe.md) |
-| Triton MoE kernel | `models/moe_triton.py` | [triton_kernels.md](triton_kernels.md) |
+| Triton MoE kernel | `models/moe_triton.py` | [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) |
 | Training loop | `training/pretrain.py` | [training.md](training.md) |
 | Generation | `inference/generate.py` | [inference.md](inference.md) |
 | Long-context eval | `inference/long_context.py` | [inference.md](inference.md) |
@@ -104,7 +104,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 |----------|-------|
 | Why alternating SWA/full? | [foundations.md](foundations.md) §4, [architecture.md](architecture.md) §4 |
 | How does sink bias work? | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
-| What is `moe_dispatch`? | [moe.md](moe.md), [triton_kernels.md](triton_kernels.md) (YAML opt-in, not env vars) |
+| What is `moe_dispatch`? | [moe.md](moe.md) (YAML opt-in, not env vars) |
 | Memory at B=8, T=4096? | [utils.md](utils.md), `scripts/microbench_a100.py` |
 | All performance knobs? | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) |
 | How to run benchmarks? | [scripts.md](scripts.md) |
@@ -143,7 +143,7 @@ Every chapter file ends with a verification footer:
 | ATTENTION_SINKS.md | ~1200 | Comprehensive (theory + implementation) |
 | OPTIMIZATIONS.md | 712 | Comprehensive |
 | architecture.md | 650 | Comprehensive |
-| triton_kernels.md | 628 | Comprehensive |
+| moe.md | ~900 | Comprehensive (MoE + Triton contract) |
 | foundations.md | 606 | Comprehensive |
 | inference.md | 549 | Comprehensive |
 | transformer.md | 532 | Comprehensive |

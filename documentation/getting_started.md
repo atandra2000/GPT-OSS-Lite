@@ -119,7 +119,7 @@ analytical benchmark. Full pretraining and `torch.compile` require CUDA.
 Optional:
 
 - **Triton** — only if you opt into `moe_dispatch: "triton_grouped"` (see
-  [triton_kernels.md](triton_kernels.md)). Default is `"stacked"` (pure PyTorch).
+  [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped)). Default is `"stacked"` (pure PyTorch).
 - **Weights & Biases** — `wandb` is in `requirements.txt`; logging is optional.
 
 ---
@@ -410,7 +410,7 @@ model:
 ```
 
 There is **no** environment variable gate — configuration is the only switch.
-See [triton_kernels.md](triton_kernels.md).
+See [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
 
 ### Passkey eval on untrained weights
 
@@ -446,7 +446,7 @@ temporarily. See `utils/memory.py` estimates at startup.
 | Training loop internals | [training.md](training.md) |
 | Tokenization and shards | [data_pipeline.md](data_pipeline.md) |
 | MoE routing and aux loss | [moe.md](moe.md) |
-| Optional Triton MoE kernel | [triton_kernels.md](triton_kernels.md) |
+| Optional Triton MoE kernel | [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) |
 
 ---
 

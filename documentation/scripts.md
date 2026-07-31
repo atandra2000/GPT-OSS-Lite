@@ -113,7 +113,7 @@ The linter flags outdated documentation conventions:
 |---------|--------|
 | LaTeX `{` `,` `}` thousand separators | Use plain `100000` or comma prose in docs |
 | Hard-coded pytest totals in prose | Run `pytest` for the current count |
-| Old MoE Triton standalone doc name | Use [triton_kernels.md](triton_kernels.md) |
+| Old MoE Triton standalone doc name | Merged into [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) |
 | Removed Triton env-var gate | Use `moe_dispatch: triton_grouped` in YAML |
 
 ### Expected output
@@ -281,7 +281,7 @@ ALL STEPS PASSED
 
 Exit **0** on success; raises `SystemExit(1)` on any failure.
 
-**Related:** [triton_kernels.md](triton_kernels.md), [utils.md](utils.md) (checkpoints).
+**Related:** [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped), [utils.md](utils.md) (checkpoints).
 
 ---
 
@@ -348,7 +348,7 @@ _dispatch_vectorized 2.10 ms
 
 For Triton grouped dispatch timing, enable `moe_dispatch="triton_grouped"` in a
 custom config and profile via `e2e_gpu_smoke.py` or a one-off script. See
-[moe.md](moe.md) and [triton_kernels.md](triton_kernels.md).
+[moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
 
 ---
 
@@ -509,7 +509,7 @@ python3 scripts/e2e_gpu_smoke.py  # when GPU available
 | Training loop CLI | [training.md](training.md) |
 | Mixed KV cache design | [architecture.md](architecture.md) §9, [OPTIMIZATIONS.md](OPTIMIZATIONS.md) |
 | Passkey eval internals | `inference/long_context.py`, [inference.md](inference.md) |
-| MoE + Triton opt-in | [moe.md](moe.md), [triton_kernels.md](triton_kernels.md) |
+| MoE + Triton opt-in | [moe.md](moe.md) |
 | Memory estimator | [utils.md](utils.md) |
 | Config reference | [configs](configs.md), `configs/pretrain_a100_502m.yaml` |
 | Optimization catalog | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) |

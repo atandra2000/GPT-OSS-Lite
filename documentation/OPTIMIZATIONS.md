@@ -40,7 +40,7 @@ slots beyond that.
 **Stale patterns to avoid in docs and configs:**
 
 - Removed Triton env-var gate — use `moe_dispatch: triton_grouped` in YAML
-- Old standalone MoE Triton doc — see [triton_kernels.md](triton_kernels.md) instead
+- MoE Triton contract — see [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped)
 - Manual dict-based mask caches — replaced by `@functools.lru_cache` (OPT-1)
 
 ---
@@ -272,7 +272,7 @@ Expected 5–15% MoE forward speedup on sm_80+ depending on batch/token count.
 
 **Files:** `models/moe_triton.py`, `models/moe.py` (`_dispatch_triton`)
 
-**Related:** [triton_kernels.md](triton_kernels.md) (replaces the old standalone MoE Triton doc)
+**Related:** [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) (Triton kernel contract)
 
 ---
 
@@ -700,7 +700,7 @@ After changing `models/attention.py`, **always** run
 | Attention masks + sinks | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
 | YaRN / RoPE | [rope_yarn.md](rope_yarn.md) |
 | MoE routing | [moe.md](moe.md) |
-| Triton kernel contract | [triton_kernels.md](triton_kernels.md) |
+| Triton kernel contract | [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) |
 | Training loop | [training.md](training.md) |
 | Memory math | [utils.md](utils.md) |
 | Benchmark scripts | [scripts.md](scripts.md) |

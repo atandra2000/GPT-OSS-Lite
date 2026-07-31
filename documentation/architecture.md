@@ -746,7 +746,7 @@ Default `"stacked"` — pure PyTorch MoE loop. Opt-in `"triton_grouped"` enables
 the fused kernel in `models/moe_triton.py`.
 
 **Dispatch semantics and Triton contract:** see [§8](#8-moe-dispatch-and-triton-opt-in)
-and [triton_kernels.md](triton_kernels.md).
+and [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
 
 ### B.4 `RMSNorm`
 

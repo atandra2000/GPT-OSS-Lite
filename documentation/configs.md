@@ -171,7 +171,7 @@ raise in `__post_init__`.
 | `n_routed_experts` | `8` | `4` | Router: `(d_model, n_routed)` |
 | `n_activated_experts` | `2` | `2` | Top-k per token |
 | `n_shared_experts` | `1` | `1` | Always-on expert(s) |
-| `moe_dispatch` | *(default `stacked`)* | `stacked` | `"triton_grouped"` opt-in — [triton_kernels.md](triton_kernels.md) |
+| `moe_dispatch` | *(default `stacked`)* | `stacked` | `"triton_grouped"` opt-in — [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) |
 
 ### Attention, YaRN, sequence limits
 
@@ -339,7 +339,7 @@ Add to YAML under `model:`:
 moe_dispatch: "triton_grouped"
 ```
 
-Requires Triton installed. See [triton_kernels.md](triton_kernels.md).
+Requires Triton installed. See [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
 
 ### Smaller effective batch (OOM)
 

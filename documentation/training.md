@@ -5,7 +5,7 @@
 > **Config reference:** [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)
 
 > **Related:** [data_pipeline.md](data_pipeline.md) (corpus and loader),
-> [moe.md](moe.md) (aux loss α=0.01), [triton_kernels.md](triton_kernels.md)
+> [moe.md](moe.md) (aux loss α=0.01, Triton opt-in)
 > (optional `moe_dispatch`).
 
 ---
