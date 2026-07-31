@@ -519,7 +519,7 @@ logger.finish()
 | KV benchmark script | [scripts.md](scripts.md) §4 |
 | Optimization catalog | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) |
 | MoE memory heuristic | [moe.md](moe.md) |
-| Config fields | [configs](configs.md), `configs/pretrain_a100_502m.yaml` |
+| Config fields | [training.md](training.md#part-b--configuration-reference), `configs/pretrain_a100_502m.yaml` |
 | Book index | [README.md](README.md) |
 
 ---

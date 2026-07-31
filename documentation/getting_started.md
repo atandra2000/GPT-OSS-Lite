@@ -69,7 +69,7 @@ through `training/pretrain.py`. Autoregressive decoding uses
 
 These are the production targets from
 [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml). Every
-field is explained in [configs.md](configs.md).
+field is explained in [training.md](training.md#part-b--configuration-reference).
 
 | Quantity | Value | Notes |
 |----------|-------|-------|
@@ -442,7 +442,7 @@ temporarily. See `utils/memory.py` estimates at startup.
 | Sink bias authoritative reference | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
 | `GPTOSS`, `GPTOSSBlock`, RMSNorm | [transformer.md](transformer.md) |
 | `MixedKVCache`, `generate()`, passkey | [inference.md](inference.md) |
-| Every YAML key | [configs.md](configs.md) |
+| Every YAML key | [training.md](training.md#part-b--configuration-reference) |
 | Training loop internals | [training.md](training.md) |
 | Tokenization and shards | [data_pipeline.md](data_pipeline.md) |
 | MoE routing and aux loss | [moe.md](moe.md) |

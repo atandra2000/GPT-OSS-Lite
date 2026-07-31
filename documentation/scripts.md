@@ -54,7 +54,7 @@ Most profiling scripts import `_bootstrap.py`, which prepends the repo root to
 
 Training itself is **not** a script under `scripts/` — use
 `python training/pretrain.py --config configs/pretrain_a100_502m.yaml`.
-See [training.md](training.md) and [configs](configs.md) (when published).
+See [training.md](training.md#part-b--configuration-reference).
 
 ---
 
@@ -511,7 +511,7 @@ python3 scripts/e2e_gpu_smoke.py  # when GPU available
 | Passkey eval internals | `inference/long_context.py`, [inference.md](inference.md) |
 | MoE + Triton opt-in | [moe.md](moe.md) |
 | Memory estimator | [utils.md](utils.md) |
-| Config reference | [configs](configs.md), `configs/pretrain_a100_502m.yaml` |
+| Config reference | [training.md](training.md#part-b--configuration-reference), `configs/pretrain_a100_502m.yaml` |
 | Optimization catalog | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) |
 | Book index | [README.md](README.md) |
 

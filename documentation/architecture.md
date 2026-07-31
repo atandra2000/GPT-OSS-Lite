@@ -722,7 +722,7 @@ class ModelConfig:
 ```
 
 **Full field encyclopedia:** see [§7](#7-modelconfig--config-to-code-wiring) and
-[configs.md](configs.md).
+[training.md](training.md#part-b--configuration-reference).
 
 Construction **fails fast** on inconsistent configs:
 

@@ -44,8 +44,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | 5 | RoPE / YaRN | [rope_yarn.md](rope_yarn.md) | Position encoding + 128K extrapolation |
 | 6 | MoE | [moe.md](moe.md) | Top-2 routing, aux loss α=0.01 |
 | 6b | Triton (opt-in) | [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) | `moe_dispatch` kernel contract |
-| 7 | Training | [training.md](training.md) | `pretrain.py`, schedules, NaN guard |
-| 7b | Config | [configs.md](configs.md) | YAML reference |
+| 7 | Training | [training.md](training.md) | `pretrain.py`, schedules, NaN guard, YAML reference |
 | 7c | Data | [data_pipeline.md](data_pipeline.md) | Shards, tokenization, loader |
 | 8 | Inference | [inference.md](inference.md) | `MixedKVCache`, `generate()` |
 | 9 | Optimizations | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) | OPT-1…24 catalog |
@@ -69,8 +68,8 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 
 ### Tier 3 — Operations (read when running experiments)
 
-- [getting_started.md](getting_started.md), [configs.md](configs.md)
-- [training.md](training.md), [data_pipeline.md](data_pipeline.md)
+- [getting_started.md](getting_started.md), [training.md](training.md)
+- [data_pipeline.md](data_pipeline.md)
 - [inference.md](inference.md)
 - [scripts.md](scripts.md), [utils.md](utils.md)
 - [OPTIMIZATIONS.md](OPTIMIZATIONS.md)
@@ -93,7 +92,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | Checkpoints | `utils/checkpoint.py` | [utils.md](utils.md) |
 | Logging | `utils/logging.py` | [utils.md](utils.md) |
 | VRAM estimator | `utils/memory.py` | [utils.md](utils.md) |
-| Production config | `configs/pretrain_a100_502m.yaml` | [configs.md](configs.md) |
+| Production config | `configs/pretrain_a100_502m.yaml` | [training.md](training.md#part-b--configuration-reference) |
 | Data pipeline | `data/` | [data_pipeline.md](data_pipeline.md) |
 
 ---
@@ -137,7 +136,7 @@ Every chapter file ends with a verification footer:
 
 | Doc | ~Lines | Status |
 |---|---|---|
-| training.md | 834 | Comprehensive |
+| training.md | ~1200 | Comprehensive (loop + YAML encyclopedia) |
 | moe.md | 754 | Comprehensive |
 | data_pipeline.md | 735 | Comprehensive |
 | ATTENTION_SINKS.md | ~1200 | Comprehensive (theory + implementation) |
@@ -151,7 +150,6 @@ Every chapter file ends with a verification footer:
 | scripts.md | 520 | Comprehensive |
 | rope_yarn.md | ~730 | Comprehensive |
 | getting_started.md | 454 | Comprehensive |
-| configs.md | 379 | Comprehensive |
 | **Total** | **10,134** | |
 
 

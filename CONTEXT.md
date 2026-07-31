@@ -13,7 +13,7 @@
 |---|---|
 | How does this repo implement X? | `models/*.py` + matching component doc §Implementation |
 | Sink bias / SWA / YaRN theory | `documentation/ATTENTION_SINKS.md` |
-| YAML / hyperparameters | `documentation/configs.md` |
+| YAML / hyperparameters | `documentation/training.md` (Part B) |
 | Train loop / NaN / checkpoints | `documentation/training.md` + `tests/test_training.py` |
 | What must not break? | `AGENTS.md` hard rules + `documentation/architecture.md` invariants |
 | Onboarding | `documentation/getting_started.md` |

@@ -541,7 +541,7 @@ step on a tiny model.
 | YaRN / RoPE | [rope_yarn.md](rope_yarn.md) |
 | Model composition | [transformer.md](transformer.md) |
 | Training (no KV cache) | [training.md](training.md) |
-| Config limits (`eval_max_seq_len`) | [configs.md](configs.md) |
+| Config limits (`eval_max_seq_len`) | [training.md](training.md#part-b--configuration-reference) |
 | Onboarding commands | [getting_started.md](getting_started.md) |
 
 ---
