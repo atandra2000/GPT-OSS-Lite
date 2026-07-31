@@ -15,7 +15,7 @@
 | Sink bias / SWA / YaRN theory | `documentation/ATTENTION_SINKS.md` |
 | YAML / hyperparameters | `documentation/configs.md` |
 | Train loop / NaN / checkpoints | `documentation/training.md` + `tests/test_training.py` |
-| What must not break? | `documentation/testing.md` load-bearing table |
+| What must not break? | `AGENTS.md` hard rules + `documentation/architecture.md` invariants |
 | Onboarding | `documentation/getting_started.md` |
 
 Everything in this file is derived from code/configs/tests.

@@ -1,411 +1,834 @@
-# Training — GPT-OSS-Lite
+# Pre-Training Loop — GPT-OSS-Lite
 
-> **Source:** `training/pretrain.py` · **Config:** `configs/pretrain_a100_502m.yaml`
-> **Companion:** [`data_pipeline.md`](data_pipeline.md) (where the tokens come from),
-> [`utils.md`](utils.md) (checkpointing, memory), [`OPTIMIZATIONS.md`](OPTIMIZATIONS.md).
+## A Complete Book Chapter on `training/pretrain.py`
 
----
+> **Config reference:** [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)
 
-## 1. Overview
-
-The pretraining script trains the 502 M-parameter (247 M active) GPT-OSS-Lite
-model on a Chinchilla-optimal 8 B-token corpus on a single A100 80 GB in
-**~16–20 hours**. The loop is intentionally conventional — a standard
-micro-batch + gradient-accumulation + cosine-LR decoder-only LM pretraining
-loop — so that every unusual decision (BF16 over FP16, the NaN guard, the
-chunked cross-entropy, the RNG-state resume) is visible and auditable rather
-than hidden behind a framework.
-
-Reproducibility is **opt-in via `--seed N`**: without it, runs are not
-reproducible (and deliberately so — forcing determinism costs throughput).
-With it, two seeded runs match to within the BF16 determinism floor (~1e-4).
+> **Related:** [data_pipeline.md](data_pipeline.md) (corpus and loader),
+> [moe.md](moe.md) (aux loss α=0.01), [triton_kernels.md](triton_kernels.md)
+> (optional `moe_dispatch`).
 
 ---
 
-## 2. The training loop, end to end
+## Table of Contents
+
+1. [Abstract](#abstract)
+2. [Training Objective](#training-objective)
+3. [Chinchilla Budget](#chinchilla-budget)
+4. [Configuration Walkthrough](#configuration-walkthrough)
+5. [Entry Point and CLI](#entry-point-and-cli)
+6. [Reproducibility — `seed_everything`](#reproducibility--seed_everything)
+7. [Hardware Performance Knobs](#hardware-performance-knobs)
+8. [Model Construction](#model-construction)
+9. [`torch.compile`](#torchcompile)
+10. [Memory Estimation](#memory-estimation)
+11. [Optimizer — AdamW with Parameter Groups](#optimizer--adamw-with-parameter-groups)
+12. [Learning Rate Schedule](#learning-rate-schedule)
+13. [Data Loading](#data-loading)
+14. [The Training Step — Inner Loop](#the-training-step--inner-loop)
+15. [Mixed Precision — BF16 Autocast](#mixed-precision--bf16-autocast)
+16. [Chunked Cross-Entropy](#chunked-cross-entropy)
+17. [Auxiliary MoE Loss Integration](#auxiliary-moe-loss-integration)
+18. [Gradient Accumulation](#gradient-accumulation)
+19. [Gradient Clipping](#gradient-clipping)
+20. [Gradient Checkpointing](#gradient-checkpointing)
+21. [NaN Guard and Checkpoint Rollback](#nan-guard-and-checkpoint-rollback)
+22. [Logging](#logging)
+23. [Checkpointing — `CheckpointManager`](#checkpointing--checkpointmanager)
+24. [Resume Training](#resume-training)
+25. [RNG State Persistence](#rng-state-persistence)
+26. [End-to-End Timeline](#end-to-end-timeline)
+27. [Operational Commands](#operational-commands)
+28. [Debugging Checklist](#debugging-checklist)
+29. [Appendix A — Step arithmetic](#appendix-a--step-arithmetic)
+30. [Appendix B — LR schedule samples](#appendix-b--lr-schedule-samples)
+31. [Appendix C — File map](#appendix-c--file-map)
+32. [Load-Bearing Invariants](#load-bearing-invariants)
+33. [References](#references)
+
+---
+
+## Abstract
+
+[`training/pretrain.py`](../training/pretrain.py) is the sole pre-training script
+for GPT-OSS-Lite. It implements a **from-scratch PyTorch loop** — no HuggingFace
+Trainer, no Lightning. The default A100 recipe trains a **~502 M total /
+~247 M active** model for **61,000 optimizer steps** on an **8.0 B-token**
+Chinchilla-optimal corpus at **131,072 tokens per step**.
+
+Stability features: **3000-step warmup**, cosine decay to **5% of peak LR**,
+**gradient clipping at 1.0**, **NaN guard with rollback** after 5 consecutive
+non-finite losses, **BF16 autocast**, **chunked cross-entropy** (chunk_size
+8192), and **auxiliary MoE load-balancing loss** (α = 0.01).
+
+Performance features: **`torch.compile(max-autotune)`**, **TF32**, **cuDNN
+benchmark_limit=0**, **cuBLASLt** preferred BLAS, **AdamW foreach+fused**,
+**gradient checkpointing every 3 layers**.
+
+---
+
+## Training Objective
+
+Per optimizer step (after gradient accumulation):
 
 ```
-seed_everything(seed)              # torch / numpy / python / cuda + CUBLAS_WORKSPACE_CONFIG
-_set_hardware_perf_knobs()         # TF32, cuDNN benchmark, float32 matmul precision
-build model → .to(dev)
-optional torch.compile(max-autotune)
-estimate_model_memory_gb → assert_fits_in_available_gpu   # pre-flight VRAM check
-build AdamW(decay / no-decay param groups)
-build LambdaLR(warmup → cosine → constant min_lr)
-build PretrainDataset + DataLoader(num_workers=4, pin_memory, persistent_workers)
-(optionally) resume from checkpoint: weights + optim + sched + RNG state
-enable_gradient_checkpointing(every=3)
-
-for step in range(total_steps):                       # 61 000 optimizer steps
-    for micro in range(grad_accum):                   # 4 micro-batches / step
-        with autocast(bf16):
-            logits, aux_loss = model(input_ids)
-            ce = chunked_cross_entropy(logits, targets, chunk=4096)
-            loss = (ce + 0.01 * aux_loss) / accum
-        if not isfinite(loss): NaN-guard rollback      # see §6
-        loss.backward()
-    clip_grad_norm_(foreach=True)
-    optim.step(); sched.step(); optim.zero_grad()
-    if step % 50   == 0: logger.log(...)
-    if step % 2000 == 0: ckpt.save(model, optim, sched, extra_meta) + save RNG state
+L = L_CE + α · L_aux
 ```
 
-Effective batch = `micro_batch_size · grad_accum · n_tokens = 8 · 4 · 4096 =
-131 072 tokens/step`; over 61 000 steps that is ~8.0 B tokens — the
-Chinchilla-optimal count for a 502 M-param model (≈16 tokens/parameter).
+| Term | Source | Description |
+|---|---|---|
+| `L_CE` | Chunked cross-entropy on LM head | Next-token prediction |
+| `L_aux` | Mean aux loss across 12 MoE layers | Load-balancing (Switch/GShard) |
+| `α` | `aux_loss_alpha` = **0.01** | Switch Transformer default |
 
----
+The model returns `(logits, aux_loss)` from [`GPTOSS.forward`](../models/transformer.py).
+`aux_loss` is already averaged across layers.
 
-## 3. Numerical-stability & performance knobs
-
-### 3.1 BF16 autocast (no `GradScaler`)
+During micro-batches, the **scalar backward target** is:
 
 ```python
-with autocast(device_type=dev.type, dtype=torch.bfloat16, enabled=(dev.type == "cuda")):
-    logits, aux_loss = model(input_ids)
-    ce = chunked_cross_entropy(logits, target_ids, chunk_size=4096)
-    loss = (ce + aux_alpha * aux_loss) / accum
+loss = (ce + aux_alpha * aux_loss) / accum
 ```
 
-Forward + loss run in BF16 on CUDA. The key point: **BF16 does not need a
-`GradScaler`** — only FP16 does. BF16 has the same exponent range as FP32
-(8 bits), so it does not overflow the way FP16 does; the underflow that
-`GradScaler` works around is handled by the FP32 master weights in AdamW. This
-is the workspace-wide rule (BF16 on Ampere/Blackwell, no `GradScaler`) applied
-here. The loss is divided by `accum` *before* backward so the accumulated
-gradient is the correct mean over micro-batches.
+Division by `accum` keeps gradient magnitude equivalent to one large batch.
 
-### 3.2 `torch.compile(mode="max-autotune")`
+---
 
-Auto-invoked on CUDA when `training.compile: true`. Uses
-`fullgraph=False` because the NaN-guard control flow (data-dependent branch
-on `torch.isfinite(loss)`) breaks full-graph capture. `max-autotune` runs the
-autotuner to pick the best fused kernels — a one-time compile cost, then
-A100-specific kernels for the rest of the run. If `torch.compile` fails to
-apply (older PyTorch, unsupported op), the script catches the exception and
-continues without it rather than aborting a 16-hour run.
+## Chinchilla Budget
 
-### 3.3 Hardware performance knobs
+From [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml):
 
-`_set_hardware_perf_knobs()` (called before model construction on CUDA):
-- `torch.backends.cuda.matmul.allow_tf32 = True` — TF32 matmuls on Ampere
-  (19-bit mantissa matmul, FP32 accumulate). ~3× faster, indistinguishable
-  quality for LM training.
-- `torch.backends.cudnn.allow_tf32 = True` + `cudnn.benchmark = True` — TF32
-  convs + cuDNN autotune.
-- `torch.set_float32_matmul_precision("high")` — allows TF32 for the FP32
-  paths (the FP32 master-weight updates).
+| Knob | Value |
+|---|---|
+| `micro_batch_size` | 8 |
+| `gradient_accumulation_steps` | 4 |
+| `max_seq_len` (model) | 4096 |
+| **Tokens per optimizer step** | **8 × 4 × 4096 = 131,072** |
+| `total_steps` | 61,000 |
+| **Total training tokens** | **61,000 × 131,072 ≈ 8.0 × 10⁹** |
 
-These are all no-ops on CPU, so the same script runs in both environments.
+This matches the **8.0 B-token** corpus prepared by the data pipeline
+(Chinchilla-optimal for ~500 M-param models).
 
-### 3.4 FP32 master weights via AdamW
+---
+
+## Configuration Walkthrough
+
+### Model block (selected fields)
+
+```yaml
+model:
+  vocab_size: 128000
+  d_model: 768
+  n_layers: 12
+  n_heads: 8
+  n_kv_heads: 4
+  head_dim: 96
+  ffn_dim: 1536
+  n_routed_experts: 8
+  n_activated_experts: 2
+  n_shared_experts: 1
+  max_seq_len: 4096
+  dtype: bf16
+  weight_tying: true
+  # moe_dispatch: "stacked"   # default; set "triton_grouped" for Triton
+```
+
+### Training block
+
+```yaml
+training:
+  micro_batch_size: 8
+  gradient_accumulation_steps: 4
+  total_steps: 61000
+  warmup_steps: 3000
+  lr: 4.0e-4
+  min_lr_ratio: 0.05
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  grad_checkpoint: true
+  grad_checkpoint_every: 3
+  compile: true
+  compile_mode: "max-autotune"
+  save_interval: 2000
+  log_interval: 50
+  nan_guard: true
+  nan_guard_max_consecutive: 5
+  aux_loss_alpha: 0.01
+  save_dir: "checkpoints/pretrain_a100"
+```
+
+### Data block
+
+```yaml
+data:
+  train_data_path: "data/pretrain_chinchilla"
+  tokenizer: "llama3"
+  shard_size_tokens: 50000000
+  max_tokens: 8000000000
+  data_mix: "gptoss-default"
+```
+
+See [data_pipeline.md](data_pipeline.md) for corpus details.
+
+---
+
+## Entry Point and CLI
+
+```bash
+python training/pretrain.py \
+  --config configs/pretrain_a100_502m.yaml \
+  --seed 42 \
+  --resume-from 4000
+```
+
+| Flag | Purpose |
+|---|---|
+| `--config` | YAML path (required) |
+| `--seed` | Seed all RNGs + set `CUBLAS_WORKSPACE_CONFIG` |
+| `--max-steps` | Override `total_steps` (debug runs) |
+| `--resume-from` | Load checkpoint at step N |
+
+`main()` flow:
+
+1. Optional `seed_everything`
+2. `_set_hardware_perf_knobs()`
+3. Load YAML → `ModelConfig`, training dict, data dict
+4. Build model, optimizer, scheduler, DataLoader
+5. Optional resume
+6. Training loop until `total_steps`
+7. Final checkpoint + RNG save
+
+---
+
+## Reproducibility — `seed_everything`
+
+```python
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    if os.environ.get("CUBLAS_WORKSPACE_CONFIG") is None:
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+```
+
+### Rules
+
+| Condition | Reproducible? |
+|---|---|
+| `--seed` passed | Yes (with same hardware/software) |
+| No `--seed` | **Not** reproducible |
+| Checkpoint resume + RNG file | Restores exact continuation |
+
+`CUBLAS_WORKSPACE_CONFIG=:4096:8` selects deterministic cuBLAS workspace
+when seed is set. Without `--seed`, the env var is still set if unset, but
+RNGs are not seeded.
+
+Checkpoints include RNG state in `rng_step_N.pt` (see
+[RNG State Persistence](#rng-state-persistence)).
+
+---
+
+## Hardware Performance Knobs
+
+`_set_hardware_perf_knobs()` in [`pretrain.py`](../training/pretrain.py):
+
+```python
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark_limit = 0      # exhaustive algo search
+torch.backends.cuda.preferred_blas_library = "cublaslt"
+torch.set_float32_matmul_precision("high")
+```
+
+| Knob | Effect |
+|---|---|
+| TF32 matmul | ~8× faster FP32 accum on Ampere+ |
+| cuDNN benchmark | Autotune convolutions (minimal here) |
+| `benchmark_limit=0` | Full cuDNN search — one-time cost, ~3–5% gain on A100 |
+| `cublaslt` | BF16 matmul via cuBLASLt hand-tuned sm_80 kernels |
+| `high` matmul precision | Allows TF32 internal accum |
+
+These apply globally before the first forward pass.
+
+---
+
+## Model Construction
+
+```python
+dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+model = GPTOSS(model_cfg).to(dev)
+```
+
+[`GPTOSS`](../models/transformer.py) prints parameter counts:
+
+```
+[model] total params: 502.xxM, active: 247.xxM
+```
+
+`ModelConfig` is built from YAML `model:` block via dataclass constructor.
+Invalid configs fail in `ModelConfig.__post_init__` (GQA divisibility, MoE
+counts, YaRN lengths).
+
+AMP dtype from config:
+
+```python
+_amp_dtype = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(model_cfg.dtype, torch.bfloat16)
+```
+
+Default and recommended: **BF16** — no `GradScaler` needed on Ampere/Blackwell.
+
+---
+
+## `torch.compile`
+
+```python
+compile_enabled = train_cfg.get("compile", False) and dev.type == "cuda"
+compile_mode = train_cfg.get("compile_mode", "max-autotune")
+if compile_enabled:
+    model = torch.compile(model, mode=compile_mode, fullgraph=False)
+```
+
+| Setting | Value |
+|---|---|
+| Enabled when | `compile: true` in YAML **and** CUDA available |
+| Mode | `"max-autotune"` |
+| `fullgraph` | `False` — allows graph breaks |
+
+First steps incur compile/autotune latency. Failure prints warning and
+continues without compile.
+
+---
+
+## Memory Estimation
+
+Before training:
+
+```python
+est = estimate_model_memory_gb(model, seq_len=..., batch_size=micro_bs, grad_checkpoint=True)
+assert_fits_in_available_gpu(est)
+```
+
+From [`utils/memory.py`](../utils/memory.py). OOM risk prints WARNING but does
+not abort (allows smoke tests on small GPUs).
+
+Gradient checkpointing (`grad_checkpoint: true`, every 3 layers) trades ~30%
+extra compute for ~40% activation memory savings at `T=4096`.
+
+---
+
+## Optimizer — AdamW with Parameter Groups
+
+### Parameter groups
+
+```python
+no_decay = ["bias", "norm", "embed"]
+decay_params = [p for n, p in model.named_parameters() if not any(nd in n.lower() for nd in no_decay)]
+no_decay_params = [p for n, p in model.named_parameters() if any(nd in n.lower() for nd in no_decay)]
+```
+
+| Group | Weight decay |
+|---|---|
+| Matrices (attention, MoE, head if not tied) | `weight_decay: 0.1` |
+| bias, norm, embed | **0.0** |
+
+Embedding is excluded from decay because it is tied to the LM head weight.
+
+### AdamW settings
 
 ```python
 optim = AdamW(
-    [{"params": decay_params, "weight_decay": weight_decay},
-     {"params": no_decay_params, "weight_decay": 0.0}],
-    lr=lr, betas=(0.9, 0.95), eps=1e-8,
+    [
+        {"params": decay_params, "weight_decay": 0.1},
+        {"params": no_decay_params, "weight_decay": 0.0},
+    ],
+    lr=4e-4,
+    betas=(0.9, 0.95),
+    eps=1e-6,
     foreach=True,
     fused=(dev.type == "cuda"),
 )
 ```
 
-Two parameter groups: **decay** (matmuls, embeddings) and **no-decay** (biases,
-norms, embeddings — matched by substring on the parameter name). AdamW keeps
-**FP32 momentum/variance internally** even when the model params are BF16, so
-the optimizer state is the numerical-stability anchor. `foreach=True` batches
-the per-parameter update into one kernel; `fused=True` uses the CUDA-only fused
-AdamW kernel (1.5–2× faster on A100/H100), falling back to `foreach` on CPU /
-older CUDA. The betas `(0.9, 0.95)` and `eps=1e-8` are the GPT-OSS / LLaMA
-convention.
+| Hyperparameter | Value | Notes |
+|---|---|---|
+| `lr` | **4e-4** | Peak after warmup |
+| `beta1` | 0.9 | |
+| `beta2` | 0.95 | |
+| `eps` | **1e-6** | BF16-safe (not 1e-8) |
+| `foreach` | True | Faster multi-tensor update |
+| `fused` | True on CUDA | ~1.5–2× vs default loop on A100 |
 
-### 3.5 Gradient checkpointing every 3rd layer
+**Why eps=1e-6?** BF16 has 7 mantissa bits; `1e-8` underflows in Adam's
+second moment, silently stalling late training. Matches DeepSeek-V3 and
+LLaMA-3 recipes.
 
-```python
-model.enable_gradient_checkpointing(every=3)
-# → checkpoint(block, x, positions, use_reentrant=False) on layers 0, 3, 6, 9
+---
+
+## Learning Rate Schedule
+
+`make_warmup_cosine_lambda(warmup_steps=3000, total_steps=61000, min_lr_ratio=0.05)`:
+
+```
+step < warmup:     lr_mult = step / warmup_steps
+step >= total:     lr_mult = min_lr_ratio (0.05)
+else:              cosine from 1.0 → 0.05 over (total - warmup) steps
 ```
 
-Layers `0, 3, 6, 9` recompute their activations in the backward pass instead of
-storing them; the other 8 layers keep activations. This is a memory/throughput
-trade tuned to "fit on one A100 80GB without dropping batch":
-- Memory: ~`2/3` of layer activations are *not* stored (see `utils.md` /
-  `_activation_bytes` `store_factor`).
-- Throughput: the 4 checkpointed layers pay a ~1.3× forward-cost penalty in
-  backward (recompute), the other 8 do not.
-- `use_reentrant=False` is the modern recommended path (the reentrant variant
-  is deprecated and has footguns around nested autograd).
+### Schedule parameters
 
-### 3.6 Chunked cross-entropy (chunk = 4096)
+| Phase | Steps | LR multiplier |
+|---|---|---|
+| Warmup | 0 → 3000 | 0 → 1.0 linear |
+| Cosine decay | 3000 → 61000 | 1.0 → 0.05 |
+| After 61000 | — | 0.05 (floor) |
+
+Peak LR = **4e-4**; floor LR = **2e-5** (5% of peak).
+
+Warmup **3000 steps** ≈ 4.9% of total — industry MoE standard 2–5% for
+top-k routing stability.
+
+```python
+sched = LambdaLR(optim, lr_lambda)
+# sched.step() called once per optimizer step (after accum boundary)
+```
+
+---
+
+## Data Loading
+
+```python
+ds = PretrainDataset(data_cfg["train_data_path"], model_cfg.max_seq_len)
+loader = DataLoader(
+    ds,
+    batch_size=micro_bs,          # 8
+    shuffle=True,
+    num_workers=4,                # default from YAML or 4
+    pin_memory=True,              # on CUDA
+    persistent_workers=True,      # when num_workers > 0
+    drop_last=True,
+)
+```
+
+See [data_pipeline.md](data_pipeline.md) for `PretrainDataset` internals.
+
+Default path: `data/pretrain_chinchilla` — directory of `shard_*.bin` + optional
+`manifest.json`.
+
+---
+
+## The Training Step — Inner Loop
+
+```python
+while step < total_steps:
+    for input_ids, target_ids in loader:
+        input_ids = input_ids.to(dev, non_blocking=True)
+        target_ids = target_ids.to(dev, non_blocking=True)
+
+        with autocast(device_type=dev.type, dtype=_amp_dtype, enabled=cuda):
+            logits, aux_loss = model(input_ids)
+            ce = chunked_cross_entropy(logits, target_ids, chunk_size=8192)
+            loss = (ce + aux_alpha * aux_loss) / accum
+
+        if not torch.isfinite(loss):
+            # NaN guard branch ...
+            continue
+
+        loss.backward()
+        micro_step += 1
+
+        if micro_step % accum == 0:
+            clip_grad_norm_(..., 1.0)
+            optim.step()
+            sched.step()
+            optim.zero_grad(set_to_none=True)
+            step += 1
+            # log / save checkpoints
+```
+
+### Step counter semantics
+
+| Counter | Increments when |
+|---|---|
+| `micro_step` | Every forward-backward |
+| `step` | Every `accum` micro-batches (optimizer step) |
+| `pbar` | Tracks optimizer `step` |
+
+---
+
+## Mixed Precision — BF16 Autocast
+
+```python
+with autocast(device_type=dev.type, dtype=torch.bfloat16, enabled=(dev.type == "cuda")):
+    ...
+```
+
+- **Forward** runs in BF16 for matmuls/convolutions where beneficial.
+- **Loss** computed inside autocast region (CE in FP32 internally via PyTorch).
+- **Master weights:** AdamW updates FP32 master copies when using fused AdamW
+  on CUDA (standard PyTorch behaviour).
+- **No GradScaler** — BF16 exponent range matches FP32.
+
+RMSNorm in the model keeps activations in native dtype (no FP32 copy in norm).
+
+---
+
+## Chunked Cross-Entropy
 
 ```python
 def chunked_cross_entropy(logits, targets, chunk_size=4096):
-    flat_logits  = logits.view(-1, logits.size(-1))    # (B·T, vocab=128000)
+    flat_logits = logits.view(-1, vocab_size)
     flat_targets = targets.view(-1)
-    total_loss = torch.zeros((), device=..., dtype=...)
-    n_total = flat_logits.size(0)                        # Python int, not a tensor
+    total_loss = 0
     for start in range(0, n_total, chunk_size):
-        end = min(start + chunk_size, n_total)
-        chunk_loss = F.cross_entropy(flat_logits[start:end], flat_targets[start:end],
-                                     reduction="sum")
-        total_loss = total_loss + chunk_loss
-    return total_loss / max(1, n_total)
+        chunk_loss = F.cross_entropy(flat_logits[start:end], flat_targets[start:end], reduction="sum")
+        total_loss += chunk_loss
+    return total_loss / n_total
 ```
 
-The final logits are `(B·T, vocab) = (32K, 128K)` per micro-batch — a full
-softmax over that is ~16 GB of intermediate in HBM. Chunking to 4096 rows keeps
-the peak at `4096 · 128K · 4 bytes ≈ 2 GB` and accumulates the *sum* of
-per-chunk losses into a single scalar, dividing by `n_total` (a Python int —
-not a tensor — once at the end). This avoids materialising the full softmax
-and saves `2 · n_chunks` kernel launches versus the old two-scalar
-accumulator (OPT-7).
+### Production chunk size
 
-### 3.7 `clip_grad_norm_(foreach=True)`
+Pretrain uses **`chunk_size=8192`** (not the function default 4096):
 
 ```python
-try:
-    nn.utils.clip_grad_norm_(model.parameters(), grad_clip, foreach=True)
-except TypeError:
-    nn.utils.clip_grad_norm_(model.parameters(), grad_clip)   # older PyTorch
+ce = chunked_cross_entropy(logits, target_ids, chunk_size=8192)
 ```
 
-Batches the per-parameter norm computation into one kernel (~2× faster on A100
-with hundreds of parameter tensors), with a `try/except TypeError` fallback
-for PyTorch < 2.1 where `foreach` did not exist on this function.
+At `B=8`, `T=4096`: `n_total = 32,768` tokens → 4 CE chunks (was 8 at 4096).
 
-### 3.8 `CUBLAS_WORKSPACE_CONFIG=:4096:8`
+**Memory:** avoids materialising full `(B×T, vocab)` softmax — peak intermediate
+~`chunk_size × vocab_size` instead of `B×T × vocab_size`.
 
-Set in `seed_everything` only if not already present. Required for *full*
-CUDA determinism (cuBLAS non-determinism otherwise breaks bit-exactness across
-seeds). Harmless when cuBLAS is not used (CPU).
-
-### 3.9 RNG seeding
-
-`seed_everything(seed)` seeds Python `random`, NumPy, `torch`, and
-`torch.cuda` (when available). It must be called **before** model construction
-(so weight init is reproducible) and **before** DataLoader creation (so shuffle
-order is reproducible). Without `--seed`, none of this is set and runs are
-deliberately non-deterministic.
+With `vocab=128000`, chunk 8192 ≈ 1 GB BF16 logits slice — well under 80 GB
+with model + activations.
 
 ---
 
-## 4. The LR schedule
+## Auxiliary MoE Loss Integration
 
 ```python
-def make_warmup_cosine_lambda(warmup_steps, total_steps, min_lr_ratio=0.05):
-    def lr_lambda(step):
-        if step < warmup_steps:
-            return step / max(1, warmup_steps)                       # linear warmup
-        if step >= total_steps:
-            return min_lr_ratio                                      # hold at min
-        progress = (step - warmup_steps) / (total_steps - warmup_steps)
-        return min_lr_ratio + (1 - min_lr_ratio) * 0.5 * (1 + cos(π · progress))  # cosine
-    return lr_lambda
+aux_alpha = train_cfg.get("aux_loss_alpha", 0.01)
+loss = (ce + aux_alpha * aux_loss) / accum
 ```
 
-Three phases, all expressed as a multiplier on the base `lr = 4e-4`:
-1. **Linear warmup** over 2 000 steps — ramps from 0 to `lr` to avoid
-   early-training instability (large LR + random weights = divergence).
-2. **Cosine decay** from `lr` down to `min_lr_ratio · lr = 0.05 · 4e-4 = 2e-5`
-   over the remaining 59 000 steps.
-3. **Constant at min** once `step >= total_steps` (the `>=` branch handles
-   training past `total_steps` gracefully).
+Logging every `log_interval`:
 
-The schedule is a `LambdaLR` so it composes with the optimiser's own LR
-handling and saves/restores cleanly in the checkpoint.
+```python
+logger.log(step, ce_val, metrics={"aux": aux_val}, lr=lr)
+pbar.set_postfix(ce=f"{ce.item():.4f}", aux=f"{aux_loss.item():.4f}")
+```
+
+Healthy training: `aux` starts ~1–4, decreases toward ~0.5–1.5 as routing
+balances. If `aux → 0` while one expert dominates, check router gradients.
+
+**Distinct from DeepSeek-v3-Lite:** GPT-OSS uses standard aux loss, not
+aux-loss-free bias updates ([moe.md](moe.md)).
 
 ---
 
-## 5. The NaN guard with checkpoint rollback
+## Gradient Accumulation
 
-The training loop's safety net. On every micro-step:
+```yaml
+gradient_accumulation_steps: 4
+micro_batch_size: 8
+```
+
+Effective batch = **32 sequences × 4096 tokens = 131,072 tokens/step**.
+
+```python
+optim.zero_grad(set_to_none=True)   # once before loop
+# ...
+loss = (ce + aux_alpha * aux_loss) / accum
+loss.backward()
+if micro_step % accum == 0:
+    optim.step()
+    optim.zero_grad(set_to_none=True)
+```
+
+`set_to_none=True` frees gradient tensors instead of zeroing — lower peak
+memory.
+
+---
+
+## Gradient Clipping
+
+```python
+grad_clip = 1.0
+nn.utils.clip_grad_norm_(model.parameters(), grad_clip, foreach=True)
+```
+
+Applied **only at optimizer step boundary** (after `accum` micro-batches).
+
+`foreach=True` for faster multi-tensor norm on CUDA; falls back if unsupported.
+
+If `grad_clip <= 0`, clipping is skipped.
+
+---
+
+## Gradient Checkpointing
+
+```python
+model.enable_gradient_checkpointing(every=train_cfg.get("grad_checkpoint_every", 3))
+```
+
+[`GPTOSS.forward`](../models/transformer.py):
+
+```python
+if use_grad_ckpt and (layer_idx % grad_ckpt_every == 0):
+    x, aux = torch.utils.checkpoint.checkpoint(block, x, positions, use_reentrant=False)
+```
+
+| Setting | Value |
+|---|---|
+| `grad_checkpoint` | `true` |
+| `grad_checkpoint_every` | **3** |
+
+Every 3rd block (layers 0, 3, 6, 9) recomputes forward on backward. Layers
+1, 2, 4, 5, 7, 8, 10, 11 store activations normally.
+
+---
+
+## NaN Guard and Checkpoint Rollback
+
+```yaml
+nan_guard: true
+nan_guard_max_consecutive: 5
+```
 
 ```python
 if not torch.isfinite(loss):
-    if nan_guard:
-        nan_count += 1
-        print(f"[nan-guard] step {step}: non-finite loss ({nan_count}/{nan_max_consec})")
-        optim.zero_grad(set_to_none=True)
-        micro_step = 0
-        if nan_count >= nan_max_consec:           # default 5 consecutive NaNs
-            latest = ckpt.latest_step()
-            if latest is not None:
-                ckpt.load(model, optim, sched, step=latest)   # full rollback
-                step = latest
-                nan_count = 0
-            else:
-                raise RuntimeError("NaN guard triggered with no checkpoint to roll back to.")
-        continue
-    else:
-        raise RuntimeError(f"Non-finite loss at step {step}: {loss.item()}")
-
-nan_count = 0          # reset on any *good* step
-loss.backward()
+    nan_count += 1
+    optim.zero_grad(set_to_none=True)
+    micro_step = 0
+    if nan_count >= nan_max_consec:
+        latest = ckpt.latest_step()
+        ckpt.load(model, step=latest, optimizer=optim, scheduler=sched)
+        step = latest
+        nan_count = 0
+    continue
 ```
 
-The state machine:
-- A single non-finite loss is treated as a transient spike — zero the grads,
-  reset the micro-step counter, skip the step, keep going. This survives the
-  occasional BF16 spike without wasting a checkpoint.
-- After `nan_guard_max_consecutive` (5) **consecutive** NaNs, the run rolls
-  back to the latest *complete* checkpoint (`latest_step()` requires all three
-  of `model_step_N.safetensors`, `optim_step_N.pt`, `meta_step_N.json` — see
-  [`utils.md`](utils.md)), resyncs the step counter, and continues. This
-  recovers from a sustained divergence.
-- If there is no checkpoint to roll back to (early in the run), it raises —
-  better to fail loudly than to silently spin on NaNs forever.
-- `nan_count` is reset to 0 on every *good* step, so the counter measures
-  *consecutive* NaNs, not total.
+| Event | Action |
+|---|---|
+| Single non-finite loss | Skip batch, zero grad, reset micro_step |
+| 5 consecutive non-finite | Roll back to **latest complete checkpoint** |
+| No checkpoint available | `RuntimeError` |
+| `nan_guard: false` | Immediate `RuntimeError` on non-finite |
 
-This is why checkpoint atomicity (see [`utils.md`](utils.md)) matters: the
-rollback must land on a known-good state, never a half-written one.
+**Never disable** NaN guard in production without explicit approval
+([`AGENTS.md`](../AGENTS.md) rule 6).
 
 ---
 
-## 6. Reproducibility — the full RNG chain
+## Logging
 
-A seeded run is reproducible end-to-end because every source of randomness is
-captured and restored:
+[`TrainingLogger`](../utils/logging.py) with:
 
-1. **At start**: `seed_everything(seed)` seeds all four RNGs.
-2. **At every save**: the RNG state is written to a sibling
-   `rng_step_N.pt` file alongside the checkpoint, capturing the `{python,
-   numpy, torch, cuda}` states at that step.
-3. **On `--resume-from N`**: the script loads weights + optimiser + scheduler
-   from the checkpoint *and* restores the RNG state from `rng_step_N.pt`, so the
-   resumed run is **bit-identical to a non-interrupted run** from that step
-   onward.
-4. **MoE dispatch** uses `torch.argsort(stable=True)` so routing ties break
-   identically across runs (see [`moe.md`](moe.md) §6.3).
+```yaml
+log_interval: 50
+```
 
-The determinism floor under BF16 is **~1e-4** — BF16 matmuls are not
-bit-reproducible even with `CUBLAS_WORKSPACE_CONFIG` set, because the
-reduction order is not fully deterministic. Two seeded runs should match
-*within* that tolerance; demanding bit-exact equality under BF16 is not
-achievable.
+Logs CE loss, aux metric, LR every 50 optimizer steps. Seq len passed for
+tokens/sec estimation.
 
 ---
 
-## 7. The dataset / DataLoader
+## Checkpointing — `CheckpointManager`
 
-`PretrainDataset` (in `pretrain.py`) reads the packed-token shards produced by
-the data pipeline (see [`data_pipeline.md`](data_pipeline.md)). Each
-`__getitem__` returns a `(input_ids, target_ids)` window of length
-`max_seq_len + 1`, sliced as `chunk[:-1]` / `chunk[1:]` — the standard
-next-token LM shift. Shards are mmap'd (`torch.from_file(..., shared=True)` or
-`torch.load(..., mmap=True)`) so the 32 GB corpus is never loaded into RAM;
-the last-loaded shard is cached to amortise the mmap cost across consecutive
-windows. Cross-shard windows are stitched with a multi-shard scan, with
-`bisect.bisect_right` giving `O(log N)` shard lookup (OPT-10).
+[`utils/checkpoint.py`](../utils/checkpoint.py)
 
-The DataLoader uses `num_workers=4`, `pin_memory=True` (on CUDA), and
-`persistent_workers=True` — async H2D transfer plus worker reuse across epochs
-(avoids the per-epoch re-import cost). `drop_last=True` keeps the
-gradient-accumulation math exact.
+### Save (every `save_interval=2000` + final)
 
----
+```python
+ckpt.save(model, optim, step, scheduler=sched, extra_meta={...})
+```
 
-## 8. Pre-flight VRAM check
-
-Before the loop starts, `estimate_model_memory_gb(model, seq_len, batch,
-grad_checkpoint=...)` sums params + FP32 optimiser state (12 bytes/param for
-AdamW m, v, master) + KV cache + activations, adds an auto-detected CUDA
-overhead (~17% of total GPU memory, capped at 13.7 GB), and
-`assert_fits_in_available_gpu(est)` raises *before* training if the estimate
-exceeds `total_memory − 2 GB` margin. A 16-hour run that OOMs at step 5 000 is
-far worse than a clear error at step 0. On CPU this is a no-op. See
-[`utils.md`](utils.md).
-
----
-
-## 9. Design rationale & rejected alternatives
-
-| Decision | Rationale | Rejected alternative |
+| File | Format | Contents |
 |---|---|---|
-| BF16 autocast, no `GradScaler` | BF16 has FP32 exponent range; scaler is FP16-only | FP16 + GradScaler — more moving parts, overflow risk |
-| `fullgraph=False` compile | NaN-guard branch breaks full graph | `fullgraph=True` — would force removing the safety net |
-| FP32 AdamW master weights | Optimiser state is the numerical anchor under BF16 | BF16 optimiser state — momentum/variance underflow |
-| Checkpoint every 3rd layer | Fits 502 M on one A100 80GB without dropping batch | Every layer — too slow; none — OOM |
-| Chunked CE (chunk=4096) | Peak softmax 2 GB, not 16 GB | Full softmax — OOM at large B·T |
-| NaN guard with rollback (5 consec) | Survives transient spikes, recovers from divergence | Hard abort on first NaN — wastes a 16-h run on a spike |
-| RNG sibling file + restore on resume | Bit-identical resume | Re-seed on resume — resume ≠ fresh run |
-| Opt-in `--seed` | Determinism costs throughput; let the user choose | Always-deterministic — slower for everyone |
+| `model_step_N.safetensors` | safetensors | Model weights (deduped shared tensors) |
+| `optim_step_N.pt` | torch.save | AdamW state |
+| `sched_step_N.pt` | torch.save | LR scheduler state |
+| `meta_step_N.json` | JSON | Step, optional aux_loss, final flag |
+
+### Atomic write pattern
+
+```
+write to .tmp in save_dir → os.replace to final path
+```
+
+Safetensors save **clones** duplicate `data_ptr` tensors (weight tying) to
+avoid safetensors duplicate-key errors.
+
+### Completeness check
+
+`latest_step()` returns highest step where model + optim + meta all exist.
 
 ---
 
-## 10. Edge cases & pitfalls
+## Resume Training
 
-- **`gradient_accumulation_steps < 1`**: raises `ValueError` — guarded in
-  `main()`. Same for `micro_batch_size < 1`.
-- **`max_steps` override**: `--max-steps N` rewrites `total_steps` in the
-  config before the schedule is built, so the cosine decay still ends cleanly
-  at `N`.
-- **Resume into a differently-shaped model**: `ckpt.load` uses
-  `strict=False` and warns on missing/unexpected keys, so a config change
-  produces a loud warning, not a silent shape mismatch.
-- **`compile` failure is non-fatal**: caught and the run continues without
-  compile — do not assume the run is compiled just because the config says so.
-- **`grad_checkpoint_every` vs `n_layers`**: `enable_gradient_checkpointing(every=3)`
-  checkpoints layers `0, 3, 6, 9`. With `n_layers = 12` this is exactly 4
-  layers; a different `n_layers` changes the count and the memory savings.
+```bash
+python training/pretrain.py \
+  --config configs/pretrain_a100_502m.yaml \
+  --resume-from 4000 \
+  --seed 42
+```
+
+```python
+meta = ckpt.load(model, step=resume_from, optimizer=optim, scheduler=sched)
+start_step = meta["step"]
+```
+
+RNG restoration from `rng_step_{resume_from}.pt` if present:
+
+```python
+random.setstate(rng_state["python"])
+np.random.set_state(rng_state["numpy"])
+torch.set_rng_state(rng_state["torch"])
+torch.cuda.set_rng_state_all(rng_state["cuda"])
+```
+
+Resume **without** `--seed` still loads weights/optimizer; RNG only restored
+if rng file exists.
 
 ---
 
-## Implementation notes (extracted from code review)
+## RNG State Persistence
 
-- **BF16 autocast**: `torch.amp.autocast(device_type=dev.type,
-  dtype=torch.bfloat16)` wraps the forward + loss. No `GradScaler` is
-  needed for BF16 (only FP16 requires it).
-- **`torch.compile(max-autotune)`**: auto-invoked on CUDA when
-  `training.compile: true` in the YAML. `fullgraph=False` is used because
-  the NaN-guard control flow breaks full-graph capture.
-- **TF32 + cuDNN benchmark + `set_float32_matmul_precision("high")`**:
-  set on CUDA before model construction via
-  `_set_hardware_perf_knobs()`. These are the standard A100 performance
-  knobs; harmless on CPU.
-- **FP32 AdamW master weights**: `AdamW(foreach=True, fused=(dev.type ==
-  "cuda"))` keeps FP32 momentum/variance internally even when the model
-  params are BF16. `foreach=True` batches the per-param update into one
-  kernel; `fused=True` uses the CUDA-only fused kernel (1.5–2× faster on
-  A100/H100). Falls back to `foreach` on CPU/older CUDA.
-- **Gradient checkpointing every 3rd layer**: `GPTOSS.enable_gradient_checkpointing(every=3)`
-  applies `torch.utils.checkpoint.checkpoint(block, x, positions,
-  use_reentrant=False)` on layers `0, 3, 6, 9`. The other layers keep
-  their activations for the backward pass. `use_reentrant=False` is the
-  recommended modern path.
-- **NaN guard with checkpoint rollback**: if `torch.isfinite(loss)` is
-  False, the optimiser is zeroed, the micro-step counter is reset, and
-  after `nan_guard_max_consecutive` (default 5) consecutive NaNs the
-  latest checkpoint is reloaded and the step counter is resynced. Without
-  a checkpoint to roll back to, the run raises.
-- **Chunked cross-entropy (chunk=4096)**: `chunked_cross_entropy` flattens
-  logits and targets, then runs `F.cross_entropy(..., reduction="sum")`
-  over 4096-row chunks, accumulating into a single `total_loss` scalar
-  and dividing by `n_total` (a Python int) once at the end. This avoids
-  materialising the full `(B*T, vocab)` softmax in HBM and saves
-  `2 × n_chunks` kernel launches vs the old two-scalar accumulator.
-- **`clip_grad_norm_(foreach=True)`**: batches the per-param norm into
-  one kernel (~2× faster on A100); falls back to the loop on older
-  PyTorch via `try/except TypeError`.
-- **`CUBLAS_WORKSPACE_CONFIG=:4096:8`**: set in `seed_everything` when
-  not already present. Required for full CUDA determinism; harmless when
-  cuBLAS is not used.
-- **RNG seeding**: `seed_everything(seed)` seeds Python `random`, NumPy,
-  `torch`, and `torch.cuda` (when available). Must be called BEFORE model
-  construction (so weight init is reproducible) and BEFORE DataLoader
-  creation (so shuffle order is reproducible). Without `--seed`, runs are
-  NOT reproducible.
+At end of training:
 
-## Reproducibility
+```python
+rng_state = {
+    "python": random.getstate(),
+    "numpy": np.random.get_state(),
+    "torch": torch.get_rng_state(),
+    "cuda": torch.cuda.get_rng_state_all() if cuda else None,
+}
+torch.save(rng_state, ckpt.save_dir / f"rng_step_{step}.pt")
+```
 
-- Checkpoints include RNG state in a sibling `rng_step_N.pt` file
-  (`{python, numpy, torch, cuda}` states). On `--resume-from N`, the
-  script restores the RNG state from that file so the resumed run is
-  bit-identical to a non-interrupted run.
-- `torch.argsort(stable=True)` in MoE dispatch ensures the same input
-  always produces the same permutation across runs (see
-  `documentation/moe.md`).
-- Determinism floor under BF16 is ~1e-4 (BF16 non-determinism); two
-  seeded runs should match within that tolerance.
+Saved alongside final checkpoint. Enables bit-exact continuation of data
+order (with same DataLoader worker config).
 
-<!-- docs:verified 2026-07-31 · fd4fe36 -->
+---
+
+## End-to-End Timeline
+
+| Step range | Phase |
+|---|---|
+| 0 – 3000 | Linear warmup, routing stabilising |
+| 3000 – 20000 | Main learning, CE rapid drop |
+| 20000 – 50000 | Cosine decay, aux loss settling |
+| 50000 – 61000 | Low LR refinement |
+| Every 2000 | Checkpoint |
+| 61000 | Final save + RNG |
+
+**Wall clock (A100 80GB):** target ~16–20 h at 35–40% MFU (config header estimate).
+
+---
+
+## Operational Commands
+
+```bash
+# Full A100 run
+python training/pretrain.py \
+  --config configs/pretrain_a100_502m.yaml \
+  --seed 42
+
+# Short smoke (override steps in code path)
+python training/pretrain.py \
+  --config configs/pretrain_gpu_smoke.yaml \
+  --max-steps 10 \
+  --seed 0
+
+# Resume
+python training/pretrain.py \
+  --config configs/pretrain_a100_502m.yaml \
+  --resume-from 2000 \
+  --seed 42
+```
+
+Ensure data exists:
+
+```bash
+python data/prepare_data.py --stage pretrain
+```
+
+---
+
+## Debugging Checklist
+
+| Symptom | Check |
+|---|---|
+| OOM at T=4096 | `grad_checkpoint: true`; reduce `micro_batch_size` |
+| Loss NaN early | NaN guard logs; sink bias clamp in attention |
+| `aux` stuck high | MoE routing collapse — see [moe.md](moe.md) |
+| Slow step 0 | `torch.compile` + cuDNN autotune — normal |
+| No reproducibility | Pass `--seed`; set `CUBLAS_WORKSPACE_CONFIG` |
+| CE dominates, aux tiny | Expected — α=0.01 scales aux down |
+| Checkpoint won't load | `list_checkpoints()` — need complete triple |
+
+---
+
+## Appendix A — Step arithmetic
+
+```
+tokens_per_micro = micro_bs × max_seq_len = 8 × 4096 = 32,768
+tokens_per_step  = tokens_per_micro × accum = 32,768 × 4 = 131,072
+total_tokens     = 61,000 × 131,072 = 7,995,392,000 ≈ 8.0B
+```
+
+---
+
+## Appendix B — LR schedule samples
+
+| Step | LR multiplier | LR (peak 4e-4) |
+|---|---|---|
+| 0 | 0.0 | 0 |
+| 1500 | 0.5 | 2e-4 |
+| 3000 | 1.0 | 4e-4 |
+| 20000 | ~0.85 | ~3.4e-4 |
+| 40000 | ~0.45 | ~1.8e-4 |
+| 61000 | 0.05 | 2e-5 |
+
+---
+
+## Appendix C — File map
+
+| File | Role |
+|---|---|
+| [`training/pretrain.py`](../training/pretrain.py) | Main loop |
+| [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml) | A100 recipe |
+| [`models/transformer.py`](../models/transformer.py) | `GPTOSS`, checkpointing |
+| [`utils/checkpoint.py`](../utils/checkpoint.py) | Safetensors I/O |
+| [`utils/logging.py`](../utils/logging.py) | Training logger |
+| [`utils/memory.py`](../utils/memory.py) | VRAM estimator |
+
+---
+
+## Load-Bearing Invariants
+
+1. **BF16 autocast** — no FP16 GradScaler.
+2. **AdamW eps=1e-6** for BF16 stability.
+3. **Aux loss α=0.01** — standard Switch, not aux-loss-free.
+4. **NaN guard** enabled by default — do not disable silently.
+5. **Atomic checkpoints** — safetensors + separate optim/sched files.
+6. **`--seed` required** for reproducibility claims.
+7. **Chunked CE** — never materialise full `(B×T, V)` softmax.
+
+---
+
+## References
+
+- [`training/pretrain.py`](../training/pretrain.py)
+- [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)
+- [moe.md](moe.md) — aux loss theory
+- [data_pipeline.md](data_pipeline.md) — `PretrainDataset`
+- Hoffmann et al., *Training Compute-Optimal LLMs* (Chinchilla)
+
+<!-- docs:verified 2026-07-31 · fa6f918 -->

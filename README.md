@@ -195,11 +195,11 @@ Full technical references live in [`documentation/`](documentation/README.md). S
 
 | Doc | Purpose |
 |---|---|
-| [getting_started.md](documentation/getting_started.md) | Onboarding, smoke tests, pitfalls |
+| [getting_started.md](documentation/getting_started.md) | Onboarding, smoke runs, pitfalls |
 | [architecture.md](documentation/architecture.md) | System diagram, file map, invariants |
 | [ATTENTION_SINKS.md](documentation/ATTENTION_SINKS.md) | Authoritative sink-bias + SWA + YaRN theory |
 | [configs.md](documentation/configs.md) | Every YAML key explained |
-| [testing.md](documentation/testing.md) | Load-bearing tests as oracle |
+| [training.md](documentation/training.md) | Pretrain loop, NaN guard, checkpoints |
 
 Validate docs: `python3 scripts/check_docs.py`
 

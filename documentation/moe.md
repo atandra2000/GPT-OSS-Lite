@@ -1,430 +1,754 @@
-# Mixture-of-Experts FFN for GPT-OSS-Lite
+# Mixture-of-Experts — GPT-OSS-Lite
 
-> **Source:** `models/moe.py`
-> **Companion:** [`../AGENTS.md`](../AGENTS.md) — the "do not replace the
-> standard aux loss" rule lives here.
+## A From-Scratch Technical Reference
+
+> **Prerequisites:** [architecture.md](architecture.md) (transformer block layout),
+> [foundations.md](foundations.md) if present.
+
+> **Implementation:** [`models/moe.py`](../models/moe.py) · optional Triton path
+> [`models/moe_triton.py`](../models/moe_triton.py) · integration in
+> [`models/transformer.py`](../models/transformer.py).
+
+> **Related:** [triton_kernels.md](triton_kernels.md) (fused W1/W3+silu dispatch),
+> [training.md](training.md) (aux loss weight α=0.01 in the objective).
 
 ---
 
-## 1. Overview
+## Table of Contents
 
-Every GPT-OSS-Lite block replaces the single dense FFN of a classic
-transformer with a **Mixture-of-Experts** (MoE) FFN: `8` routed SwiGLU
-experts of which the top-`2` are activated per token, plus `1` shared expert
-that is always on. This is what gives the model its **50.8% sparsity** — 502 M
-total parameters but only ~247 M active per forward pass — and it is the
-second architectural pillar after sliding-window attention.
+1. [Abstract](#abstract)
+2. [Why MoE in GPT-OSS-Lite](#why-moe-in-gpt-oss-lite)
+3. [SwiGLU — The Expert Building Block](#swiglu--the-expert-building-block)
+4. [Sparse Routing — Theory](#sparse-routing--theory)
+5. [Auxiliary Load-Balancing Loss](#auxiliary-load-balancing-loss)
+6. [GPT-OSS-Lite MoE Topology](#gpt-oss-lite-moe-topology)
+7. [Class Reference — `SwiGLUExpert`](#class-reference--swigluexpert)
+8. [Class Reference — `MoERouter`](#class-reference--moerouter)
+9. [Function Reference — `aux_load_balancing_loss`](#function-reference--aux_load_balancing_loss)
+10. [Class Reference — `MoELayer`](#class-reference--moelayer)
+11. [Dispatch Paths — Stacked vs Triton Grouped](#dispatch-paths--stacked-vs-triton-grouped)
+12. [Shared Experts](#shared-experts)
+13. [Integration in `GPTOSS`](#integration-in-gptoss)
+14. [Parameter and FLOP Accounting](#parameter-and-flop-accounting)
+15. [Numerical Stability](#numerical-stability)
+16. [Comparison with DeepSeek-v3-Lite](#comparison-with-deepseek-v3-lite)
+17. [Debugging Checklist](#debugging-checklist)
+18. [Appendix A — Worked routing example](#appendix-a--worked-routing-example)
+19. [Appendix B — Dispatch layout diagram](#appendix-b--dispatch-layout-diagram)
+20. [Appendix C — Gradient flow](#appendix-c--gradient-flow)
+21. [Appendix D — Glossary](#appendix-d--glossary)
+22. [Load-Bearing Invariants](#load-bearing-invariants)
+23. [References](#references)
 
-The implementation is deliberately distinct from the sibling
-[DeepSeek-v3-Lite](https://github.com/atandra2000/DeepSeek-v3-Lite) project in
-three ways, each chosen to keep this repo a clean educational reference for the
-*GPT-OSS* MoE rather than a copy of DeepSeek's:
+---
 
-| Aspect | GPT-OSS-Lite (this repo) | DeepSeek-v3-Lite |
+## Abstract
+
+GPT-OSS-Lite replaces the dense feed-forward network (FFN) in every transformer
+block with a **Mixture-of-Experts (MoE)** layer. Each token is routed to
+**top-2 of 8 routed experts** plus **1 shared expert** that always runs. The
+router uses **softmax gating in FP32**, renormalises the top-k weights to sum
+to 1, and trains with a **standard Switch/GShard auxiliary load-balancing
+loss** (α = 0.01) — deliberately *not* DeepSeek-V3's auxiliary-loss-free gate.
+
+The implementation is raw PyTorch in [`models/moe.py`](../models/moe.py). An
+optional Triton fused kernel ([`models/moe_triton.py`](../models/moe_triton.py))
+accelerates the W1/W3+silu stage when `moe_dispatch="triton_grouped"` is set
+in [`ModelConfig`](../models/transformer.py).
+
+---
+
+## Why MoE in GPT-OSS-Lite
+
+A dense SwiGLU FFN at `d_model=768`, `ffn_dim=1536` stores:
+
+```
+Params per layer  ≈ 3 × d × d_ff = 3 × 768 × 1536 ≈ 3.5 M
+Active FLOPs/token ≈ 6 × d × d_ff  (three matmuls at full width)
+```
+
+With 12 layers, dense FFNs would dominate parameter count. MoE trades **stored
+capacity** for **sparse activation**:
+
+| Quantity | Dense (hypothetical) | GPT-OSS MoE (actual) |
 |---|---|---|
-| Aux loss | **Standard** Switch/GShard load-balancing (α=0.01) | Aux-loss-free bias trick |
-| Routing granularity | **Top-2 of 8** (coarse) | Top-4 of 20 (fine) |
-| Dispatch | **Grouped / vectorized** (per-expert loop, CPU-friendly) | Stacked `bmm` |
-| Shared expert | 1 (same) | 1 (same) |
+| Routed experts stored | 1 | 8 |
+| Routed experts active per token | 1 | 2 |
+| Shared experts (always on) | 0 | 1 |
+| Expert width `ffn_dim` | 1536 | 1536 |
+| Router params per layer | 0 | `d × 8` |
+
+**Headline benefit:** ~502 M total parameters with ~247 M **active** per
+forward pass — the model can specialise experts without paying full dense FFN
+cost on every token.
+
+MoE also pairs naturally with GPT-OSS's long-context design: sliding-window /
+full-attention alternation saves KV-cache memory; MoE saves FFN compute while
+retaining capacity for reasoning-heavy corpora (code + math in the data mix).
 
 ---
 
-## 2. The SwiGLU expert
+## SwiGLU — The Expert Building Block
+
+SwiGLU (Shazeer, 2020) is a gated linear unit used in LLaMA, PaLM, and most
+modern LLMs. For input `x ∈ ℝ^d`:
+
+```
+SwiGLU(x) = W2 · (silu(W1 · x) ⊙ (W3 · x))
+```
+
+where `silu(t) = t · σ(t)` is the sigmoid linear unit.
+
+### Why three matrices?
+
+A standard GLU uses two projections (gate and value). SwiGLU splits the "up"
+projection into **W1** (gate) and **W3** (value), then multiplies after the
+nonlinearity:
+
+```
+gate  = silu(W1 x)     ∈ ℝ^{d_ff}
+value = W3 x           ∈ ℝ^{d_ff}
+hidden = gate ⊙ value  ∈ ℝ^{d_ff}
+out    = W2 hidden     ∈ ℝ^d
+```
+
+This matches the LLaMA/PaLM convention and gives slightly better quality than
+ReLU-gated variants at similar cost.
+
+### Parameter layout in code
+
+[`SwiGLUExpert`](../models/moe.py) stores three `nn.Linear` layers, all
+**bias=False** (RMSNorm handles scaling; bias is omitted for parameter
+efficiency):
+
+| Layer | Shape | Role |
+|---|---|---|
+| `w1` | `(ffn_dim, d_model)` | Gate projection |
+| `w2` | `(d_model, ffn_dim)` | Down projection |
+| `w3` | `(ffn_dim, d_model)` | Value projection |
+
+Forward (verbatim from source):
+
+```python
+return self.w2(F.silu(self.w1(x)) * self.w3(x))
+```
+
+### FLOPs per expert forward
+
+For one token, one expert:
+
+```
+FLOPs ≈ 2 × d × d_ff   (W1, W3 matmuls)
+      + 2 × d_ff × d   (W2 matmul)
+      ≈ 4 × d × d_ff   (elementwise ops negligible)
+```
+
+With `d=768`, `d_ff=1536`: ~4.7 M FLOPs per expert per token.
+
+---
+
+## Sparse Routing — Theory
+
+### The routing problem
+
+Given hidden state `h_t ∈ ℝ^d` for token `t`, the router must:
+
+1. Score all `N` routed experts.
+2. Select `k` experts (`k = n_activated_experts`).
+3. Produce weights `w_{t,i}` for the weighted sum of expert outputs.
+
+### Softmax gating (GPT-OSS-Lite)
+
+Unlike DeepSeek-V3 (sigmoid + bias buffer), GPT-OSS-Lite uses **softmax over
+all routed experts**:
+
+```
+logits_t = h_t · W_gate^T        ∈ ℝ^N
+probs_t  = softmax(logits_t)     ∈ ℝ^N   (computed in FP32)
+ℐ_t      = TopK(probs_t, k)      indices of k largest
+w_{t,i}  = probs_{t,i} / Σ_{j∈ℐ_t} probs_{t,j}   (renormalised on top-k)
+```
+
+**Renormalisation** ensures `Σ_{i∈ℐ_t} w_{t,i} = 1` even though softmax
+originally summed over all `N` experts. Only the top-k slice is used in the
+forward pass, but weights are **re-scaled** so the routed contribution has unit
+mass.
+
+### Why FP32 softmax?
+
+Router logits are produced in the model's native dtype (typically BF16 during
+training). BF16 has only 7 mantissa bits; when one expert's logit dominates,
+`softmax` in BF16 can **underflow** smaller probabilities to zero, starving
+gradients through the gate. Computing `F.softmax(logits.float(), dim=-1)` in
+FP32 before top-k selection is a standard MoE stability fix (also used in
+Switch Transformer training recipes).
+
+### Top-k selection
+
+`topk_weights, topk_indices = all_probs_f32.topk(n_activated, dim=-1)`
+
+For GPT-OSS-Lite: `N=8`, `k=2`. Each token activates exactly two routed
+experts (unless numerical edge cases in topk — indices are always in
+`[0, N-1]`).
+
+### Routed output
+
+For flattened tokens `t = 1…N_tokens`:
+
+```
+y_t^routed = Σ_{i∈ℐ_t} w_{t,i} · Expert_i(h_t)
+```
+
+Implementation gathers tokens per expert (see [Dispatch Paths](#dispatch-paths--stacked-vs-triton-grouped)),
+runs the expert forward on contiguous chunks, scales by routing weights, and
+accumulates back into the token output buffer with `index_add_`.
+
+---
+
+## Auxiliary Load-Balancing Loss
+
+### The collapse problem
+
+Without balancing, routing positive feedback collapses capacity:
+
+```
+Expert 0 gets more tokens → adapts faster → gate routes more to Expert 0
+→ other experts starve → effective model shrinks to 1–2 experts
+```
+
+### Switch / GShard formulation
+
+GPT-OSS-Lite implements the **standard auxiliary loss** from Switch
+Transformer and GShard (Fedus et al., 2021; Lepikhin et al., 2020):
+
+```
+f_e = (1 / (N_tokens × k)) × count_e     fraction of top-k slots assigned to expert e
+P_e = mean_t probs_{t,e}                   mean router probability for expert e
+L_aux = N × Σ_e f_e × P_e
+```
+
+where `N = n_routed_experts` (8 in the default config).
+
+### Implementation walkthrough
+
+From [`aux_load_balancing_loss`](../models/moe.py):
+
+```python
+probs_f32 = F.softmax(all_logits.float(), dim=-1)
+N = probs_f32.size(0)
+topk_idx = probs_f32.topk(n_activated, dim=-1).indices.flatten()
+f = torch.bincount(topk_idx, minlength=n_experts).to(torch.float32) / float(N * n_activated)
+P = probs_f32.mean(dim=0)
+return (n_experts * (f * P).sum()).to(all_logits.dtype)
+```
+
+**Interpretation:**
+
+- `f_e` measures **actual dispatch frequency** (hard assignment).
+- `P_e` measures **router's soft preference** for expert `e`.
+- The product `f_e × P_e` is high when an expert is both **selected often**
+  and **preferred by the gate** — the loss pushes this toward uniformity.
+- Scaling by `N` keeps magnitude comparable across different expert counts.
+
+### Training objective
+
+From [`training/pretrain.py`](../training/pretrain.py):
+
+```
+L_total = L_CE + α × L_aux
+```
+
+with `α = aux_loss_alpha = 0.01` (Switch Transformer default for top-k MoE).
+
+Per micro-batch, the loss is **divided by gradient accumulation steps** before
+`backward()`:
+
+```python
+loss = (ce + aux_alpha * aux_loss) / accum
+```
+
+`aux_loss` returned from the model is the **mean across all 12 MoE layers**
+(see [Integration in `GPTOSS`](#integration-in-gptoss)).
+
+### FP32 internal computation
+
+Like the router forward, `aux_load_balancing_loss` computes `softmax` and
+`bincount` statistics in FP32, then casts the scalar result back to the
+activation dtype. This prevents BF16 underflow when the router saturates on
+one expert during early training.
+
+---
+
+## GPT-OSS-Lite MoE Topology
+
+Default config ([`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)):
+
+| Field | Value | Meaning |
+|---|---|---|
+| `d_model` | 768 | Hidden size |
+| `ffn_dim` | 1536 | Expert intermediate width |
+| `n_routed_experts` | 8 | Router pool size |
+| `n_activated_experts` | 2 | Top-k per token |
+| `n_shared_experts` | 1 | Always-on experts |
+| `n_layers` | 12 | Every block is MoE (no dense FFN layers) |
+| `moe_dispatch` | `"stacked"` (default) | PyTorch loop dispatch |
+
+### Per-token expert activation
+
+Each token through one MoE layer executes:
+
+- **2 routed SwiGLU experts** (weighted sum)
+- **1 shared SwiGLU expert** (unweighted sum into output)
+- **Router matmul** `768 → 8`
+
+Effective SwiGLU executions per token per layer: **3** (2 routed + 1 shared).
+
+### Layer placement
+
+Every [`GPTOSSBlock`](../models/transformer.py) is:
+
+```
+x = x + Attention(RMSNorm(x))
+x = x + MoE(RMSNorm(x))     → returns (moe_out, aux_loss)
+```
+
+There is no dense FFN alternate — MoE is universal across all 12 layers.
+
+---
+
+## Class Reference — `SwiGLUExpert`
+
+**File:** [`models/moe.py`](../models/moe.py)
 
 ```python
 class SwiGLUExpert(nn.Module):
-    """Single SwiGLU expert: W2(silu(W1(x)) * W3(x))."""
-    def forward(self, x):
-        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+    def __init__(self, dim: int, inter_dim: int):
+        self.w1 = nn.Linear(dim, inter_dim, bias=False)
+        self.w2 = nn.Linear(inter_dim, dim, bias=False)
+        self.w3 = nn.Linear(dim, inter_dim, bias=False)
 ```
 
-Each expert is a **SwiGLU** (Swish-Gated Linear Unit) FFN with three
-weight matrices:
+| Argument | Default (502M config) | Role |
+|---|---|---|
+| `dim` | 768 | `d_model` |
+| `inter_dim` | 1536 | `ffn_dim` |
 
-```
-gate  = W1 x          ∈ ℝ^{ffn_dim}      (dim → ffn_dim = 768 → 1536)
-up    = W3 x          ∈ ℝ^{ffn_dim}
-h     = silu(gate) * up                   Swish gating: silu(z)=z·σ(z)
-out   = W2 h          ∈ ℝ^{dim}           (ffn_dim → dim)
-```
+**Shapes:** input `(B, T, D)` or `(N, D)` → output same shape.
 
-SwiGLU is the standard GLU variant in modern LLMs (LLaMA, DeepSeek, GPT-OSS):
-the `silu` gating is smooth and empirically outperforms ReLU/GLU variants. The
-three-matrix form means each expert holds `3 · d_model · ffn_dim =
-3 · 768 · 1536 ≈ 3.54 M` parameters.
+**Gradients:** all three weight matrices and the input receive gradients on
+`backward()`. No special routing mask — shared experts are dense paths.
 
 ---
 
-## 3. The router — top-k gating
+## Class Reference — `MoERouter`
+
+**File:** [`models/moe.py`](../models/moe.py)
 
 ```python
 class MoERouter(nn.Module):
-    def __init__(self, d_model, n_experts, n_activated)
-    def forward(self, x) -> (indices, weights, all_logits)
+    def __init__(self, d_model: int, n_experts: int, n_activated: int):
+        self.gate = nn.Linear(d_model, n_experts, bias=False)
 ```
 
-Routing is a single linear projection `gate: d_model → n_experts` followed by
-softmax and top-k selection:
+### Forward return tuple
 
-```
-logits   = W_gate x                       ∈ ℝ^{n_experts}
-probs    = softmax(logits)                ∈ ℝ^{n_experts}    (FP32!)
-topk_w, topk_idx = probs.topk(n_activated)
-topk_w   = topk_w / topk_w.sum()           renormalise the k selected weights
+```python
+def forward(self, x) -> tuple[Tensor, Tensor, Tensor]:
+    # returns (topk_indices, topk_weights, all_logits)
 ```
 
-The router returns three things:
-- **`indices`** `(B·T, k)` — which expert each token goes to (here `k = 2`).
-- **`weights`** `(B·T, k)` — the renormalised routing weights, summed to 1 per
-  token. These multiply each expert's output before scattering back.
-- **`all_logits`** `(B·T, n_experts)` — the *full* pre-topk logits, kept for the
-  auxiliary loss (which needs the mean probability of *every* expert, not just
-  the chosen ones).
+| Return | Shape | Dtype | Description |
+|---|---|---|---|
+| `topk_indices` | `(N, k)` | int64 | Expert indices per token |
+| `topk_weights` | `(N, k)` | matches `x` | Renormalised routing weights |
+| `all_logits` | `(N, n_experts)` | matches `x` | Pre-softmax logits (for aux loss) |
 
-Two numerical-stability details:
-1. The softmax runs in **FP32** (`F.softmax(logits.float(), dim=-1)`) even when
-   the input is BF16 — small per-expert probabilities underflow to zero in BF16.
-2. The renormalisation denominator is clamped at `1e-6` so a degenerate
-   all-equal softmax does not divide by zero.
+### Renormalisation
+
+```python
+topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True).clamp(min=1e-6)
+```
+
+The `clamp(min=1e-6)` guards against a degenerate all-zero top-k slice (should
+not occur with softmax, but prevents division by zero).
 
 ---
 
-## 4. The auxiliary load-balancing loss
+## Function Reference — `aux_load_balancing_loss`
+
+**Signature:**
 
 ```python
-def aux_load_balancing_loss(all_logits, n_experts, n_activated) -> torch.Tensor
+def aux_load_balancing_loss(
+    all_logits: torch.Tensor,   # (N_tokens, n_experts)
+    n_experts: int,
+    n_activated: int,
+) -> torch.Tensor:               # scalar
 ```
 
-This is the **standard** Switch Transformer / GShard load-balancing loss —
-*not* the aux-loss-free bias trick that DeepSeek-v3 uses. GPT-OSS-Lite keeps it
-deliberately, both as an educational contrast and because at this scale
-(`8` experts, top-`2`) the standard loss is simple and stable.
+**Inputs:** `all_logits` from the router (not softmaxed — function recomputes
+softmax internally in FP32).
 
-### 4.1 The math
+**Output:** scalar loss term, same dtype as `all_logits`.
 
-The loss penalises two kinds of imbalance simultaneously:
-
-```
-f_i = (fraction of tokens routed to expert i)         # from top-k selection
-P_i = (mean softmax probability of expert i)          # over all tokens
-L   = n_experts · Σ_i f_i · P_i
-```
-
-- **`f_i`** is the *dispatch* frequency — how often expert `i` was actually
-  chosen. Computed via `torch.bincount(topk_idx)` over the flattened
-  `(N·k,)` selection indices, divided by `N·k`.
-- **`P_i`** is the *average router probability* — how much the router *wants*
-  to send tokens to expert `i`, regardless of whether it did. Computed as
-  `probs.mean(dim=0)`.
-
-The product `f_i · P_i` is what makes this work: a collapsed router that sends
-everything to one expert has high `f_i` and high `P_i` for that expert, so the
-product (and the loss) is large. A perfectly balanced router has
-`f_i = P_i = 1/n_experts` for all `i`, giving
-`L = n_experts · n_experts · (1/n_experts)² = 1` — the minimum. The
-`n_experts` prefactor normalises the loss to be scale-invariant to expert
-count.
-
-### 4.2 Why both `f` and `P`?
-
-Using `f` alone is non-differentiable (top-k selection is discrete). Using
-`P` alone is differentiable but weak — the router can keep `P` uniform while
-dispatch collapses (the argmax is what matters, not the softmax shape). The
-product couples a differentiable signal (`P`) to the actual dispatch outcome
-(`f`): gradients flow through `P`, but the loss only goes *down* when `f` also
-balances. This is the GShard insight.
-
-### 4.3 FP32 softmax + `bincount`
-
-The loss upcasts logits to FP32 for the softmax and mean (the same BF16
-underflow concern as the router), and uses `torch.bincount` for the per-expert
-fraction — a single vectorised histogram pass, no Python loop over experts. The
-result is cast back to the input dtype before returning. The training loop
-adds `α · L` to the CE loss with `α = 0.01` (see [`training.md`](training.md)).
+**Differentiability:** gradients flow through `all_logits` via `probs_f32` and
+the `P` term. The `f` term uses hard top-k indices (Switch Transformer
+standard — straight-through on the soft part).
 
 ---
 
-## 5. Shared expert
+## Class Reference — `MoELayer`
+
+**File:** [`models/moe.py`](../models/moe.py)
+
+### Construction
 
 ```python
-if self.n_shared > 0:
-    self.shared_experts = nn.ModuleList([SwiGLUExpert(...) for _ in range(n_shared)])
-...
+class MoELayer(nn.Module):
+    def __init__(self, cfg):
+        self.router = MoERouter(d_model, n_routed, n_activated)
+        self.experts = ModuleList([SwiGLUExpert(...) for _ in range(n_routed)])
+        self.shared_experts = ModuleList([SwiGLUExpert(...) ...])  # if n_shared > 0
+        self.moe_dispatch = getattr(cfg, "moe_dispatch", "stacked")
+```
+
+`moe_dispatch` is read from [`ModelConfig.moe_dispatch`](../models/transformer.py)
+(default `"stacked"`). Set `"triton_grouped"` to enable the fused kernel path
+(see [triton_kernels.md](triton_kernels.md)).
+
+### Forward
+
+```python
+def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+    # x: (B, T, D)
+    # returns (out (B, T, D), aux_loss scalar)
+```
+
+**Steps:**
+
+1. Flatten `(B, T, D) → (N, D)` where `N = B × T`.
+2. Router → `(indices, weights, all_logits)`.
+3. Dispatch routed experts via `_dispatch_vectorized` or `_dispatch_triton`.
+4. `aux_loss = aux_load_balancing_loss(all_logits, ...)`.
+5. Add shared expert outputs (if configured).
+6. Reshape to `(B, T, D)`.
+
+---
+
+## Dispatch Paths — Stacked vs Triton Grouped
+
+Both paths share the same **sort-by-expert** layout. The difference is how
+W1/W3+silu is computed inside each expert chunk.
+
+### Common preprocessing
+
+Given `indices (N, k)` and `weights (N, k)`:
+
+```python
+flat_idx = indices.reshape(-1)           # N × k slots
+flat_w = weights.reshape(-1)
+token_ids = arange(N).repeat_interleave(k)
+
+order = argsort(flat_idx, stable=True)    # group slots by expert id
+sorted_token_ids = token_ids[order]
+sorted_weights = flat_w[order]
+sorted_expert_ids = flat_idx[order]
+
+expert_counts = bincount(flat_idx, minlength=n_routed)
+expert_offsets = cumsum(counts) with leading zero
+```
+
+**Stable argsort** is mandatory for reproducibility ([`AGENTS.md`](../AGENTS.md)
+§4).
+
+### Stacked dispatch (`moe_dispatch="stacked"`)
+
+Method: [`_dispatch_vectorized`](../models/moe.py)
+
+For each expert `e` with `cnt > 0` tokens:
+
+```python
+chunk_tokens = sorted_token_ids[start:end]
+expert_out = self.experts[e](flat[chunk_tokens])   # full SwiGLU
+out.index_add(0, chunk_tokens, expert_out * chunk_weights)
+```
+
+**Characteristics:**
+
+- Pure PyTorch — runs on CPU, Mac, and CUDA without Triton.
+- Each expert chunk calls the full `SwiGLUExpert.forward` (W1, W3, silu, W2).
+- Correct reference path for tests and for machines without Triton.
+
+### Triton grouped dispatch (`moe_dispatch="triton_grouped"`)
+
+Method: [`_dispatch_triton`](../models/moe.py)
+
+1. Sort tokens as above; build `x_sorted = flat[sorted_token_ids]`.
+2. Stack expert weights: `W1_stack`, `W3_stack`, `W2_stack`.
+3. **Triton fused kernel:** `triton_moe_w1w3_silu(...)` → `gated_sorted`
+   (shape `(N×k, d_ff)`), fusing W1, W3, silu, and elementwise multiply.
+4. **PyTorch W2:** per-expert loop on sorted layout:
+   ```python
+   out_sorted[start:end] = gated_sorted[start:end] @ W2_stack[e].T
+   ```
+5. Scale by `sorted_weights`, `index_add_` back to token positions.
+
+**Characteristics:**
+
+- W1/W3+silu fused in one Triton launch; W2 stays in PyTorch (no activation
+  to fuse after W2).
+- Raises `ImportError` if Triton is missing — **no silent fallback** during
+  a `triton_grouped` training run.
+- See [triton_kernels.md](triton_kernels.md) for kernel contract and tiling.
+
+### Dispatch path selection
+
+| Scenario | Recommended `moe_dispatch` |
+|---|---|
+| Default training / CPU dev | `"stacked"` |
+| A100 production with Triton installed | `"triton_grouped"` |
+| Mac / no CUDA Triton | `"stacked"` (required) |
+| Debugging routing correctness | `"stacked"` (easier to breakpoint) |
+
+Set in YAML under `model.moe_dispatch` or in `ModelConfig`.
+
+---
+
+## Shared Experts
+
+When `n_shared_experts > 0`, [`MoELayer.forward`](../models/moe.py) adds:
+
+```python
 shared_out = sum(e(flat) for e in self.shared_experts)
 out = out + shared_out
 ```
 
-The `1` shared expert is **always active** — every token passes through it in
-addition to its top-2 routed experts. Its role is to carry the
-"all-tokens-always-need-this" knowledge (syntactic primitives, common
-functionality) so the routed experts can specialise without each having to
-redundantly relearn the common case. DeepSeek-v3 introduced this; GPT-OSS
-adopts it. Because it is dense, its parameters count toward the *active* total,
-not the sparsity.
+**Properties:**
+
+- **No router** — shared experts run on every token.
+- **No routing weights** — output is summed directly (not scaled by gate).
+- **Always added** after routed dispatch, before reshape.
+- Default config: `n_shared_experts = 1`.
+
+**Rationale:** Shared experts capture ubiquitous patterns (syntax, common
+function words, formatting) so routed experts can specialise on harder
+sub-domains (math, code, long-form prose).
+
+**Gradient flow:** full dense backward through shared SwiGLU — typically
+~33% of MoE FFN FLOPs per token (1 of 3 effective expert executions).
 
 ---
 
-## 6. Vectorized dispatch
+## Integration in `GPTOSS`
+
+### Block forward
+
+[`GPTOSSBlock`](../models/transformer.py):
 
 ```python
-def _dispatch_vectorized(self, flat, indices, weights) -> torch.Tensor
+x = x + self.attn(self.norm1(x), positions)
+moe_out, aux_loss = self.moe(self.norm2(x))
+x = x + moe_out
+return x, aux_loss
 ```
 
-The fast path. Given `N = B·T` tokens each assigned to `k = 2` experts, the
-algorithm groups tokens by expert so each expert's matmul is one batched call:
+### Model-level aux aggregation
 
-### 6.1 Algorithm
-
-```
-1. Flatten (token, expert, weight) triples into (N·k,) vectors.
-2. argsort by expert id (stable) → contiguous per-expert runs.
-3. bincount → per-expert counts; cumsum → per-expert offsets.
-4. For each expert e (E = 8):
-       chunk_tokens  = sorted_token_ids[offset_e : offset_e + count_e]
-       expert_in     = flat[chunk_tokens]
-       gate          = F.linear(expert_in, W1_stack[e])     # SwiGLU
-       up            = F.linear(expert_in, W3_stack[e])
-       expert_out    = F.linear(silu(gate) * up, W2_stack[e])
-       out.index_add_(0, chunk_tokens, expert_out * chunk_weights)
-```
-
-### 6.2 Why this is fast
-
-- **One `torch.argsort`** over `(N·k,)` entries — the only `O(N·k log(N·k))`
-  step, and it is a single kernel.
-- **`E = 8` expert matmul launches per layer**, not `N·k` — the per-expert loop
-  is Python but it iterates 8 times, not thousands.
-- **`F.linear(...)` bypasses `nn.Module.__call__`** — the stacked weights (see
-  §7) let each expert's three matmuls go straight to ATEN, skipping the
-  `nn.Linear` forward / autograd-hook machinery.
-- **`index_add_`** scatters the weighted expert outputs back to their source
-  token positions in one fused kernel.
-
-### 6.3 Determinism
-
-`torch.argsort(flat_idx, stable=True)` is load-bearing for reproducibility:
-with `stable=True` the same input *always* produces the same permutation, so
-two `--seed 42` runs route identically. Without it, ties in `flat_idx` could
-break arbitrarily across runs and break bit-exact resume.
-
----
-
-## 7. The stacked-expert weight cache
+[`GPTOSS.forward`](../models/transformer.py) collects per-layer aux losses and
+returns the **mean**:
 
 ```python
-def _ensure_stacked(self):
-    version = sum(e.w1.weight._version for e in self.experts)
-    if self._stacked_cache is not None and self._stacked_version == version:
-        return self._stacked_cache
-    W1 = torch.stack([e.w1.weight for e in self.experts], dim=0)   # (E, F, D)
-    W2 = torch.stack([e.w2.weight for e in self.experts], dim=0)
-    W3 = torch.stack([e.w3.weight for e in self.experts], dim=0)
-    self._stacked_cache = (W1, W2, W3)
-    self._stacked_version = version
-    return self._stacked_cache
+aux_loss = torch.stack(aux_losses).mean()
+return logits, aux_loss
 ```
 
-The vectorized dispatch wants each expert's weights as a single stack so it
-can index `W1_stack[e]`. Building that stack on every forward would cost
-`3 · E` `torch.stack` allocations. Instead the stack is built **once** and
-cached, with cache invalidation keyed on the sum of each parameter's
-`_version` counter.
+So `aux_loss` in the training loop is one scalar representing average load-
+balancing pressure across all 12 MoE layers.
 
-`tensor._version` is PyTorch's in-place-write counter: every in-place op
-(including the optimiser step) bumps it. So `sum(e.w1.weight._version)` changes
-exactly when the weights change — the cache is invalidated automatically on
-every optimiser step and rebuilt on the next forward, with zero manual
-plumbing. This is the same mechanism autograd uses to detect in-place bugs.
+### Active parameter estimate
 
-Memory cost: `E · 3 · F · D · 2 bytes = 8 · 3 · 1536 · 768 · 2 ≈ 57 MB` at
-production scale — negligible on an A100 80GB.
+[`num_active_parameters`](../models/transformer.py) counts:
+
+- All non-expert params (embed, attention, norms, head, routers).
+- Per layer: `(n_activated + n_shared) × 3 × d × d_ff` expert weights +
+  `d × n_routed` router weights.
+
+Default: ~247 M active of ~502 M total.
 
 ---
 
-## 8. Forward flow and parameter accounting
+## Parameter and FLOP Accounting
 
-```
-x (B,T,d_model)
-  │ router(x.view(-1,D)) → indices, weights, all_logits
-  │ _dispatch_vectorized(flat, indices, weights)   → routed_out (B·T, D)
-  │ aux_load_balancing_loss(all_logits, ...)        → aux_loss scalar
-  │ shared_experts(flat)                            → shared_out
-  │ out = routed_out + shared_out
-  ▼
-  (out.view(B,T,D), aux_loss)
-```
+### Per-layer MoE parameters
 
-### Active-parameter accounting (`GPTOSS.num_active_parameters`)
-
-```
-non_moe_params                              # embedding, attn, norms, head, router(ish)
-  + n_layers · (n_activated + n_shared) · (3 · d_model · ffn_dim)   # active experts
-  + n_layers · (d_model · n_routed_experts)                         # router
-```
-
-With `n_activated=2`, `n_shared=1`, `n_routed=8`, `ffn_dim=1536`,
-`d_model=768`, `n_layers=12`: each layer activates `3` experts' worth of FFN
-parameters (2 routed + 1 shared) instead of all `8` — the source of the 50.8%
-sparsity. The full `8` routed experts still count toward *total* parameters
-(they all live in memory and receive gradients); only their *forward* cost is
-sparse.
-
----
-
-## 9. Design rationale & rejected alternatives
-
-| Decision | Rationale | Rejected alternative |
+| Component | Formula | Value (768/1536/8/2/1) |
 |---|---|---|
-| Standard aux loss (α=0.01) | Simple, stable at 8 experts; educational contrast | Aux-loss-free bias — DeepSeek-v3's choice, explicitly *not* used here |
-| Top-2 of 8 | GPT-OSS granularity; coarse routing is easier to balance | Top-4 of 20 (DeepSeek) — more experts, finer routing, more memory |
-| Grouped/vectorized dispatch | CPU-friendly, simple to read, `stable argsort`-reproducible | Stacked `bmm` over a padded `(E, max_tokens, D)` tensor — wastes memory on padding |
-| Stacked-weight cache via `_version` | Automatic invalidation on every optimiser step | Manual `clear_cache()` call — easy to forget, causes stale-weight bugs |
-| FP32 softmax in router & aux loss | BF16 underflows small per-expert probabilities | BF16 softmax — silently zeroes the loss when the router saturates |
-| 1 shared expert | Common-knowledge carrier, lets routed experts specialise | 0 shared — each routed expert must relearn primitives; 2 shared — too dense |
+| Router `gate` | `d × N` | 6,144 |
+| Routed experts (8) | `8 × 3 × d × d_ff` | ~28.3 M |
+| Shared experts (1) | `3 × d × d_ff` | ~3.5 M |
+| **Total MoE per layer** | | ~31.8 M |
+
+× 12 layers ≈ **382 M** of the ~502 M total (remainder: attention, embed, norms).
+
+### Per-token active FLOPs (one MoE layer, approximate)
+
+| Path | FLOPs |
+|---|---|
+| Router | `2 × d × N` |
+| 2 routed SwiGLUs | `2 × 4 × d × d_ff` |
+| 1 shared SwiGLU | `4 × d × d_ff` |
+| **Total** | `≈ 12 × d × d_ff + 2dN` |
+
+At `d=768`, `d_ff=1536`: ~14.2 MFLOPs/token/layer for MoE FFN.
 
 ---
 
-## 10. Edge cases & pitfalls
+## Numerical Stability
 
-- **Empty expert**: if no token routes to expert `e` in a step (`count_e == 0`),
-  the dispatch loop `continue`s past it — no matmul, no allocation. This is
-  the normal early-training state before the aux loss balances routing.
-- **All-equal logits**: the router's renormalisation clamps the denominator at
-  `1e-6`; the aux loss's `bincount` handles a uniform selection fine.
-- **`stable=True` is mandatory, not cosmetic**: drop it and two seeded runs
-  can disagree on tie-breaking, breaking `--resume-from` bit-exactness.
-- **Do not "optimise" the aux loss away**. Replacing it with the aux-loss-free
-  bias trick would make this repo a duplicate of DeepSeek-v3-Lite and loses the
-  deliberate architectural distinction. `AGENTS.md` calls this out explicitly.
+| Mechanism | Where | Why |
+|---|---|---|
+| FP32 softmax in router | `MoERouter.forward` | BF16 underflow on saturated gates |
+| FP32 aux loss internals | `aux_load_balancing_loss` | Stable `f` and `P` statistics |
+| Top-k weight renorm + clamp | `MoERouter.forward` | Unit sum; no div-by-zero |
+| `eps=1e-6` in AdamW | `pretrain.py` | BF16-safe optimizer (see [training.md](training.md)) |
 
----
-
-## Implementation notes (extracted from code review)
-
-- **FP32 softmax in the aux loss**: `aux_load_balancing_loss` upcasts the
-  router logits to FP32 before softmax and mean. Under BF16, small
-  per-expert probabilities can underflow to zero, silently zeroing out the
-  loss when the router saturates early in training. The FP32 path keeps the
-  loss numerically meaningful; the result is cast back to the input dtype
-  before returning.
-- **Stable argsort for reproducible dispatch**: both `_dispatch_vectorized`
-  and `_dispatch_grouped` call `torch.argsort(flat_idx, stable=True)`. With
-  `stable=True`, the same input always produces the same permutation across
-  runs (required for bit-exact reproducibility under `--seed`).
-- **Cached `(W1, W2, W3)` stacks via `F.linear`**: `MoELayer._ensure_stacked`
-  builds per-expert weight stacks once and caches them keyed on
-  `sum(e.w1.weight._version)` so the cache is invalidated automatically on
-  every optimizer step (in-place writes bump `_version`). The dispatch loop
-  then calls `F.linear(expert_in, W1_stack[e])` instead of
-  `self.experts[e](expert_in)`, bypassing the `nn.Module.__call__` Python
-  overhead. Bit-exact equivalent of the grouped path; verified by
-  `test_moe_dispatch_correct` and `test_moe_dispatch_is_deterministic`.
-- **Standard aux loss vs aux-loss-free**: GPT-OSS-Lite deliberately uses the
-  Switch-Transformer / GShard standard auxiliary load-balancing loss
-  (α=0.01), NOT the aux-loss-free bias trick. This is an intentional
-  distinction from DeepSeek-v3-Lite; do not "optimise" it away.
+MoE-specific: watch **expert histograms** during warmup (first 3000 steps).
+Healthy training shows all 8 routed experts receiving >5% of top-k slots by
+step ~5000.
 
 ---
 
-## 11. Sanctioned Triton path: fused W1/W3+silu grouped-GEMM
+## Comparison with DeepSeek-v3-Lite
 
-See [triton_kernels.md](triton_kernels.md) for the full kernel design doc.
+| Feature | GPT-OSS-Lite | DeepSeek-v3-Lite |
+|---|---|---|
+| Gate activation | Softmax (FP32) | Sigmoid |
+| Load balancing | **Aux loss** (α=0.01) | **Aux-loss-free bias buffer** |
+| Routed experts | 8, top-2 | 20, top-4 |
+| Shared experts | 1 | 1 |
+| Expert width | 1536 | 384 (fine-grained) |
+| Dense FFN layers | None (all MoE) | 2 dense + 16 MoE |
 
-`models/moe_triton.py` adds an opt-in kernel that fuses the **W1 (gating) +
-W3 (up-projection) + silu(g) * u** chain into a single launch. W2 stays in
-PyTorch because it has no activation to fuse. Enable it via
-`moe_dispatch="triton_grouped"` in `ModelConfig`; the default `"stacked"`
-path (§6) is unchanged.
+This distinction is **deliberate** ([`AGENTS.md`](../AGENTS.md) rule 5). Do not
+port `AuxLossFreeGate` into GPT-OSS-Lite without an explicit design change.
 
-### 11.1 Why fuse?
+---
 
-At the production scale (12 layers × 8 experts), the stacked dispatch path
-issues **3 × 8 = 24 cuBLAS launches per layer per forward** (W1, W3, W2 per
-expert), plus a Python loop with `index_add_` and an `argsort`. On A100 the
-launch overhead alone is non-trivial; on smaller GPUs (sm_75 with limited
-shared memory) it's a meaningful fraction of the MoE forward time.
+## Debugging Checklist
 
-The Triton kernel collapses W1 and W3 into one launch, with the silu applied
-inline. The result: **1 launch per expert** for the W1+W3+silu stage (vs
-2 × 8 = 16 stacked), then a per-expert loop for W2 (the cleanest way to
-handle the ragged token counts after the sort).
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| One expert >80% of tokens | Router collapse | Check aux loss is enabled; increase warmup |
+| `aux_loss` → 0 instantly | α too low or router frozen | Verify `aux_loss_alpha=0.01` |
+| `ImportError: triton` | `triton_grouped` without Triton | Use `moe_dispatch="stacked"` or install Triton |
+| Routed vs shared imbalance | Data mix too narrow | Broaden web/code fraction |
+| NaN after MoE step | BF16 overflow in attention mask | Check sink bias clamp (attention, not MoE) |
+| Dispatch mismatch | Stable argsort disabled | Ensure `stable=True` in argsort |
 
-### 11.2 Kernel structure
-
-```
-Grid:    (n_experts, ceil(max_tokens / BLOCK_T), ceil(d_ff / BLOCK_N))
-Tile:    BLOCK_T=16 tokens, BLOCK_M=32 d_model, BLOCK_N=32 d_ff
-Stages:  num_stages=1 (sm_75 has 64 KB shared; num_stages=2 spills)
-Accum:   fp32 over the d_model reduction
-Activation: silu in fp32 (tl.sigmoid requires fp32/fp64)
-```
-
-The K-loop accumulates the W1·x and W3·x products in fp32, applies
-silu × u, then casts to the input dtype on store. The mask boundaries are
-explicit (`tok_mask`, `n_mask`, `k_mask`) so the kernel is correct for
-arbitrary `d_model` / `d_ff` / token counts (not just power-of-2).
-
-### 11.3 Backward (autograd)
-
-The custom autograd function (`_MoEW1W3SiluFunction`) keeps the forward
-on Triton but **delegates the backward to the pure-PyTorch reference path**
-(`_moe_w1w3_silu_reference`). This is intentional: the forward is the hot
-path (one matmul-fused launch), the backward is two matmuls per expert
-where the Triton gain is small relative to autograd setup cost. Verified
-bit-equivalent to a fully-PyTorch forward+backward in the test suite
-(`test_moe_layer_grad_flow` and the existing MoELayer tests).
-
-### 11.4 Dispatcher changes (`models/moe.py`)
-
-`_dispatch_triton` was rewritten to handle the W2 stage as a per-expert
-loop on the sorted token indices, replacing the original
-`torch.bmm(gated_sorted.unsqueeze(0), W2_stack[sorted_expert_ids])` which
-had a shape mismatch (bmm requires the batch dims to match). The new
-pattern matches `_dispatch_vectorized` but operates on the Triton-produced
-`gated_sorted` tensor:
+**Routing histogram** (manual debug snippet):
 
 ```python
-for e in range(self.n_routed):
-    cnt = counts_cpu[e]
-    if cnt == 0:
-        continue
-    start, end = offsets_cpu[e], offsets_cpu[e] + cnt
-    out_sorted[start:end] = gated_sorted[start:end] @ W2_stack[e].T
-out_sorted *= sorted_weights.unsqueeze(-1)
-out.index_add_(0, sorted_token_ids, out_sorted)
+with torch.no_grad():
+    flat = x.view(-1, D)
+    idx, w, _ = moe.router(flat)
+    hist = torch.bincount(idx.reshape(-1), minlength=8)
+    print(hist.float() / hist.sum())
 ```
 
-### 11.5 When to use
+---
 
-- **Production training on A100**: enable (`moe_dispatch="triton_grouped"`)
-  for the launch-overhead saving. Re-enable `num_stages=2` in
-  `models/moe_triton.py` to use the full 164 KB shared memory.
-- **Dev box (sm_75 / 64 KB shared)**: the kernel runs at `num_stages=1` and
-  is bit-correct. The speedup is smaller than on A100 but the launch-count
-  reduction still helps.
-- **CPU / Mac**: keep the default `"stacked"` path. The Triton import is
-  gated on `try/except ImportError`; `MoELayer._dispatch_triton` raises
-  `ImportError` if `HAS_TRITON` is False.
+## Appendix A — Worked routing example
 
-### 11.6 Test coverage
+**Setup:** `N_tokens=1`, `d=4`, `n_experts=4`, `k=2`.
 
-- `tests/test_moe_triton.py` — 9 tests total:
-  - 4 reference cross-checks (always run, CPU-runnable).
-  - 2 dispatch-wiring tests (default `stacked`, monkeypatched `ImportError`).
-  - 2 GPU-gated tests (`@gpu_required`, FP32 + BF16 kernel vs reference).
-  - 1 hard-cap test (ValueError on `d_ff > 8192` or `d_model > 8192`).
-- `scripts/e2e_gpu_smoke.py` step 3 (kernel vs reference, FP32 + BF16) and
-  step 4 (`MoELayer` end-to-end with `triton_grouped` vs `stacked`) verify
-  the full forward pass on real GPU hardware.
+```
+h = [1.0, 0.0, -1.0, 0.5]
+W_gate produces logits = [2.0, 0.5, -1.0, 1.0]
+softmax(logits) = [0.576, 0.105, 0.014, 0.305]
+top-2 indices = [0, 3]
+top-2 weights (raw) = [0.576, 0.305]
+renormalised = [0.576/0.881, 0.305/0.881] = [0.654, 0.346]
 
-### 11.7 Numerical notes
+y = 0.654 × Expert_0(h) + 0.346 × Expert_3(h) + Shared(h)
+```
 
-- The kernel accumulates W1·x and W3·x in **fp32** but the reference
-  (`_moe_w1w3_silu_reference`) computes them in the input dtype. For BF16
-  inputs, the kernel is *more* accurate than the reference; differences
-  are bounded by ~1 BF16 ULP at the output magnitude. The BF16 test uses
-  `atol=rtol=2e-2` to account for this (vs `1e-3` for FP32).
-- `tl.sigmoid` is fp32/fp64-only in Triton, so the silu is computed in
-  fp32 inside the kernel and cast back on store. No precision loss.
+---
 
-<!-- docs:verified 2026-07-31 · fd4fe36 -->
+## Appendix B — Dispatch layout diagram
+
+```
+Tokens:     T0  T1  T2  T3
+Top-k=2:    e2  e0  e2  e1   (expert ids)
+            e5  e3  e7  e2
+
+Flat slots (N×k = 8):
+  slot:  0   1   2   3   4   5   6   7
+  tok:   T0  T0  T1  T1  T2  T2  T3  T3
+  exp:   e2  e5  e0  e3  e2  e7  e1  e2
+
+After stable argsort by expert:
+  exp:   e0  e2  e2  e2  e2  e3  e5  e7
+  tok:   T1  T0  T2  T3  T0  T1  T0  T2
+
+Expert loops process contiguous [start:end] ranges per expert id.
+```
+
+---
+
+## Appendix C — Gradient flow
+
+**Router:** gradients through renormed top-k weights → selected softmax
+entries → `gate` weights → input `h`.
+
+**Routed experts:** gradients through `index_add_` scatter → expert W1/W2/W3
+for tokens routed to that expert only.
+
+**Shared experts:** dense gradients on every token.
+
+**Aux loss:** gradients into `all_logits` → `gate` (encourages uniform `P`).
+
+**Checkpointing:** MoE layers inside gradient-checkpointed blocks recompute
+forward on backward — router + dispatch run twice per step for checkpointed
+layers.
+
+---
+
+## Appendix D — Glossary
+
+| Term | Definition |
+|---|---|
+| **Routed expert** | Expert selected by top-k router |
+| **Shared expert** | Expert that runs on every token |
+| **Top-k** | Number of routed experts per token (`n_activated_experts`) |
+| **Dispatch** | Grouping tokens by assigned expert for batched execution |
+| **Aux loss** | Load-balancing penalty on router statistics |
+| **`f_e`** | Hard dispatch frequency for expert `e` |
+| **`P_e`** | Mean soft probability for expert `e` |
+| **SwiGLU** | `W2(silu(W1x) * W3x)` activation |
+| **`moe_dispatch`** | Config key: `"stacked"` or `"triton_grouped"` |
+
+---
+
+## Load-Bearing Invariants
+
+1. **Top-k weights sum to 1** per token after renorm.
+2. **Stable argsort** in dispatch (`stable=True`).
+3. **Shared experts always added** when `n_shared_experts > 0`.
+4. **Aux loss uses FP32 softmax** — do not cast to BF16 inside the loss.
+5. **`triton_grouped` must not silently fall back** — raise on missing Triton.
+6. **Do not replace aux loss with bias-buffer balancing** without project-level
+   approval (GPT-OSS vs DeepSeek distinction).
+
+---
+
+## References
+
+- Shazeer, *GLU Variants Improve Transformer* (2020) — SwiGLU.
+- Fedus et al., *Switch Transformers* (2021) — top-k routing + aux loss.
+- Lepikhin et al., *GShard* (2020) — load-balanced MoE at scale.
+- [`models/moe.py`](../models/moe.py) — implementation.
+- [`models/moe_triton.py`](../models/moe_triton.py) — fused kernel.
+- [triton_kernels.md](triton_kernels.md) — kernel contract.
+- [training.md](training.md) — α=0.01 in the training loop.
+
+<!-- docs:verified 2026-07-31 · fa6f918 -->

@@ -1,352 +1,549 @@
-# Inference — GPT-OSS-Lite
+# Inference — Mixed KV Cache and Long-Context Evaluation
 
-> **Source:** `inference/generate.py`, `inference/long_context.py`
-> **Companion:** [`attention.md`](attention.md) (the attention paths the cache feeds),
-> [`yarn.md`](yarn.md) (rotated-K caching), [`OPTIMIZATIONS.md`](OPTIMIZATIONS.md) §11–15.
-
----
-
-## 1. Overview
-
-The inference path is where the model's two architectural choices pay off in
-*wall-clock terms*, not just parameter counts:
-
-1. **The mixed windowed/global KV cache** (`MixedKVCache`) delivers the 2×
-   VRAM savings at long context (the first headline metric) by giving
-   windowed layers an O(window) cache and global layers an O(T) but
-   amortised-O(1)-per-step cache.
-2. **Rotated-K caching** turns decode from O(T²) per token into O(T) per token
-   by applying RoPE once at insertion rather than recomputing over the whole
-   cache.
-
-On top of that, `generate()` pre-allocates its output and avoids `torch.cat`
-per step, and `long_context.PasskeyEvaluator` provides the second headline
-metric: 128K passkey retrieval from a 4K-trained model.
+> **Chapter on `inference/generate.py` and `inference/long_context.py`.** This
+> chapter explains how GPT-OSS-Lite decodes autoregressively with a heterogeneous
+> per-layer KV cache, how sink-bias clamping is cached for decode, the passkey
+> retrieval protocol, and what the KV-cache benchmark measures. Prerequisites:
+> [attention.md](attention.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md),
+> [transformer.md](transformer.md).
 
 ---
 
-## 2. `MixedKVCache` — the per-layer mixed cache
+## Table of contents
+
+1. [Why a custom inference path?](#1-why-a-custom-inference-path)
+2. [Architecture recap for inference](#2-architecture-recap-for-inference)
+3. [`MixedKVCache` design](#3-mixedkvcache-design)
+4. [Windowed layer: ring buffer](#4-windowed-layer-ring-buffer)
+5. [Global layer: exponential growth](#5-global-layer-exponential-growth)
+6. [The `append` / `get` contract](#6-the-append--get-contract)
+7. [`_attn_forward_layer`](#7-_attn_forward_layer)
+8. [Sink bias clamp cache](#8-sink-bias-clamp-cache)
+9. [The `generate()` loop](#9-the-generate-loop)
+10. [Top-p sampling](#10-top-p-sampling)
+11. [Decode without cache](#11-decode-without-cache)
+12. [Passkey evaluation protocol](#12-passkey-evaluation-protocol)
+13. [`scripts/passkey_eval.py`](#13-scriptspasskey_evalpy)
+14. [KV-cache benchmark meaning](#14-kv-cache-benchmark-meaning)
+15. [Memory and complexity](#15-memory-and-complexity)
+16. [Operational commands](#16-operational-commands)
+17. [Failure modes](#17-failure-modes)
+18. [Where to go next](#18-where-to-go-next)
+
+---
+
+## 1. Why a custom inference path?
+
+`GPTOSS.forward` in `models/transformer.py` is optimized for **training**:
+full-sequence forward, gradient checkpointing, aux loss aggregation. Autoregressive
+generation needs different behavior:
+
+1. **Incremental decode** — after the prompt, only one new token per step
+2. **KV reuse** — past keys and values must not be recomputed
+3. **Heterogeneous caches** — even layers (sliding window) store at most `W`
+   tokens; odd layers (global) store the full prefix
+4. **Rotated keys** — RoPE is applied before caching; stored tensors are
+   already position-rotated
+
+`inference/generate.py` implements this without modifying the training forward.
+It calls block submodules (`norm1`, `attn`, `moe`, `norm2`) through
+`_attn_forward_layer`.
+
+---
+
+## 2. Architecture recap for inference
+
+For the 502M production config:
+
+| Layer index | Attention type | KV stored |
+|-------------|----------------|-----------|
+| 0, 2, 4, 6, 8, 10 | Sliding window `W=128` | Last `min(T, 128)` tokens |
+| 1, 3, 5, 7, 9, 11 | Full (global) | All `T` tokens |
+
+GQA: queries use 8 heads; K/V use 4 heads (`repeat_kv` expands K/V to 8 at
+attention matmul time).
+
+Sink bias: per-head scalar, clamped to `[-10, 15]` at forward — see
+[ATTENTION_SINKS.md](ATTENTION_SINKS.md).
+
+YaRN: position-dependent RoPE frequencies; `positions` tensor must reflect
+**absolute** token index during decode (0, 1, …, T-1 for prompt; then
+`cur_pos-1` for each new token).
+
+---
+
+## 3. `MixedKVCache` design
 
 ```python
 class MixedKVCache:
-    _GLOBAL_CAP_TOKENS = 4_000_000
-    def append(self, layer_idx, k_rot, v, is_windowed, window) -> None
-    def get(self, layer_idx, is_windowed) -> (K, V)
-    def seq_len(self, layer_idx, is_windowed) -> int
+  _GLOBAL_CAP_TOKENS = 4_000_000
+
+  def __init__(self, global_cap_tokens: int | None = None):
+      self.windowed_kv: List[...] = []   # ring buffers per SWA layer
+      self.global_kv: List[...] = []    # growable buffers per global layer
+      self.global_lengths: List[int] = []
+      self.global_caps: List[int] = []
 ```
 
-A single cache object holds **two storage strategies in parallel**, one per
-layer type — this is the literal implementation of the GPT-OSS
-sliding/full alternation at the cache level. It stores **rotated K** (RoPE is
-applied at insertion, not at attention time — see §4 and [`yarn.md`](yarn.md)).
+Two parallel storage systems indexed by `layer_idx`:
 
-### 2.1 Windowed layers — fixed-size ring buffer
+| Storage | Layers | Semantics |
+|---------|--------|-----------|
+| `windowed_kv` | `is_windowed=True` | Fixed-size ring, capacity `window` |
+| `global_kv` | `is_windowed=False` | Dynamic array, amortized O(1) append |
 
-Even-indexed layers cache only the last `window = 128` tokens. Storage is a
-**ring buffer**: a single `(B, H_kv, window, D)` tensor allocated once at first
-append, plus a `head` pointer and a `count`.
+`reset()` clears all state — call between independent generation requests.
 
-- **Append**: if the new chunk fits in the remaining tail
-  (`head + T_new <= window`), copy it in place; otherwise wrap around,
-  copying the first part to the tail and the second part to the head, then
-  advance `head = (head + T_new) % window`. This is **O(window) memcpy per
-  step, independent of T** — the whole cache is never reallocated.
-- **Get**: when `count < window`, return the leading `count` slots (still
-  filling up). When full, if `head == 0` the buffer is already in temporal
-  order; otherwise return `cat(buf[head:], buf[:head])` — a single
-  `torch.cat` to reconstruct temporal order from the ring. The result is a
-  view (zero-copy slices where possible), so attention reads it without an
-  extra copy.
+`__len__` returns `max(len(windowed_kv), len(global_kv))` — useful for
+debugging how many layers have been touched.
 
-This is OPT-11: the previous implementation did `torch.cat([old_k, k_rot])` on
-every step, allocating and copying the *entire* cache each time — O(T) per
-step, O(T²) total. The ring buffer makes per-step work O(window). For a 64K
-context with `window = 128`, that is a **500× reduction** in per-step KV
-work.
+### Why "mixed"?
 
-### 2.2 Global layers — exponentially-growing buffer
+A single flat cache cannot capture GPT-OSS memory behavior. At sequence length
+131072:
 
-Odd-indexed layers cache the full sequence. Storage is a contiguous buffer
-that **grows by 1.5× on demand**, capped at `_GLOBAL_CAP_TOKENS = 4 000 000`
-per layer (a safety bound, ~4M tokens ≈ far beyond the 128K target):
+- 6 global layers × 131072 tokens × KV footprint
+- 6 windowed layers × 128 tokens × KV footprint
 
-```python
-new_cap = max(needed, int(cur_cap * 1.5) + 1)
-new_cap = min(new_cap, self._global_cap_tokens)
-buf = torch.empty(B, H, new_cap, D, ...)
-buf[:, :, :cur_len, :].copy_(old[:, :, :cur_len, :])     # copy existing
-buf[:, :, cur_len:needed, :].copy_(k_rot)               # append new
-```
-
-- **Append** (no grow needed): in-place copy into the existing buffer's tail —
-  O(T_new), no allocation.
-- **Append** (grow needed): allocate a 1.5× buffer, copy the old prefix + the
-  new chunk. This happens ~`log_{1.5}(T)` times over a generation, so the
-  **amortised cost per step is O(1)** even though a single grow step is O(T).
-  This is OPT-12: the previous `torch.cat`-every-step was O(T) per step and
-  O(T²) total (~2 billion tokens of memory traffic over a 64K generation); the
-  exponential buffer is O(N) total.
-
-`get()` returns `buf[:, :, :cur_len, :]` — a zero-copy view.
-
-### 2.3 Why the split?
-
-A naive "one buffer per layer of size T" cache would (a) need to know T up
-front — fine for fixed-length decode but not for open-ended generation, and
-(b) over-allocate for windowed layers that only ever use `window` slots. The
-mixed cache gives windowed layers their tight O(window) bound and global layers
-an amortised-O(1) append, matching each layer's actual access pattern. This is
-what produces the measured **1.94×–2.0× KV-cache reduction at 128K** in
-`scripts/kv_cache_benchmark.py` — half the layers (the windowed ones) hold
-`window = 128` tokens instead of `T = 131 072`.
+The headline **~2× KV reduction** comes entirely from this split. Analytical
+proof: `scripts/kv_cache_benchmark.py` (Section 14).
 
 ---
 
-## 3. `generate()` — the decode loop
+## 4. Windowed layer: ring buffer
+
+Each windowed layer stores `[buf_k, buf_v, head, count]`:
+
+| Field | Meaning |
+|-------|---------|
+| `buf_k`, `buf_v` | `(B, H_kv, window, head_dim)` tensors |
+| `head` | Next write index in the ring (0 ≤ head < window) |
+| `count` | Effective history length (`≤ window`) |
+
+### Prompt phase (`T_new` tokens at once)
+
+When the prompt fits in one forward (typical):
+
+- If `T_new >= window`: copy only the **last `window`** K/V into the buffer;
+  set `head=0`, `count=window`
+- If `T_new < window`: fill from the start; `count = T_new`
+
+### Decode phase (one token per step)
+
+Each step appends one K/V slice:
+
+1. Write at `head` position
+2. Wrap with `(head + 1) % window`
+3. `count = min(window, count + 1)`
+
+### Chronological ordering on read
+
+`get()` for windowed layers may need to **unrotate** the ring when `head != 0`:
+
+```python
+k_ordered = torch.cat([k[:, :, head:, :], k[:, :, :head, :]], dim=2)
+```
+
+Attention always sees K/V in temporal order for the last `count` positions.
+
+---
+
+## 5. Global layer: exponential growth
+
+Global layers keep the **entire prefix** for full attention. Storage strategy:
+
+1. **First write:** allocate `(B, H_kv, new_cap, D)` with `new_cap = max(needed, 1)`
+2. **Growth:** when `cur_len + T_new > cur_cap`, reallocate with
+   `new_cap = max(needed, int(cur_cap * 1.5) + 1)`
+3. **Cap:** `new_cap = min(new_cap, _GLOBAL_CAP_TOKENS)` where default cap is
+   **4,000,000 tokens** per layer
+
+The 1.5× growth factor gives amortized O(1) append cost per token — standard
+dynamic array doubling strategy with a gentler constant.
+
+`global_lengths[layer_idx]` tracks valid prefix length; `global_caps[layer_idx]`
+tracks allocated capacity (may be larger than length).
+
+### Why cap at 4M?
+
+Safety rail against runaway allocation on bugs or adversarially long generation.
+128K context is well under this cap. For research beyond 4M, pass a custom
+`global_cap_tokens` to `MixedKVCache(...)`.
+
+---
+
+## 6. The `append` / `get` contract
+
+### `append(layer_idx, k_rot, v, is_windowed, window)`
+
+- `k_rot`: **already RoPE-rotated** keys, shape `(B, H_kv, T_new, D)`
+- `v`: values, same shape
+- Appends along sequence dim for this layer only
+
+### `get(layer_idx, is_windowed) -> (K, V)`
+
+Returns cached tensors for attention, or `(None, None)` if empty.
+
+- Windowed: at most `window` tokens, chronologically ordered
+- Global: `K[:, :, :cur_len, :]`
+
+### `seq_len(layer_idx, is_windowed)`
+
+Introspection helper — current cached length at a layer.
+
+---
+
+## 7. `_attn_forward_layer`
+
+Core per-layer inference step (simplified flow):
+
+```
+x_norm = block.norm1(x)
+q, k_new, v_new = projections + RoPE on q and k_new
+cache.append(layer_idx, k_new_rot, v_new, is_windowed, window)
+k, v = cache.get(...) or k_new_rot, v_new
+k, v = repeat_kv(k, v)  # GQA
+out = causal_attention(q, k, v, window=..., sink_bias=clamped)
+x = x + o_proj(out)
+x = x + moe(block.norm2(x))
+return x
+```
+
+Differences from training `GPTOSSAttention.forward`:
+
+- Uses cached K/V instead of full-sequence matmul over recomputed history
+- MoE runs on every token (no aux loss needed at inference — discarded as `_`)
+- Same sink clamp and window mask logic as training
+
+Rotary: `cos, sin = attn.yarn(positions, n_pruned_dims=...)` then
+`apply_rope` — matches [yarn.md](yarn.md) training behavior.
+
+---
+
+## 8. Sink bias clamp cache
+
+Training clamps sink bias every forward:
+
+```python
+sink_bias_clamped = self.sink_bias.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)
+# SINK_CLAMP_MIN = -10.0, SINK_CLAMP_MAX = 15.0
+```
+
+During multi-step `generate()`, the same clamped tensor would be recomputed
+every layer every step. `generate()` passes a `sink_bias_cache: dict` keyed by
+`id(attn)`:
+
+```python
+if id(attn) in sink_bias_cache:
+    sink_bias_clamped = sink_bias_cache[id(attn)]
+else:
+    sink_bias_clamped = attn.sink_bias.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)
+    sink_bias_cache[id(attn)] = sink_bias_clamped
+```
+
+Properties:
+
+- **Unclamped parameter** still trains normally — clamp is forward-only
+- Cache is per `generate()` call, not global — reflects current parameter values
+- Identical numerics to training forward for a given `sink_bias` parameter
+
+See [attention.md](attention.md) for why clamp prevents BF16 mask-add overflow.
+
+---
+
+## 9. The `generate()` loop
 
 ```python
 @torch.no_grad()
-def generate(model, input_ids, max_new_tokens=64, temperature=0.7,
-             top_p=0.9, use_cache=True) -> torch.Tensor
+def generate(model, input_ids, max_new_tokens=64,
+             temperature=0.7, top_p=0.9, use_cache=True) -> Tensor
 ```
 
-### 3.1 Pre-allocated output (OPT-13)
+Returns `(B, T_prompt + max_new_tokens)` token ids.
+
+### Phase A — Prompt prefill
 
 ```python
-output = torch.empty(B, T_prompt + max_new_tokens, dtype=input_ids.dtype, device=dev)
-output[:, :T_prompt] = input_ids
-...
-output[:, T_prompt + step : T_prompt + step + 1] = next_id      # in-place write
-```
+model.to(dev)  # no-op if already on device
+cache = MixedKVCache() if use_cache else None
+sink_bias_cache = {}
 
-The full output tensor is allocated once; each new token is written in place.
-The previous `torch.cat([generated, next_id])` per step was O(T) per step and
-O(T²) total over a generation — pure waste, since the output length is known
-up front.
-
-### 3.2 The prefill + decode structure
-
-```
-# Prefill: process the whole prompt at once, populate the cache.
 x = model.embed(input_ids)
-positions = arange(T_prompt)
+positions = torch.arange(T_prompt, device=dev)
 for layer_idx, block in enumerate(model.blocks):
     x = _attn_forward_layer(block, layer_idx, x, positions, cache, sink_bias_cache)
-next_token_logits = model.head(model.norm(x))[:, -1, :]
-
-# Decode: one token at a time, reading from the cache.
-for step in range(max_new_tokens):
-    sample next_id from next_token_logits (greedy or top-p)
-    output[:, T_prompt + step] = next_id
-    x_step = model.embed(next_id)
-    positions_step = tensor([cur_pos - 1])
-    for layer_idx, block in enumerate(model.blocks):
-        x_step = _attn_forward_layer(block, layer_idx, x_step, positions_step, cache, sink_bias_cache)
-    next_token_logits = model.head(model.norm(x_step))[:, -1, :]
+x = model.norm(x)
+next_token_logits = model.head(x)[:, -1, :]
 ```
 
-The prefill processes all `T_prompt` tokens in one forward pass and seeds the
-cache; each decode step processes a *single* token and appends one (rotated) K
-and one V per layer. This is the standard prefill/decode split; the GPT-OSS
-twist is that the cache is *mixed*, so windowed and global layers behave
-differently inside `_attn_forward_layer`.
+All prompt tokens processed in **one parallel pass** per layer (standard
+prefill). KV cache populated for both windowed and global layers.
 
-### 3.3 Per-call sink-bias clamp cache (OPT-14)
+### Phase B — Token-by-token decode
+
+For each of `max_new_tokens` steps:
+
+1. Sample `next_id` from `next_token_logits` (greedy if `temperature <= 0`)
+2. Append to `output` buffer
+3. If `use_cache`:
+   - Embed single token `x_step`
+   - `positions_step = tensor([cur_pos - 1])` — absolute index of new token
+   - Run all layers with `_attn_forward_layer` (append length-1 K/V)
+   - `next_token_logits = head(norm(x_step))[:, -1, :]`
+4. If not `use_cache`: re-forward entire prefix (correctness reference, slow)
+
+`model.eval()` is set at entry; dropout is not used in GPT-OSS-Lite.
+
+---
+
+## 10. Top-p (nucleus) sampling
+
+When `temperature > 0`:
 
 ```python
-if sink_bias_cache is not None and id(attn) in sink_bias_cache:
-    sink_bias_clamped = sink_bias_cache[id(attn)]
-else:
-    sink_bias_clamped = attn.sink_bias.clamp(attn._sink_clamp_min, attn._sink_clamp_max)
-    if sink_bias_cache is not None:
-        sink_bias_cache[id(attn)] = sink_bias_clamped
+probs = softmax(logits / temperature)
+sorted_probs, sorted_idx = probs.sort(descending=True)
+cumsum = sorted_probs.cumsum(dim=-1)
+mask = cumsum - sorted_probs > top_p
+sorted_probs[mask] = 0.0
+sorted_probs /= sorted_probs.sum(dim=-1, keepdim=True)
+next_id = multinomial(sorted_probs, 1)
+next_id = sorted_idx.gather(-1, next_id)
 ```
 
-A `sink_bias_cache: dict` keyed by `id(attn)` is threaded through the decode
-loop. The first call per layer computes the clamped sink bias; subsequent
-calls reuse the cached tensor. With 12 layers × N decode steps, this avoids
-12N redundant clamps. Small but free.
+Default `top_p=0.9`, `temperature=0.7`. Passkey eval uses `temperature=0.0`
+(greedy argmax) for deterministic scoring.
 
-### 3.4 Sampling: greedy vs top-p
+---
 
-- `temperature <= 0` → greedy `argmax` (deterministic; used by `passkey_eval`).
-- `temperature > 0` → top-p (nucleus) sampling: softmax with temperature, sort
-  descending, zero out the tokens above the cumulative `top_p` mass
-  (`cumsum - sorted_probs > top_p`), renormalise, `multinomial`, gather back.
-  The `cumsum - sorted_probs > top_p` form keeps the highest-probability token
-  always eligible even when it alone exceeds `top_p`.
+## 11. Decode without cache
 
-### 3.5 `use_cache=False` — the correctness replay path
-
-When the cache is disabled, each step re-runs the *full* prompt + history
-through the model with no cache. This is correct but O(T) per step — useless
-for production but invaluable for testing: `generate(..., use_cache=False,
-max_new_tokens=1)` produces the *same logits* as `model(input_ids)`, so the
-test suite can certify that the cached fast path matches the uncached ground
-truth without any tolerance.
-
-### 3.6 Device contract
+`use_cache=False` recomputes the full prefix every step:
 
 ```python
-model.to(dev)   # no-op if already on dev
+full_input = output[:, : T_prompt + step + 1]
+x_full = model.embed(full_input)
+positions_full = torch.arange(full_input.size(1), device=dev)
+for layer_idx, block in enumerate(model.blocks):
+    x_full = _attn_forward_layer(..., cache=None, ...)
 ```
 
-`generate` forces the model onto the input's device so embed/head/matmuls
-never cross devices. `.to(dev)` is a no-op (no copy) when the model is already
-on `dev`, so this is cheap to call per-generation inside an eval loop (e.g. the
-passkey retriever calls `generate` hundreds of times).
+Complexity: O(T²) per step — usable only for short sequences and correctness
+checks. Production long-context eval always sets `use_cache=True`.
 
 ---
 
-## 4. Rotated-K caching — why decode is O(T), not O(T²)
+## 12. Passkey evaluation protocol
 
-`_attn_forward_layer` applies RoPE to the *new* K before appending it:
+`PasskeyEvaluator` in `inference/long_context.py` implements the **needle-in-a-haystack**
+variant popularized by Mohtashami & Jaggi (2023).
+
+### Prompt construction
+
+1. Generate deterministic filler text (`make_filler_text`) of roughly
+   `context_length` words
+2. Insert `"The passkey is {passkey}."` at `start`, `middle`, or `end`
+3. Append question template:
+
+```
+There is an important info in the context above.
+Find it and remember it. The passkey is {passkey}.
+Now answer: what is the passkey?
+```
+
+### Scoring
+
+1. Tokenize prompt (eval script uses a char-level stub tokenizer for portability)
+2. `generate(..., max_new_tokens=16, temperature=0.0)`
+3. Decode only **new** tokens after prompt
+4. Extract first 5-digit number via regex `r"\b(\d{5})\b"`
+5. Match against ground-truth passkey
+
+### Default context lengths
 
 ```python
-cos, sin = attn.yarn(positions, n_pruned_dims=attn.n_pruned_dims)
-q = apply_rope(q, cos, sin)
-k_new_rot = apply_rope(k_new, cos, sin)
-if cache is not None:
-    cache.append(layer_idx, k_new_rot, v_new, ...)     # store ROTATED K
-    cached_k, cached_v = cache.get(layer_idx, ...)
-    k_for_q = cached_k                                  # already rotated
+context_lengths = [4096, 8192, 32768, 65536, 131072]
+n_trials = 100  # distinct random passkeys per length
 ```
 
-The cache stores `k_new_rot`, the *already-RoPE'd* key. Attention then reads
-cached rotated K directly — no re-application of RoPE over the growing cache.
-Without this, each decode step would recompute RoPE over the entire `T`-token
-cache (O(T) RoPE applications per step → O(T²) over a generation), because
-YaRN's frequencies are position-dependent. With it, each step rotates only the
-*one* new K (O(1) per step). This composes with the ring buffer (windowed) and
-exponential buffer (global) to make the *whole* decode loop O(T) per token
-rather than O(T²).
+Returns `{ctx_len: accuracy}` dict.
 
-This is only correct because RoPE is a *linear* rotation that commutes with
-cache append — the rotated K of an old token does not change when a new token
-is appended. A nonlinear or additive position encoding would not have this
-property.
+### Target accuracy (README headline)
+
+| Position range | Target |
+|----------------|--------|
+| 0 – 32K | ≥ 95% |
+| 32K – 96K | ≥ 90% |
+| 96K – 128K | ≥ 85% |
+
+These require a model trained with YaRN at 4K that successfully extrapolates —
+see [yarn.md](yarn.md). Untrained models score near zero.
 
 ---
 
-## 5. `long_context.PasskeyEvaluator` — the 128K benchmark
+## 13. `scripts/passkey_eval.py`
+
+CLI wrapper:
+
+```bash
+python3 scripts/passkey_eval.py \
+    --checkpoint path/to/model.safetensors \
+    --n-trials 100 \
+    --context-lengths 4096 8192 32768 65536 131072 \
+    --position middle \
+    --seed 42
+```
+
+Behavior:
+
+1. Loads `ModelConfig` from `configs/pretrain_a100_502m.yaml`
+2. Builds `GPTOSS`, loads safetensors weights (`strict=False` for flexibility)
+3. Uses `_CharTokenizer` stub — ord(char) mod vocab for CPU portability
+4. Runs `PasskeyEvaluator.evaluate`
+5. Prints accuracy table; checks ≥ 85% at max context length
+
+For production eval, swap in the real LLaMA-3 tokenizer to match training
+distribution — the stub is documented as a harness convenience.
+
+---
+
+## 14. KV-cache benchmark meaning
+
+`scripts/kv_cache_benchmark.py` is an **analytical** script — no GPU, no model
+load. It computes KV bytes from architecture constants:
 
 ```python
-class PasskeyEvaluator:
-    def evaluate(self, context_lengths=(4096, 8192, 32768, 65536, 131072),
-                 n_trials=100, passkey_position="middle", base_seed=42) -> dict[int, float]
+N_LAYERS = 12
+N_WINDOWED = 6
+N_GLOBAL = 6
+N_KV_HEADS = 4
+HEAD_DIM = 96
+WINDOW = 128
+DTYPE_BYTES = 2  # BF16
 ```
 
-The **passkey retrieval** benchmark (Mohtashami & Jaggi, 2023) is the canonical
-long-context eval: hide a 5-digit passkey in a long filler-text context, ask
-the model to retrieve it, measure accuracy as a function of where the passkey
-sits and how long the context is. It is the second headline metric of this
-repo: a 4K-trained model retrieving passkeys at 128K is the proof that YaRN +
-pruned RoPE actually extrapolate.
+### Per-token KV size (one layer)
 
-### 5.1 Prompt construction
+```
+kv_bytes_per_token = 2 * N_KV_HEADS * HEAD_DIM * DTYPE_BYTES
+                   = 2 * 4 * 96 * 2 = 1536 bytes
+```
 
-`build_prompt(passkey, context_length, passkey_position, seed)`:
-1. `make_filler_text(target_tokens=context_length, seed=context_length)` —
-   deterministic filler (a fixed 16-word vocabulary sampled with a seeded
-   RNG). The filler seed is `context_length`, *not* the trial index, so every
-   trial at the same context length sees the same filler — only the passkey
-   is per-trial randomness.
-2. Insert `"The passkey is {passkey}."` at `start` / `middle` / `end` of the
-   filler word list.
-3. Append the question template:
-   `"There is an important info in the context above. Find it and remember
-   it. The passkey is {passkey}. Now answer: what is the passkey?"`
+Factor 2 = K and V.
 
-### 5.2 Reproducibility design
+### Total cache bytes at sequence length `T`
 
-- **Per-context-length RNG**: `rng = random.Random(base_seed + ctx_len)` —
-  different context lengths are statistically independent (a fix at one length
-  does not perturb the passkey set at another).
-- **Passkeys without replacement**: `rng.sample(range(100_000), n_distinct)` —
-  no duplicate passkeys within a context length's trial set.
-- **Filler seeded by context length** (not trial): each context length has
-  its own deterministic filler; only the passkey varies per trial. This
-  isolates the variable under test (passkey position vs retrieval) from
-  filler-text variation.
+**Pure GQA (all full):**
 
-### 5.3 Evaluation
+```
+bytes = N_LAYERS * T * kv_bytes_per_token
+```
 
-For each `(context_length, trial)`:
-1. Tokenise the prompt, run `generate(model, input_ids, max_new_tokens=16,
-   temperature=0.0, top_p=1.0, use_cache=True)` — greedy decode, 16 tokens
-   (enough for a 5-digit number plus surrounding text).
-2. Decode the *new* tokens only, regex-extract the first `\b\d{5}\b`, compare
-   to the true passkey.
+**SWA/Full mix:**
 
-Expected behaviour: **≥ 95% at 4K** (training context — should be near-perfect),
-**≥ 85% at 128K** (the YaRN extrapolation target). `scripts/passkey_eval.py` is
-the CLI entrypoint; it falls back to a **stub** when no trained checkpoint is
-provided (it still tests prompt construction and the cache mechanics, just not
-retrieval accuracy — there are no learned weights to retrieve *with*).
+```
+windowed_tokens = N_WINDOWED * min(WINDOW, T)
+global_tokens   = N_GLOBAL * T
+bytes = (windowed_tokens + global_tokens) * kv_bytes_per_token
+```
+
+### Example table (batch=1, BF16)
+
+| Context | Pure GQA | SWA/Full | Reduction |
+|--------:|---------:|---------:|----------:|
+| 4,096 | 72 MB | 72 MB | 1.00× |
+| 16,384 | 288 MB | 144 MB | 2.00× |
+| 131,072 | 2.25 GB | 1.13 GB | 2.00× |
+
+Pass threshold: **≥ 1.8×** at 128K (`THRESHOLD = 1.8`).
+
+### Relationship to `MixedKVCache`
+
+The benchmark assumes ideal caching (exactly `W` windowed tokens, no overhead).
+`MixedKVCache` adds ring metadata and capacity slack — real memory is slightly
+higher but same asymptotic scaling.
+
+The benchmark validates the **architectural claim**, not runtime allocator behavior.
 
 ---
 
-## 6. Design rationale & rejected alternatives
+## 15. Memory and complexity
 
-| Decision | Rationale | Rejected alternative |
-|---|---|---|
-| Mixed cache (ring + exponential) | Matches each layer type's access pattern | One buffer per layer of size T — needs T up front, over-allocates windowed layers |
-| Ring buffer for windowed layers | O(window) per step, fixed memory | `torch.cat` per step — O(T²) total |
-| Exponential 1.5× growth for global | Amortised O(1) append | Fixed-size T buffer — needs T known; `torch.cat` — O(T²) |
-| Store rotated K | O(1) RoPE per decode step | Recompute RoPE over whole cache — O(T²) |
-| Pre-allocated output | No O(T²) `torch.cat` | `torch.cat` per step |
-| `use_cache=False` replay path | Certifies the fast path against uncached ground truth | Trust the fast path — bugs hide |
-| Sink-bias clamp cache | Avoids 12N redundant clamps | Recompute every layer every step |
-| Passkey filler seeded by ctx_len | Isolates passkey-position as the variable | Per-trial filler — confounds filler variance with position |
+### Per decode step (with cache)
 
----
+| Layer type | Work per new token | KV growth |
+|------------|-------------------|-----------|
+| Windowed | O(W) attention | O(1) storage |
+| Global | O(T) attention | O(1) amortized append |
 
-## 7. Edge cases & pitfalls
+Dominant cost at 128K: **6 global layers** each attend over full `T`.
 
-- **`generate` mutates `model`'s device** via `model.to(dev)`. If you hold a
-  reference to the model expecting it on a specific device, be aware it may
-  move. The `.to(dev)` is a no-op when already correct.
-- **`use_cache=False` is O(T²)** — never use it for long generation; it exists
-  for correctness testing only.
-- **Ring buffer `get()` allocates on wrap**: when `head != 0` and the buffer is
-  full, `get()` does a `torch.cat` to reconstruct temporal order. This is one
-  allocation per windowed-layer attention call in the wrapped state —
-  unavoidable without a double-buffer, and tiny relative to the matmul.
-- **`_GLOBAL_CAP_TOKENS = 4_000_000`** caps global-layer buffers. At 128K
-  target context this is a 30× safety margin; a generation that exceeds it
-  would silently stop growing (cache would drop new tokens). If you ever push
-  past 4M tokens per layer, raise this.
-- **`PasskeyEvaluator` needs a trained checkpoint**: on an untrained model the
-  stub path runs prompt construction + decode but retrieval is random
-  (~`1e-5` for a random 5-digit guess). Do not interpret stub accuracy as a
-  model property.
+### KV memory at T=131072 (production)
+
+~1.13 GB BF16 (batch=1) from benchmark — before activations, MoE weights, or
+framework overhead.
+
+### Sink + window interaction
+
+Windowed layers apply both causal mask **and** sliding mask plus sink column —
+attention never sees more than `W` prior keys plus sink semantics. See
+[ATTENTION_SINKS.md](ATTENTION_SINKS.md).
 
 ---
 
-## Implementation notes (extracted from code review)
+## 16. Operational commands
 
-- **`MixedKVCache` ring + exponential growth**: windowed layers use a
-  fixed-size ring buffer of length `window` (O(window) append, O(1) amortised
-  decode step). Global layers use an exponentially-growing buffer
-  (1.5× growth capped at `_GLOBAL_CAP_TOKENS = 4_000_000`), giving O(N)
-  total work over an N-token generation instead of O(N²) from `torch.cat`
-  on every step.
-- **Pre-allocated `generate` output**: `generate()` allocates the full
-  `(B, T_prompt + max_new_tokens)` output tensor once and each new token is
-  written in place. This avoids the O(T²) `torch.cat` per step that the
-  original implementation had.
-- **Per-call sink-bias clamp cache**: a `sink_bias_cache: dict` keyed by
-  `id(attn)` is threaded through the decode loop. The first call per
-  layer computes `attn.sink_bias.clamp(min, max)`; subsequent calls
-  reuse the cached tensor. Avoids 12N redundant clamps over N decode
-  steps.
-- **`use_cache=False` replay path**: when the cache is disabled, the
-  full prompt + history is replayed on every step (correct but slow).
-  Useful for testing — `generate(..., use_cache=False, max_new_tokens=1)`
-  gives the same logits as `model(input_ids)`.
-- **Rotated-K caching**: `_attn_forward_layer` applies RoPE to the new K
-  once and stores `k_new_rot` in the cache, so each decode step only
-  rotates the single new K rather than recomputing RoPE over the
-  growing cache. Decode is O(T) per token, not O(T²).
+```bash
+# Analytical KV headline metric (CPU)
+python3 scripts/kv_cache_benchmark.py
 
-<!-- docs:verified 2026-07-31 · fd4fe36 -->
+# Passkey eval (GPU + checkpoint)
+python3 scripts/passkey_eval.py --checkpoint checkpoints/pretrain_a100/model_step_61000.safetensors
+
+# Programmatic generation
+python3 -c "
+import torch, yaml
+from models.transformer import GPTOSS, ModelConfig
+from inference.generate import generate
+with open('configs/pretrain_a100_502m.yaml') as f:
+    cfg = ModelConfig(**yaml.safe_load(f)['model'])
+m = GPTOSS(cfg).eval()
+ids = torch.randint(0, 1000, (1, 32))
+out = generate(m, ids, max_new_tokens=8, use_cache=True)
+print(out.shape)
+"
+```
+
+E2E GPU smoke (`scripts/e2e_gpu_smoke.py`) includes a `MixedKVCache` generation
+step on a tiny model.
+
+---
+
+## 17. Failure modes
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| Garbage long-context output | Untrained model or wrong tokenizer | Train; use LLaMA-3 tokenizer |
+| OOM at 128K prefill | Batch > 1 or insufficient VRAM | batch=1; BF16; shorter eval |
+| Slower than expected decode | `use_cache=False` | Enable cache |
+| Position bugs / repeated tokens | Wrong `positions` during decode | Use absolute index `cur_pos-1` |
+| Global cap hit | Sequence > 4M tokens | Raise `global_cap_tokens` |
+| Sink overflow / NaN logits | Missing clamp | Ensure `SINK_CLAMP_*` path used |
+
+---
+
+## 18. Where to go next
+
+| Topic | Document |
+|-------|----------|
+| Attention implementation | [attention.md](attention.md) |
+| Sink theory | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
+| YaRN / RoPE | [yarn.md](yarn.md), [rotary.md](rotary.md) |
+| Model composition | [transformer.md](transformer.md) |
+| Training (no KV cache) | [training.md](training.md) |
+| Config limits (`eval_max_seq_len`) | [configs.md](configs.md) |
+| Onboarding commands | [getting_started.md](getting_started.md) |
+
+---
+
+<!-- docs:verified 2026-07-31 · fa6f918 -->

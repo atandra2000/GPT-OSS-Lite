@@ -1,268 +1,396 @@
-# Rotary Position Embeddings (RoPE) in GPT-OSS-Lite
+# Rotary Position Embeddings (RoPE)
 
-> **Source:** `models/rotary.py`
-> **Companions:** [`yarn.md`](yarn.md) (YaRN scaling of these frequencies),
-> [`attention.md`](attention.md) (where the rotation is applied).
-
----
-
-## 1. Overview
-
-RoPE encodes **relative** position into the attention scores by rotating the
-query and key vectors in the complex plane *before* their dot product. Unlike
-additive position embeddings (GPT-2 style), RoPE does not touch the input
-stream at all — it acts on Q and K inside every attention layer, after the
-projections. Because the rotation angle grows with position, the dot product
-`Q·K` ends up depending on the *difference* of their positions, which is
-exactly the relative-position structure attention wants.
-
-This module exposes three functions, all operating on the last
-(`head_dim`) axis:
-
-1. **`apply_rope(x, cos, sin)`** — apply a precomputed rotation to a tensor of
-   Q or K.
-2. **`compute_yarn_freqs(...)`** — compute YaRN-scaled inverse frequencies
-   (the per-dimension rotation-rate table). Lives here rather than in
-   `yarn.py` because it is the bridge between "what is a frequency" and "how
-   does YaRN stretch it".
-3. **`compute_yarn_mscale(scale_factor)`** — the YaRN attention-temperature
-   correction (a scalar, see [`yarn.md`](yarn.md)).
-4. **`prune_rope(cos, sin, n_pruned_dims)`** — zero out the lowest-frequency
-   dimensions on global layers (the GPT-OSS "pruned RoPE" trick).
-
-All functions use the **half-dim convention**: `cos`/`sin` have shape
-`(..., head_dim // 2)`, i.e. one angle per *pair* of feature dimensions, and are
-duplicated to full `head_dim` inside `apply_rope`.
+> Mathematical foundation and implementation of RoPE in GPT-OSS-Lite.
+> Source: `models/rotary.py`. YaRN scaling wrapper: [yarn.md](yarn.md).
+> Attention consumer: [attention.md](attention.md).
 
 ---
 
-## 2. The math: why rotation encodes relative position
+## Table of Contents
 
-### 2.1 The 2-D rotation
-
-For a single frequency dimension `d` with base frequency
-`ω_d = 1 / θ^{2d / head_dim}`, RoPE rotates the `(x_{2d}, x_{2d+1})` feature
-pair of the vector at position `m` by angle `m · ω_d`:
-
-```
-┌ x_{2d}   ┐     ┌ cos(m·ω_d)  −sin(m·ω_d) ┐ ┌ x_{2d}   ┐
-│          │  =  │                          │ │          │
-└ x_{2d+1} ┘     ┌ sin(m·ω_d)   cos(m·ω_d) ┘ └ x_{2d+1} ┘
-```
-
-i.e. the standard rotation. Written elementwise:
-
-```
-out[2d]     = x[2d]   · cos(m·ω_d)  − x[2d+1] · sin(m·ω_d)
-out[2d+1]   = x[2d]   · sin(m·ω_d)  + x[2d+1] · cos(m·ω_d)
-```
-
-### 2.2 Why this gives relative position
-
-The dot product of two rotated vectors depends only on the *difference* of
-their rotation angles. For Q at position `m` and K at position `n`:
-
-```
-Q'_d · K'_d  =  f(x_Q, x_K,  (m − n) · ω_d)
-```
-
-So the attention score `Q'·K'` is a function of the relative offset `m − n`,
-not the absolute positions — exactly what causal attention needs. No position
-table to learn, no max-length baked in at construction; the position is
-implicit in the rotation angle.
-
-### 2.3 The frequency table
-
-The frequencies span a geometric range from high (fast rotation, captures
-local structure) to low (slow rotation, captures long-range structure):
-
-```
-ω_d = 1 / θ^{2d / head_dim},    d = 0 … head_dim/2 − 1
-```
-
-With `θ = 100 000` and `head_dim = 96` (so `head_dim/2 = 48` frequencies), the
-fastest dimension rotates ~`100 000` radians over 128K tokens while the slowest
-barely moves. YaRN (see [`yarn.md`](yarn.md)) stretches the *low*-frequency
-dimensions to push the model's usable context from 4K to 128K.
+1. [Introduction](#1-introduction)
+2. [`apply_rope`](#2-apply_rope)
+3. [Pairwise Rotation Geometry](#3-pairwise-rotation-geometry)
+4. [Frequency Bases](#4-frequency-bases)
+5. [`compute_yarn_freqs`](#5-compute_yarn_freqs)
+6. [`compute_yarn_mscale`](#6-compute_yarn_mscale)
+7. [Interaction with YaRN](#7-interaction-with-yarn)
+8. [Dtype and SDPA Contract](#8-dtype-and-sdpa-contract)
+9. [Broadcasting Rules](#9-broadcasting-rules)
+10. [Worked Example](#10-worked-example)
+11. [Comparison with Absolute PE](#11-comparison-with-absolute-pe)
+12. [Implementation Notes](#12-implementation-notes)
 
 ---
 
-## 3. `apply_rope` — the fused rotation
+## 1. Introduction
+
+Rotary Position Embedding (RoPE; Su et al., 2021) encodes token position by
+**rotating** query and key vectors in two-dimensional subspaces. Attention score
+\(q_i^\top k_j\) depends on relative position \(i - j\) — a natural fit for causal
+autoregressive models.
+
+GPT-OSS-Lite uses:
+
+| Function / class | File | Role |
+|------------------|------|------|
+| `apply_rope` | `rotary.py` | Apply rotation to Q/K tensors |
+| `compute_yarn_freqs` | `rotary.py` | Build YaRN-scaled inverse frequencies |
+| `compute_yarn_mscale` | `rotary.py` | Attention temperature correction |
+| `YaRNRoPE` | `yarn.py` | Module wrapping freq table + forward |
+
+Standard RoPE is the `scale_factor=1`, zero-ramp limit of YaRN.
+
+---
+
+## 2. `apply_rope`
 
 ```python
-def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor
+def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
 ```
 
-`x` is `(B, H, T, head_dim)`; `cos`/`sin` are `(T, head_dim // 2)` and are
-broadcast up. A naive implementation would `repeat_interleave` the half-dim
-cos/sin to full head_dim, build the rotation matrix, and matmul — three
-allocations and a small `O(T·H·D²)` matmul per layer. The implementation here
-is fused into two elementwise ops:
+Applies rotary embeddings to tensor `x` using precomputed `cos` and `sin`.
 
-### 3.1 The fused form
+### 2.1 Contract
 
-```
-x_pairs   = x.unflatten(-1, (-1, 2))        # group (x_{2d}, x_{2d+1}) pairs
-x_swapped = x_pairs.flip(-1)                # (x_{2d+1}, x_{2d})
-x_swapped[..., 0] = -x_swapped[..., 0]      # (-x_{2d+1}, x_{2d})   =: x_rotated
-out       = x * cos_full + x_rotated * sin_full
-```
+| Argument | Typical shape | Description |
+|----------|---------------|-------------|
+| `x` | `(B, H, T, D)` | Queries or keys (head-major) |
+| `cos` | `(T, D/2)` | Cosine of rotation angles per pair |
+| `sin` | `(T, D/2)` | Sine of rotation angles per pair |
+| return | same as `x` | Rotated tensor, **same dtype as `x`** |
 
-`x_rotated` is exactly the "swap and negate first slot" trick that produces
-`(-x_{2d+1}, x_{2d})`, which is what multiplies `sin` in §2.1. The result is
-the rotation, expressed as two fused elementwise multiply-adds instead of a
-matmul. Only **one** `repeat_interleave` is needed (to expand the half-dim
-`cos`/`sin` to full `head_dim`); everything else is a broadcast.
-
-### 3.2 Why half-dim convention?
-
-Storing `cos`/`sin` at `head_dim // 2` matches the "one angle per pair"
-structure of §2.1. The alternative — full-dim `cos`/`sin` interleaved — wastes
-half the storage on duplicated values. The half-dim form is the LLaMA / GPT-OSS
-convention and is what `YaRNRoPE` produces.
-
----
-
-## 4. `compute_yarn_freqs` — the YaRN frequency table
+### 2.2 Dtype preservation
 
 ```python
-def compute_yarn_freqs(head_dim, theta, scale_factor, original_max, target_max,
-                        beta_fast=32.0, beta_slow=1.0, ...) -> torch.Tensor
+cos_full = cos.repeat_interleave(2, dim=-1).to(x.dtype)
+sin_full = sin.repeat_interleave(2, dim=-1).to(x.dtype)
 ```
 
-This is the heart of YaRN. It produces a per-dimension inverse frequency that
-**interpolates between two regimes**:
+`cos`/`sin` are computed in FP32 inside `YaRNRoPE`. Casting to `x.dtype` before
+multiply prevents implicit promotion to FP32, which would:
 
-- **High-frequency dimensions** (large `ω_d`, fast rotation): *unchanged*.
-  These encode local structure and would be destroyed by stretching.
-- **Low-frequency dimensions** (small `ω_d`, slow rotation): *fully scaled* by
-  `scale_factor` (here `32`, since `131072 / 4096 = 32`). These encode
-  long-range structure and must be stretched to reach the longer context.
-- **In between**: a smooth ramp blends the two, so no single dimension is
-  abruptly switched.
+1. Break `torch.compile` fusion patterns.
+2. Violate SDPA's requirement that Q, K, V share dtype.
 
-### 4.1 The construction
-
-```
-base       = 1 / θ^{2d/head_dim}              # plain RoPE frequencies
-low, high  = ramp bounds (from beta_fast, beta_slow — see below)
-ramp[d]    = clamp((d − low) / (high − low), 0, 1)     # 0 → 1 across the ramp
-inv_freq[d] = base[d] · (1 − ramp[d])  +  (base[d] / scale_factor) · ramp[d]
-```
-
-- When `ramp[d] = 0` (high-freq end): `inv_freq = base` — unchanged RoPE.
-- When `ramp[d] = 1` (low-freq end): `inv_freq = base / scale_factor` —
-  frequencies divided by 32, so the model "thinks" position 128K is really at
-  4K, i.e. it interpolates the low frequencies into the longer range.
-
-### 4.2 The ramp bounds
-
-```
-low  = floor( (head_dim/2) / log2(original_max / beta_slow · π) )
-high = ceil ( (head_dim/2) / log2(original_max / beta_fast · π) )
-```
-
-`beta_fast` / `beta_slow` define the rotation counts at the ramp's two ends:
-roughly, a dimension is "high-frequency" if it completes ≥ `beta_fast` full
-rotations within `original_max` tokens, and "low-frequency" if it completes ≤
-`beta_slow`. The defaults (`beta_fast=32`, `beta_slow=1`) come from the YaRN
-paper. The ramp is the linear interpolation between those two thresholds.
-
-### 4.3 Degenerate-ramp guard
-
-If `high <= low` (extreme `head_dim`, `original_max`, or `beta` choices that
-collapse the ramp), the function emits a `UserWarning` with the offending
-values and returns a **zero ramp** — i.e. falls back to plain RoPE with *no*
-length extrapolation. This is a loud failure rather than a silent one: a
-degenerate ramp means YaRN is doing nothing, and the model will not extrapolate
-to 128K. Check `beta_fast` / `beta_slow` if it fires. See [`yarn.md`](yarn.md).
-
----
-
-## 5. `compute_yarn_mscale` — the attention-temperature correction
+### 2.3 Pair rotation via `unflatten` / `flip`
 
 ```python
-def compute_yarn_mscale(scale_factor: float) -> float
-    return 0.1 · log(scale_factor) + 1.0      # for scale_factor > 1
+x_pairs = x.unflatten(-1, (-1, 2))       # (..., D/2, 2)
+x_swapped = x_pairs.flip(-1)              # swap pair elements
+x_swapped[..., 0] = -x_swapped[..., 0]   # negate first of swapped
+x_rotated = x_swapped.flatten(-2)
 ```
 
-When the context grows, the softmax in attention sees more keys, so the
-typical attention logit must be rescaled to keep the softmax temperature
-well-conditioned. YaRN multiplies Q and K by `mscale` (equivalently, divides
-the attention logits by `√mscale²`), which compensates for the longer
-extrapolation context. For `scale_factor = 32`: `mscale ≈ 1.346`. The
-`YaRNRoPE` module applies this by scaling `cos`/`sin` (and therefore Q/K) by
-`mscale`. See [`yarn.md`](yarn.md) for the full rationale.
+This implements the complex multiply formulation without explicit complex tensors:
 
----
+\[
+\begin{pmatrix} x'_0 \\ x'_1 \end{pmatrix}
+=
+\begin{pmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{pmatrix}
+\begin{pmatrix} x_0 \\ x_1 \end{pmatrix}
+\]
 
-## 6. `prune_rope` — pruned RoPE on global layers
+Equivalent to:
+
+\[
+x' = x \odot \cos + x_{\text{rotate}} \odot \sin
+\]
+
+where \(x_{\text{rotate}}\) is the "rotate-half" transform: \((-x_1, x_0)\) per pair.
+
+### 2.4 Broadcast over batch and heads
 
 ```python
-def prune_rope(cos, sin, n_pruned_dims) -> (cos, sin)
-    cos_pruned[..., :n_pruned_dims] = 1.0
-    sin_pruned[..., :n_pruned_dims] = 0.0
+while cos_full.dim() < x.dim():
+    cos_full = cos_full.unsqueeze(0)
+    sin_full = sin_full.unsqueeze(0)
 ```
 
-**Pruned RoPE** zeroes out the leading `n_pruned_dims` *lowest-frequency*
-dimensions by setting `cos = 1, sin = 0` — the identity rotation, so those
-dimensions receive **no positional encoding at all**. GPT-OSS applies this on
-global (full-attention) layers only (25% of dims, i.e. `head_dim // 4 = 24`
-dims here).
+`cos`/`sin` start as `(T, D)` after `repeat_interleave`; unsqueeze prepends dims
+until rank matches `x` (typically 4D). Position index aligns with `x.size(-2)`.
 
-The rationale: at 128K context the lowest-frequency dimensions have rotated so
-far that their contribution to the attention score becomes noisy / saturated
-("over-rotation"). Pruning them removes the noise without losing the
-high-frequency local structure. Windowed layers never prune — their context
-is bounded by `window = 128`, so over-rotation is not a concern. See
-[`attention.md`](attention.md) §7.4 and [`yarn.md`](yarn.md).
+### 2.5 Final combine
+
+```python
+return x * cos_full + x_rotated * sin_full
+```
+
+No in-place ops — safe for autograd.
 
 ---
 
-## 7. Design rationale & rejected alternatives
+## 3. Pairwise Rotation Geometry
 
-| Decision | Rationale | Rejected alternative |
-|---|---|---|
-| RoPE (rotary), not additive | Relative position falls out of the dot product for free | Learned additive position embeddings — bake in a max length |
-| Apply inside attention, on Q/K only | RoPE is a Q/K transform; V and the input stream are untouched | Apply to the residual stream — couples position to the FFN |
-| Fused elementwise form | Two multiply-adds, one `repeat_interleave` | Build the `(D,D)` rotation matrix and matmul — `O(D²)` per layer |
-| Half-dim `cos`/`sin` storage | Matches "one angle per pair"; halves storage | Full-dim interleaved — duplicated values |
-| Pruned RoPE on global layers only | Removes over-rotation noise at 128K | Prune everywhere — loses local structure on windowed layers |
-| Loud `UserWarning` on degenerate ramp | Silent fallback = silent loss of extrapolation | Silent identity — model trains, fails at 128K, mystery |
+### 3.1 Why pairs
+
+Head dimension \(D\) splits into \(D/2\) independent 2D rotations. Each pair
+\((x_{2m}, x_{2m+1})\) rotates in its own plane at frequency \(\omega_m\).
+
+### 3.2 Relative position property
+
+RoPE on queries at position \(i\) and keys at position \(j\):
+
+\[
+(R_{\theta_i} q)^\top (R_{\theta_j} k) = q^\top R_{\theta_i}^\top R_{\theta_j} k
+= q^\top R_{\theta_j - \theta_i} k
+\]
+
+Attention scores depend on **relative** offset \(i - j\), not absolute positions
+individually.
+
+### 3.3 `repeat_interleave(2)`
+
+`cos`/`sin` from `YaRNRoPE` have shape `(T, D/2)` — one value per pair. RoPE needs
+one value per scalar dimension:
+
+```python
+cos_full = cos.repeat_interleave(2, dim=-1)  # (T, D)
+```
+
+Pair \(m\) angles apply to both \(x_{2m}\) and \(x_{2m+1}\).
 
 ---
 
-## 8. Edge cases & pitfalls
+## 4. Frequency Bases
 
-- **Odd `head_dim`**: `compute_yarn_freqs` raises `ValueError` — the half-dim
-  convention requires an even `head_dim`. The model config validates this in
-  `ModelConfig.__post_init__`.
-- **`prune_rope` bounds**: passing `n_pruned_dims > head_dim // 2` raises
-  `ValueError` (would prune more dims than exist).
-- **`prune_rope` clones**: it `.clone()`s `cos`/`sin` before overwriting — the
-  caller's tensors (often cached in `YaRNRoPE`) are not mutated. This is a
-  per-call allocation on pruned layers; acceptable because only global layers
-  prune and only on the prefill / decode-1 path.
-- **Device consistency**: `cos`/`sin` are computed on the position tensor's
-  device; `apply_rope` does not move anything. A device mismatch here would
-  surface as an explicit broadcast error, not a silent wrong result.
+### 4.1 Standard RoPE inverse frequencies
+
+For base \(\theta\) (GPT-OSS: `rope_theta = 100000`):
+
+\[
+\text{inv\_freq}_m = \theta^{-2m/D}, \quad m \in \{0, \ldots, D/2 - 1\}
+\]
+
+In code (`compute_yarn_freqs`):
+
+```python
+exponents = torch.arange(0, half, dtype=torch.float32) / half
+base = 1.0 / (theta ** exponents)
+```
+
+Note: exponent uses `m/half` not `2m/D` — equivalent because `half = D/2`.
+
+### 4.2 Wavelength interpretation
+
+Wavelength at pair \(m\) for position increment 1:
+
+\[
+\lambda_m = \frac{2\pi}{\omega_m}
+\]
+
+Low \(m\) → high frequency → short wavelength → local positional sensitivity.
+High \(m\) → low frequency → long wavelength → global positional sensitivity.
+
+### 4.3 Position 0
+
+At \(p = 0\): \(\theta_{0,m} = 0\) → \(\cos=1, \sin=0\) → identity rotation.
+Position 0 is unmodified — useful for sink-adjacent behaviour.
 
 ---
 
-## Implementation notes (extracted from code review)
+## 5. `compute_yarn_freqs`
 
-- **`apply_rope` fused op**: the rotation is computed as
-  `out = x * cos + x_rotated * sin` where `x_rotated` is built by
-  pair-flipping `(a, b) → (b, a)` and negating the first slot. This avoids
-  the `repeat_interleave` allocation for cos/sin on every call (the
-  half-dim cos/sin is duplicated to full head_dim via a single
-  `repeat_interleave` broadcast).
-- **`compute_yarn_freqs` degenerate-ramp warning**: when `high <= low` the
-  ramp is degenerate; the function emits a `UserWarning` and falls back to
-  identity (zero ramp). See `documentation/yarn.md` for details.
-- **`prune_rope` convention**: zeroes the leading `n_pruned_dims` cos/sin
-  dims by setting `cos=1.0, sin=0.0` (identity rotation), so those
-  dimensions receive no positional encoding. Used on global (full-attention)
-  layers to reduce over-rotation at 128K.
+Full implementation in `models/rotary.py`. Returns `inv_freq` tensor of shape
+`(head_dim // 2,)`.
 
-<!-- docs:verified 2026-07-31 · fd4fe36 -->
+### 5.1 Algorithm summary
+
+1. Compute base RoPE frequencies `base`.
+2. Compute ramp boundaries `low`, `high` from `original_max_seq_len`, `beta_fast`, `beta_slow`.
+3. Build linear ramp \(\gamma_m\) from `low` to `high`.
+4. Blend: `inv_freq = base * (1 - ramp) + (base / scale_factor) * ramp`.
+
+See [yarn.md §5](yarn.md#5-frequency-computation) for parameter table and degenerate
+ramp handling.
+
+### 5.2 Validation
+
+```python
+if head_dim % 2 != 0:
+    raise ValueError(f"head_dim must be even, got {head_dim}")
+if original_max_seq_len <= 0 or target_seq_len <= 0:
+    raise ValueError(...)
+```
+
+---
+
+## 6. `compute_yarn_mscale`
+
+```python
+def compute_yarn_mscale(scale_factor: float) -> float:
+    if scale_factor <= 1.0:
+        return 1.0
+    return 0.1 * math.log(scale_factor) + 1.0
+```
+
+Multiplies all cos/sin values in `YaRNRoPE.forward`. Compensates for attention
+logit magnitude change when frequencies are compressed.
+
+For \(s = 32\): mscale \(\approx 1.347\).
+
+---
+
+## 7. Interaction with YaRN
+
+### 7.1 Data flow
+
+```
+compute_yarn_freqs()  ──► inv_freq buffer (48,)
+        │
+        ▼
+YaRNRoPE.forward(positions, n_pruned_dims)
+        │
+        ├─ freqs = outer(positions, inv_freq)
+        ├─ cos, sin = freqs.cos/sin * mscale
+        ├─ [optional] prune first n_pruned_dims pairs
+        │
+        ▼
+apply_rope(Q or K, cos, sin)
+```
+
+### 7.2 Pruning effect on rotation
+
+When `n_pruned_dims > 0` (global layers only):
+
+```python
+cos[:, :n_pruned_dims] = 1.0
+sin[:, :n_pruned_dims] = 0.0
+```
+
+Lowest-frequency pairs become identity — equivalent to not rotating those
+subspaces. `apply_rope` is unaware of pruning; it receives modified cos/sin.
+
+### 7.3 Training vs inference positions
+
+- **Prefill:** `positions = torch.arange(T)` → cos/sin shape `(T, half)`.
+- **Decode:** `positions = torch.tensor([cur_pos - 1])` → shape `(1, half)`.
+
+Same `inv_freq` table; only position values change.
+
+---
+
+## 8. Dtype and SDPA Contract
+
+### 8.1 Why BF16 matters
+
+GPT-OSS trains in BF16. If `apply_rope` promoted Q/K to FP32:
+
+```python
+# BAD — would break SDPA dtype contract
+return (x.float() * cos + x_rotated.float() * sin).to(x.dtype)
+```
+
+SDPA requires `query_states.dtype == key_states.dtype == value_states.dtype`.
+
+### 8.2 cos/sin precision
+
+Frequencies computed in FP32; cos/sin in FP32; cast to BF16 at multiply time.
+Sufficient precision for angles up to 128K positions with YaRN scaling.
+
+---
+
+## 9. Broadcasting Rules
+
+`apply_rope` alignment requirements:
+
+| `x` dim | `cos`/`sin` dim after unsqueeze |
+|---------|--------------------------------|
+| `(B, H, T, D)` | `(1, 1, T, D)` |
+
+Position dimension `-2` of `x` must equal `T` in `cos`/`sin`.
+
+Batch and head broadcast freely — same cos/sin table shared across all heads in a
+layer (head-agnostic positional encoding).
+
+---
+
+## 10. Worked Example
+
+**Setup:** `D=4` (2 pairs), `B=1`, `H=1`, `T=1`, position `p=1`, \(\theta=100000\).
+
+### 10.1 Frequencies
+
+\[
+\omega_0 = 1.0, \quad \omega_1 = 100000^{-1/2} \approx 0.00316
+\]
+
+### 10.2 Angles at position 1
+
+\[
+\theta_0 = 1.0 \text{ rad}, \quad \theta_1 \approx 0.00316 \text{ rad}
+\]
+
+### 10.3 cos/sin (before mscale)
+
+\[
+\cos_0 \approx 0.540, \quad \sin_0 \approx 0.841
+\]
+
+### 10.4 Rotation of pair 0
+
+For \((x_0, x_1)\):
+
+\[
+x'_0 = x_0 \cos\theta_0 - x_1 \sin\theta_0
+\]
+\[
+x'_1 = x_0 \sin\theta_0 + x_1 \cos\theta_0
+\]
+
+`apply_rope` computes this via the `unflatten`/`flip` path — numerically equivalent.
+
+---
+
+## 11. Comparison with Absolute PE
+
+| Property | Absolute sinusoidal PE | RoPE |
+|----------|------------------------|------|
+| Applied to | Input embeddings | Q and K only |
+| Position in score | Absolute | Relative |
+| KV cache | Must store position offset | Rotate Q at decode; K pre-rotated |
+| Extrapolation | Poor beyond train length | YaRN extends |
+
+GPT-OSS caches **rotated** K in `MixedKVCache` — see
+[attention.md §12](attention.md#12-inference-integration).
+
+---
+
+## 12. Implementation Notes
+
+### 12.1 No learned RoPE parameters
+
+`inv_freq` is a fixed buffer from hyperparameters. Position generalisation is
+entirely in the frequency table design (YaRN ramp), not learned embeddings.
+
+### 12.2 `head_dim` must be even
+
+Odd `head_dim` raises `ValueError` in both `compute_yarn_freqs` and `YaRNRoPE`.
+Production config uses `head_dim=96`.
+
+### 12.3 Relation to standard `rope` in other repos
+
+Some implementations use `torch.polar` or complex multiplication. This repo uses
+the rotate-half trick — fewer dependencies, identical math, better `torch.compile`
+compatibility.
+
+### 12.4 Import paths
+
+```python
+from models.rotary import apply_rope, compute_yarn_freqs, compute_yarn_mscale
+```
+
+`models/attention.py` imports `apply_rope` from `models.rotary`.
+`models/yarn.py` imports freq helpers from `models.rotary`.
+
+---
+
+## Related Documentation
+
+- [yarn.md](yarn.md) — `YaRNRoPE` module, pruning, config
+- [attention.md](attention.md) — where RoPE sits in the forward path
+- [ATTENTION_SINKS.md](ATTENTION_SINKS.md) — sinks independent of RoPE
+
+---
+
+<!-- docs:verified 2026-07-31 · fa6f918 -->

@@ -1,372 +1,669 @@
-# Attention Mechanisms in GPT-OSS-Lite
+# Attention Module — Implementation Walkthrough
 
-> **Source:** `models/attention.py`
-> **Authoritative companion:** [`ATTENTION_SINKS.md`](ATTENTION_SINKS.md) — the
-> theoretical deep-dive on the learned sink bias. This file documents the
-> *implementation*; that file documents the *idea*. It now lives alongside this
-> file in `documentation/`.
+> Line-level guide to `models/attention.py`. For the conceptual deep dive on sink
+> bias and SWA/full alternation, see [ATTENTION_SINKS.md](ATTENTION_SINKS.md).
+> Positional encoding is covered in [yarn.md](yarn.md) and [rotary.md](rotary.md).
 
 ---
 
-## 1. Overview
+## Table of Contents
 
-Attention is the load-bearing component of GPT-OSS-Lite — it is where the model's
-two headline innovations live: **sliding-window / full attention alternation**
-(which delivers the 2× KV-cache reduction at 128K context) and the **learned
-attention-sink bias** (which stabilises long-context attention). This module
-exposes three layers of API, from low-level reference kernels up to the full
-`nn.Module`:
-
-1. **`manual_causal_attention`** — a naive, explicit `O(T²)` reference
-   implementation. It is *not* on any production path; it exists so the test suite
-   can check the SDPA fast paths against ground truth that is obviously correct.
-   It supports the sink bias and an optional sliding-window mask.
-2. **`sliding_window_attention` / `full_causal_attention`** — the production
-   paths, built on `F.scaled_dot_product_attention` (SDPA). Each supports the
-   learned sink bias, and `sliding_window_attention` takes a bounded window.
-3. **`GPTOSSAttention`** — the `nn.Module` a block actually instantiates. It
-   wires together GQA projections, the YaRN RoPE, the per-head sink-bias
-   parameter, and the **alternating layer pattern** (even layers slide, odd
-   layers attend globally).
-
-The split is deliberate: keeping the reference path separate from the
-optimised path means correctness regressions in the SDPA code are caught by a
-comparison against something a human can read line-by-line, not against another
-fused kernel.
+1. [Module Overview](#1-module-overview)
+2. [Constants and Imports](#2-constants-and-imports)
+3. [`manual_causal_attention`](#3-manual_causal_attention)
+4. [Mask Helpers](#4-mask-helpers)
+5. [`causal_attention`](#5-causal_attention)
+6. [Sink Path: SDPA with Zero K/V Column](#6-sink-path-sdpa-with-zero-kv-column)
+7. [`repeat_kv` — GQA Head Expansion](#7-repeat_kv--gqa-head-expansion)
+8. [`GPTOSSAttention`](#8-gptossattention)
+9. [Forward Path Trace](#9-forward-path-trace)
+10. [Shape Reference](#10-shape-reference)
+11. [SDPA Backend Notes](#11-sdpa-backend-notes)
+12. [Inference Integration](#12-inference-integration)
+13. [Config Knobs](#13-config-knobs)
+14. [Common Pitfalls](#14-common-pitfalls)
 
 ---
 
-## 2. The math each path implements
+## 1. Module Overview
 
-### 2.1 Plain scaled dot-product attention
-
-For query/key/value tensors `Q, K, V ∈ ℝ^{B×H×T×D}`:
+`models/attention.py` implements the complete attention stack for GPT-OSS-Lite:
 
 ```
-scores  = (Q · Kᵀ) / √D                      # (B, H, T, T)
-attn    = softmax(scores)                     # row-wise, over the key axis
-out     = attn · V                            # (B, H, T, D)
+Input x (B, T, d_model)
+    │
+    ├─ q_proj ──► Q (B, H, T, D)
+    ├─ kv_proj ─► K, V (B, H_kv, T, D) ──► repeat_kv ──► (B, H, T, D)
+    │
+    ├─ YaRNRoPE(positions) ──► cos, sin
+    ├─ apply_rope(Q), apply_rope(K)          [rotary.py]
+    │
+    ├─ clamp(sink_bias)  [optional]
+    └─ causal_attention(Q, K, V, window?, sink_bias?)
+           │
+           └─ o_proj ──► (B, T, d_model)
 ```
 
-Causal masking sets `scores[i, j] = -∞` for `j > i` so a position cannot attend
-to the future. The `1/√D` factor keeps the pre-softmax scores in a sane range
-as `D` grows (here `D = head_dim = 96`, so `√D ≈ 9.8`).
-
-### 2.2 Sliding-window attention (SWA)
-
-SWA adds a second mask on top of causality: position `i` may only attend to
-keys in `[i − window + 1, i]`. For `window = 128` and `T ≫ 128`, each query row
-has at most 128 finite entries. This is what makes the windowed layers' KV
-cache bounded by `window` rather than `T` — the architectural claim of GPT-OSS.
-
-```
-mask[i, j] = -∞  if  j > i              (causality)
-mask[i, j] = -∞  if  i − j ≥ window      (sliding window)
-```
-
-### 2.3 The learned sink bias (off-by-one / StreamingLLM trick)
-
-The sink bias is a per-head scalar `s_h` (one float per query head, `H = 8`
-values total). It is injected into the softmax *denominator* as if there were
-an extra "virtual" key whose pre-softmax logit is `s_h`:
-
-```
-Z          = exp(s_h) + Σ_j exp(scores[i, j])     # augmented denominator
-attn[i, j] = exp(scores[i, j]) / Z
-```
-
-Equivalently, append a synthetic `(sink_key, sink_value)` pair — with the
-key's logit set to `s_h` and its value zeroed — and let the normal softmax
-absorb it. The synthetic value being zero means the sink contributes mass to
-the denominator (lowering all other weights uniformly) but adds nothing to the
-numerator-weighted output. This is the StreamingLLM / "off-by-one" trick:
-the sink absorbs the otherwise-unbound "null attention" mass that the
-first few positions accumulate in a causal LM, which is what destabilises
-naive long-context extrapolation. The GPT-OSS twist is that `s_h` is
-**learned** (initialised to 0, trained by backprop) rather than fixed.
-
-### 2.4 Grouped Query Attention (GQA)
-
-`n_heads = 8` query heads share `n_kv_heads = 4` key/value heads, so each KV
-head serves `n_rep = 8 / 4 = 2` query heads. This halves the KV-cache size and
-the KV-bandwidth pressure of attention without measurably hurting quality at
-this scale. `repeat_kv` broadcasts each KV head to its `n_rep` query heads.
+There is a single module class `GPTOSSAttention` — not separate SWA/Full classes.
+Layer behaviour is selected by `is_windowed = (layer_idx % 2 == 0)`.
 
 ---
 
-## 3. `manual_causal_attention` — the reference path
+## 2. Constants and Imports
 
 ```python
-def manual_causal_attention(query_states, key_states, value_states,
-                             sink_bias=None, window=None) -> torch.Tensor
+from models.yarn import YaRNRoPE
+from models.rotary import apply_rope
+
+SINK_CLAMP_MIN = -10.0
+SINK_CLAMP_MAX = 15.0
 ```
 
-A literal implementation of §2. It computes scores in **FP32** regardless of
-the input dtype (`query_states.float() @ key_states.float().transpose(-2, -1)`),
-builds the causal mask with `torch.triu`, optionally applies the sliding-window
-mask, then either runs `F.softmax` directly or — when a sink bias is given —
-concatenates a `(B, H, T, 1)` sink-logit column onto the scores, runs softmax
-over the augmented `(T+1)` columns, and slices back to the first `T` columns
-before multiplying by `V`.
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `SINK_CLAMP_MIN` | -10.0 | Forward clamp lower bound |
+| `SINK_CLAMP_MAX` | 15.0 | Forward clamp upper bound |
 
-**Why FP32 here?** Under BF16 inputs, the score matmul and softmax are the two
-places where catastrophic cancellation and underflow bite. SDPA handles this
-internally; the manual path does not, so it upcasts explicitly. The final
-`attn · V` matmul is cast back to `value_states.dtype` so the output dtype
-matches the production path. This is the reference path used by
-`tests/test_attention.py` to certify the SDPA paths.
+Clamping prevents BF16 SDPA mask-add overflow. See
+[ATTENTION_SINKS.md §6](ATTENTION_SINKS.md#6-bf16-clamp-rationale).
 
 ---
 
-## 4. `sliding_window_attention` — the SWA production path
+## 3. `manual_causal_attention`
 
 ```python
-def sliding_window_attention(query_states, key_states, value_states,
-                              window=128, sink_bias=None) -> torch.Tensor
+def manual_causal_attention(
+    query_states: torch.Tensor,   # (B, H, T, D)
+    key_states: torch.Tensor,     # (B, H, T, D)
+    value_states: torch.Tensor,   # (B, H, T, D)
+    sink_bias: torch.Tensor | None = None,  # (H,)
+    window: int | None = None,
+) -> torch.Tensor:               # (B, H, T, D)
 ```
 
-Built on `F.scaled_dot_product_attention` (SDPA), which dispatches to
-FlashAttention / memory-efficient fused kernels on CUDA and a math fallback on
-CPU. Two sub-paths:
+**Purpose:** Naive \(O(T^2)\) attention for tests and numerical oracle. Not used in
+training or inference hot paths.
 
-### 4.1 No sink bias — pure SWA via cached mask
-
-When `sink_bias is None` and `T_q == T_k` (training), the call reuses
-`_get_sliding_window_mask(T, window, device, dtype)` and passes it as
-`attn_mask`. SDPA's native `is_causal` path is *not* used here because the
-sliding window is stricter than plain causality; instead the full
-causal-and-window mask is precomputed once and cached (see OPT-1 in
-[`OPTIMIZATIONS.md`](OPTIMIZATIONS.md)).
-
-For the cross-attention case (`T_q < T_k`, as during cached decode), the query
-position is treated as `T_k − 1` (the most recent key) and the window mask is
-built on the fly — the cached mask key assumes self-attention.
-
-### 4.2 With sink bias — virtual sink key + cached base mask
-
-The sink case physically extends the K/V sequence with a synthetic
-`(B, H, 1, D)` pair — `sink_k = 0`, `sink_v = 0` — so SDPA's softmax naturally
-incorporates `exp(s_h)` into the denominator. The attention mask becomes
-`(H, T_q, T_k + 1)`: the first `T_k` columns are the cached causal+window base
-mask (zeros in the sink column), and the last column holds the per-head sink
-logit, overwritten on each call from the live `sink_bias`:
+### 3.1 Score computation (FP32)
 
 ```python
-mask_with_sink = mask.clone()
-mask_with_sink[:, :, T_k] = sink_bias.to(q_dtype).unsqueeze(1).expand(H, T_q)
+B, H, T, D = query_states.shape
+scores = (query_states.float() @ key_states.float().transpose(-2, -1)) / math.sqrt(D)
 ```
 
-The clone is the only per-call allocation; the base mask is reused across
-calls (OPT-3). This is what makes the sink path only ~5% slower than the
-no-sink path at production scale rather than ~30%.
+Scores are computed in FP32 regardless of input dtype. This is a project
+numerical-stability rule — BF16 matmul on scores can accumulate error in long
+sequences.
+
+Result shape: `(B, H, T, T)`.
+
+### 3.2 Causal mask
+
+```python
+causal = torch.triu(torch.ones(T, T, dtype=torch.bool, device=...), diagonal=1)
+scores = scores.masked_fill(causal, float("-inf"))
+```
+
+`causal[i, j] = True` when `j > i` (future positions). Masked positions become
+\(-\infty\) so softmax assigns zero weight.
+
+### 3.3 Sliding-window mask
+
+```python
+if window is not None and window < T:
+    idx = torch.arange(T, device=...)
+    outside = idx.unsqueeze(0) - idx.unsqueeze(1) >= window
+    scores = scores.masked_fill(outside, float("-inf"))
+```
+
+For query index `i` and key index `j`: masked when `i - j >= window`.
+Combined with causal mask, allowed keys satisfy `j \le i` and `i - j < window`.
+
+When `window >= T`, the window constraint is vacuous — behaves as full causal.
+
+### 3.4 Sink augmentation
+
+```python
+if sink_bias is not None:
+    sink_logit = sink_bias.view(1, H, 1, 1).to(scores.dtype)
+    augmented = torch.cat([scores, sink_logit.expand(B, H, T, 1)], dim=-1)
+    attn_weights = F.softmax(augmented, dim=-1)
+    attn_weights = attn_weights[..., :T]
+    return (attn_weights.to(value_states.dtype) @ value_states)
+```
+
+Steps:
+
+1. Reshape `sink_bias` from `(H,)` to broadcastable `(1, H, 1, 1)`.
+2. Concatenate along key dimension → shape `(B, H, T, T+1)`.
+3. Softmax over all `T+1` columns.
+4. **Strip** sink column → `(B, H, T, T)`.
+5. Matmul with `value_states` — sink's zero value never enters because its weight
+   was removed.
+
+When `sink_bias is None`:
+
+```python
+attn_weights = F.softmax(scores, dim=-1)
+return (attn_weights.to(value_states.dtype) @ value_states)
+```
 
 ---
 
-## 5. `full_causal_attention` — the global-attention production path
+## 4. Mask Helpers
+
+Two cached functions build boolean masks for the SDPA path.
+
+### 4.1 `_causal_mask`
 
 ```python
-def full_causal_attention(query_states, key_states, value_states,
-                           sink_bias=None) -> torch.Tensor
+@functools.lru_cache(maxsize=None)
+def _causal_mask(T: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    idx = torch.arange(T, device=device)
+    return idx.unsqueeze(1) >= idx.unsqueeze(0)  # (T, T)
 ```
 
-Three sub-paths, in order:
-1. **No sink, self-attention** (`T_q == T_k`): the cheapest possible call —
-   `SDPA(..., is_causal=True)` lets the kernel build the causal mask internally
-   with no Python mask tensor at all.
-2. **No sink, cross-attention** (`T_q < T_k`, cached decode): plain SDPA with no
-   mask — the cache is already causal by construction, so no masking is needed.
-3. **Sink bias (any shape):** delegates to `sliding_window_attention` with
-   `window = max(T_q, T_k)`. With a window at least as large as the sequence, the
-   sliding-window mask degenerates to plain causality, so this reuses the
-   well-tested sink+mask code path instead of maintaining a second sink
-   implementation.
+Returns `True` where attention is **allowed** (lower-triangular including diagonal).
+Opposite convention from `manual_causal_attention` (which masks `True` = forbidden).
 
-This is why global (odd) layers are *more* expensive than windowed layers at
-long context: they cache the full `T` keys, while windowed layers cap at
-`window = 128`.
+Shape: `(T_q, T_k)` when square; used for prefill where `T_q == T_k`.
+
+### 4.2 `_window_mask`
+
+```python
+@functools.lru_cache(maxsize=None)
+def _window_mask(T_q, T_k, window, device, dtype) -> torch.Tensor:
+```
+
+**Prefill branch** (`T_q == T_k`):
+
+```python
+idx = torch.arange(T_q, device=device)
+return (idx.unsqueeze(0) - idx.unsqueeze(1) < window) & _causal_mask(T_q, device, dtype)
+```
+
+**Decode branch** (`T_q = 1`, `T_k` = cached length):
+
+```python
+idx_q = torch.tensor([T_k - 1], device=device)
+idx_k = torch.arange(T_k, device=device)
+return (idx_q.unsqueeze(-1) - idx_k.unsqueeze(0) < window)
+```
+
+Decode assumes a single new query at position `T_k - 1` attending to cached keys
+`0 .. T_k-1`. No separate causal check needed — all cached keys are in the past.
+
+### 4.3 Cache key semantics
+
+`lru_cache` keys on `(T, device, dtype)` or `(T_q, T_k, window, device, dtype)`.
+Changing device or dtype misses cache (expected). `maxsize=None` — unbounded cache;
+typical training sees few distinct `(T, window)` pairs per run.
 
 ---
 
-## 6. `repeat_kv` — the GQA broadcast helper
+## 5. `causal_attention`
 
 ```python
-def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor
+def causal_attention(
+    query_states: torch.Tensor,   # (B, H, T_q, D)
+    key_states: torch.Tensor,     # (B, H, T_k, D)
+    value_states: torch.Tensor,   # (B, H, T_k, D_v)
+    window: int | None = None,
+    sink_bias: torch.Tensor | None = None,  # (H,)
+) -> torch.Tensor:               # (B, H, T_q, D_v)
 ```
 
-Broadcasts each of the `H_kv` KV heads to `n_rep` query heads via
-`expand + reshape`. The deliberately dropped `.contiguous()` (OPT-2) is the
-whole point of this function's existence as a named helper: SDPA's flash path
-operates on strided tensors and calls `.contiguous()` internally *only when
-needed*, so the previous `expand + reshape + contiguous()` was allocating a
-fresh `(B, H_kv × n_rep, T, D)` tensor on every forward — 12 times per step —
-for nothing. The current version hands SDPA a view it can fuse into the
-underlying matmul. A tiny `.contiguous()` is retained only on the no-sink
-training path where SDPA's own internal copy would dominate anyway.
+Production attention via `F.scaled_dot_product_attention`. Supports rectangular
+`T_q \ne T_k` for decode.
+
+### 5.1 Fast path: no sink, no window
+
+```python
+if sink_bias is None:
+    if window is None:
+        if T_q == T_k:
+            return F.scaled_dot_product_attention(
+                query_states, key_states, value_states, is_causal=True
+            )
+        return F.scaled_dot_product_attention(
+            query_states, key_states, value_states
+        )
+```
+
+- Square + causal → `is_causal=True` enables Flash Attention fusion.
+- Rectangular without causal flag → caller responsible for mask semantics
+  (decode with only past keys in cache).
+
+### 5.2 Window path without sink
+
+```python
+if T_q == T_k:
+    mask = _causal_mask(T_q, device, dtype) & _window_mask(T_q, T_k, window, device, dtype)
+else:
+    mask = _window_mask(T_q, T_k, window, device, dtype)
+
+attn_mask = torch.where(mask, 0.0, float("-inf")).to(dtype).unsqueeze(0).unsqueeze(0)
+return F.scaled_dot_product_attention(query_states, key_states, value_states, attn_mask=attn_mask)
+```
+
+Boolean allowed-mask → additive mask: `0.0` (pass) or `-inf` (block).
+Batch/head dims added via `unsqueeze(0).unsqueeze(0)` → broadcast `(1, 1, T_q, T_k)`.
+
+### 5.3 Branch summary
+
+| `sink_bias` | `window` | Path |
+|-------------|----------|------|
+| `None` | `None` | `is_causal=True` or bare SDPA |
+| `None` | set | Cached boolean → `where(0, -inf)` mask |
+| set | `None`/set | Sink K/V extension + head-specific mask |
 
 ---
 
-## 7. `GPTOSSAttention` — the layer module
+## 6. Sink Path: SDPA with Zero K/V Column
+
+When `sink_bias is not None`:
+
+### 6.1 Extend K and V
+
+```python
+sink_k = torch.zeros(B, H, 1, query_states.shape[-1], device=device, dtype=dtype)
+sink_v = torch.zeros(B, H, 1, value_states.shape[-1], device=device, dtype=value_states.dtype)
+k_ext = torch.cat([key_states, sink_k], dim=2)   # (B, H, T_k+1, D)
+v_ext = torch.cat([value_states, sink_v], dim=2)
+```
+
+The sink key is all zeros → dot product \(q \cdot k_{\text{sink}} = 0\). The learned
+bias enters **only** through the attention mask, not through K.
+
+### 6.2 Build causal/window base
+
+```python
+if window is None or window >= T_k:
+    causal = _causal_mask(T_q, device, dtype) if T_q == T_k \
+        else torch.ones(T_q, T_k, dtype=torch.bool, device=device)
+elif T_q == T_k:
+    causal = _causal_mask(T_q, device, dtype) & _window_mask(T_q, T_k, window, device, dtype)
+else:
+    causal = _window_mask(T_q, T_k, window, device, dtype)
+```
+
+When `window >= T_k`, window constraint is inactive — only causal (or all-ones for decode).
+
+### 6.3 Assemble head-specific mask
+
+```python
+mask = torch.zeros(H, T_q, T_k + 1, device=device, dtype=dtype)
+mask[:, :, :T_k] = causal.to(dtype)
+mask[:, :, T_k] = sink_bias.to(dtype).unsqueeze(1).expand(H, T_q)
+return F.scaled_dot_product_attention(query_states, k_ext, v_ext, attn_mask=mask.unsqueeze(0))
+```
+
+Mask layout:
+
+| Column range | Value | Meaning |
+|--------------|-------|---------|
+| `0 .. T_k-1` | `1.0` if allowed, `0.0` if forbidden | Boolean `causal` cast to float |
+| `T_k` (sink) | `sink_bias[h]` | Per-head learned logit |
+
+**Important:** The non-sink window path uses `torch.where(mask, 0.0, -inf)` to block
+forbidden positions. The sink path uses `causal.to(dtype)` (`1.0`/`0.0`) instead.
+These conventions differ — when validating sink behaviour, compare against
+`manual_causal_attention` (the test oracle), not against the no-sink SDPA path.
+
+The sink column receives `sink_bias[h]` directly — this is the logit added to
+\(q \cdot k_{\text{sink}} / \sqrt{d} = 0\), equivalent to the concat-and-softmax
+formulation in `manual_causal_attention`.
+
+Output shape: `(B, H, T_q, D_v)` — unchanged from input value head dimension.
+
+---
+
+## 7. `repeat_kv` — GQA Head Expansion
+
+Grouped-query attention (GQA) uses fewer KV heads than Q heads:
+
+| Config field | Default | Meaning |
+|--------------|---------|---------|
+| `n_heads` | 8 | Query heads \(H\) |
+| `n_kv_heads` | 4 | Key/value heads \(H_{\text{kv}}\) |
+| `n_rep` | `n_heads // n_kv_heads` | Replication factor (2) |
+
+```python
+def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
+    if n_rep == 1:
+        return x
+    B, H_kv, T, D = x.shape
+    x = x[:, :, None, :, :]           # (B, H_kv, 1, T, D)
+    x = x.expand(B, H_kv, n_rep, T, D) # no memory copy
+    return x.reshape(B, H_kv * n_rep, T, D)
+```
+
+### 7.1 Why `expand` not `repeat_interleave`
+
+`expand` creates a broadcast view — no `.contiguous()` copy. SDPA's Flash Attention
+backend handles non-contiguous K/V internally. This saves memory bandwidth during
+both training and inference.
+
+### 7.2 Head mapping
+
+KV head `h_kv` maps to Q heads `2*h_kv` and `2*h_kv + 1` when `n_rep=2`.
+Each pair shares identical K/V after `repeat_kv`.
+
+---
+
+## 8. `GPTOSSAttention`
 
 ```python
 class GPTOSSAttention(nn.Module):
-    def __init__(self, cfg: dict, layer_idx: int)
-    def forward(self, x, positions=None) -> torch.Tensor
+    def __init__(self, cfg, layer_idx: int):
 ```
 
-### 7.1 Projections
-
-A fused `kv_proj` produces both K and V in one matmul
-(`2 * n_kv_heads * head_dim` output features, then split along the feature
-axis), and separate `q_proj` / `o_proj` linears. No biases anywhere — the
-GPT-OSS convention, and a small parameter saving.
-
-### 7.2 The alternating layer pattern
+### 8.1 Construction
 
 ```python
 self.is_windowed = (layer_idx % 2 == 0)
+self.prune_rope_global = bool(getattr(cfg, "yarn_prune_rope_global", True))
+self.n_rep = self.n_heads // self.n_kv_heads
+
+self.q_proj = nn.Linear(d_model, n_heads * head_dim, bias=False)
+self.kv_proj = nn.Linear(d_model, 2 * n_kv_heads * head_dim, bias=False)
+self.o_proj = nn.Linear(n_heads * head_dim, d_model, bias=False)
 ```
 
-- **Even layers (0, 2, 4, …) → sliding-window attention** (`window = 128`).
-- **Odd layers (1, 3, 5, …) → full causal attention.**
+Fused `kv_proj` emits K and V in one matmul — halves KV projection kernel launches
+vs separate `k_proj`/`v_proj`.
 
-The alternation is the architectural headline: half the layers' KV caches are
-bounded by `window`, the other half grow with `T`. At 128K context this is
-exactly a 2× cache reduction versus pure full-attention GQA (verified by
-`scripts/kv_cache_benchmark.py`). A pure-SWA stack would be cheaper still but
-loses global information flow; the alternation gives every token a path to the
-global layers within two hops, preserving long-range signal.
-
-### 7.3 The sink-bias parameter and its forward-time clamp
+### 8.2 Sink parameter
 
 ```python
-self._sink_clamp_min = -10.0
-self._sink_clamp_max =  15.0
-self.sink_bias = nn.Parameter(torch.zeros(self.n_heads))   # one scalar per head
+if cfg.sink_bias:
+    self.sink_bias = nn.Parameter(torch.zeros(self.n_heads))
+else:
+    self.register_parameter("sink_bias", None)
 ```
 
-The sink bias is initialised to **0** (so the sink starts disabled —
-`exp(0) = 1` just adds a uniform constant to the denominator) and trained by
-backprop. In `forward`, the *trained* parameter is left untouched (its gradient
-flows normally) but a **detached, clamped copy** is what actually enters the
-attention math:
+When disabled, `causal_attention` takes the fast no-sink paths.
+
+### 8.3 YaRN module
 
 ```python
-sink_bias_clamped = self.sink_bias.clamp(self._sink_clamp_min, self._sink_clamp_max)
+self.yarn = YaRNRoPE(
+    head_dim=self.head_dim,
+    theta=cfg.rope_theta,
+    scale_factor=cfg.yarn_scale_factor,
+    original_max_seq_len=cfg.yarn_original_max_seq_len,
+    target_seq_len=cfg.yarn_target_seq_len,
+    beta_fast=cfg.yarn_beta_fast,
+    beta_slow=cfg.yarn_beta_slow,
+    mscale=cfg.yarn_mscale,
+)
 ```
 
-The clamp bounds are chosen for BF16 safety:
-- `exp(+15) ≈ 3.27 × 10⁶` — the largest power-of-e sink that stays comfortably
-  inside BF16's `~3.4 × 10⁷` max representable value, with headroom for the
-  `Σ exp(scores)` term that shares the denominator.
-- `exp(−10) ≈ 4.5 × 10⁻⁵` — small enough to act as a *disabled* sink (its
-  contribution to the denominator is negligible), the floor below which a
-  learned sink is effectively off.
+See [yarn.md](yarn.md) for parameter semantics.
 
-This is a **forward-only numerical-stability guard against BF16 SDPA mask-add
-overflow**, not a regulariser — the unclamped `nn.Parameter` keeps its gradient
-so the optimiser still sees the true value. See [`ATTENTION_SINKS.md`](ATTENTION_SINKS.md)
-for the full theoretical treatment of *why* the sink needs this guard.
-
-### 7.4 Pruned RoPE on global layers
+### 8.4 Pruned RoPE helper
 
 ```python
-n_pruned_dims = 0
-if (not self.is_windowed) and cfg.get("yarn_prune_rope_global", True):
-    n_pruned_dims = self.head_dim // 4      # 25% of dims on global layers
+def _n_pruned_dims(self) -> int:
+    if (not self.is_windowed) and self.prune_rope_global:
+        return self.head_dim // 4
+    return 0
 ```
 
-Global (odd) layers zero out the lowest-frequency 25% of RoPE dimensions (set
-`cos=1, sin=0` → identity rotation), reducing over-rotation at 128K context.
-Windowed layers never prune. See [`yarn.md`](yarn.md) and [`rotary.md`](rotary.md).
+Returns number of frequency **pairs** to prune (not individual dims). For
+`head_dim=96` → 24 pairs → 48 scalar dimensions frozen to identity rotation.
 
-### 7.5 Forward flow
+Applied only on **global** (odd-indexed) layers when `yarn_prune_rope_global=True`.
 
+### 8.5 `extra_repr`
+
+```python
+def extra_repr(self) -> str:
+    mode = "SWA" if self.is_windowed else "Full"
+    ...
 ```
-x (B,T,d_model)
-  │ q_proj → (B,T, n_heads·head_dim) → transpose → (B,H,T,D)   [Q]
-  │ kv_proj → split → (B,H_kv,T,D) × 2                           [K,V]
-  │ YaRNRoPE(positions, n_pruned) → (cos, sin)
-  │ apply_rope(Q, cos, sin); apply_rope(K, cos, sin)
-  │ repeat_kv(K, n_rep); repeat_kv(V, n_rep)                     [GQA broadcast]
-  │ sink_bias.clamp(-10, 15)                                     [stability guard]
-  │ → sliding_window_attention  (if is_windowed)
-  │ → full_causal_attention      (else)
-  ▼
-  o_proj → (B,T,d_model)
-```
+
+Example: `layer=0 (SWA), H=8/4, D=96, window=128`.
 
 ---
 
-## 8. Design rationale & rejected alternatives
+## 9. Forward Path Trace
 
-| Decision | Rationale | Rejected alternative |
-|---|---|---|
-| Two attention paths (manual + SDPA) | Test the fused kernel against auditable ground truth | One path only — would make correctness bugs invisible |
-| Cached sliding-window mask | Mask shape is invariant during training; rebuild is pure waste | Rebuild per forward — 40% of SWA call time on CPU |
-| Sink bias = virtual key + value 0 | Lets SDPA's fused softmax absorb the sink natively | Manual denominator patch — defeats the point of SDPA |
-| Forward-time clamp on a detached copy | BF16 safety without disturbing the gradient | Clamp the Parameter in place — kills the gradient signal |
-| `repeat_kv` without `.contiguous()` | SDPA accepts strided tensors | Always-contiguous — wastes a full `(B,H,T,D)` copy per layer |
-| Alternating SWA/full (not all-SWA) | Global layers preserve long-range signal | All-SWA stack — cheaper but loses global information |
-| `kv_proj` fused | One matmul instead of two | Separate k_proj/v_proj — 2× the launch overhead |
+Complete `forward(x, positions=None)` execution:
+
+### Step 1 — Positions
+
+```python
+B, T, _ = x.shape
+if positions is None:
+    positions = torch.arange(T, device=x.device)
+```
+
+Default: contiguous positions `0, 1, ..., T-1`. Inference passes explicit positions
+for decode (single position per step).
+
+### Step 2 — Projections
+
+```python
+query_states = self.q_proj(x).view(B, T, self.n_heads, self.head_dim)
+kv = self.kv_proj(x).view(B, T, 2, self.n_kv_heads, self.head_dim)
+key_states, value_states = kv[:, :, 0], kv[:, :, 1]
+```
+
+### Step 3 — Head-major layout
+
+```python
+query_states = query_states.transpose(1, 2)   # (B, H, T, D)
+key_states = key_states.transpose(1, 2)         # (B, H_kv, T, D)
+value_states = value_states.transpose(1, 2)
+```
+
+SDPA expects `(B, H, T, D)`.
+
+### Step 4 — RoPE
+
+```python
+cos, sin = self.yarn(positions, n_pruned_dims=self._n_pruned_dims())
+query_states = apply_rope(query_states, cos, sin)
+key_states = apply_rope(key_states, cos, sin)
+```
+
+`apply_rope` is imported from `models.rotary` — see [rotary.md](rotary.md).
+
+### Step 5 — GQA expansion
+
+```python
+key_states = repeat_kv(key_states, self.n_rep)
+value_states = repeat_kv(value_states, self.n_rep)
+```
+
+### Step 6 — Sink clamp
+
+```python
+if self.sink_bias is not None:
+    sink_bias_clamped = self.sink_bias.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)
+else:
+    sink_bias_clamped = None
+```
+
+### Step 7 — Attention
+
+```python
+out = causal_attention(
+    query_states, key_states, value_states,
+    window=self.window_size if self.is_windowed else None,
+    sink_bias=sink_bias_clamped,
+)
+```
+
+| Layer type | `window` argument | Effect |
+|------------|-------------------|--------|
+| Even (`is_windowed=True`) | `cfg.window_size` (128) | SWA |
+| Odd (`is_windowed=False`) | `None` | Full causal |
+
+### Step 8 — Output projection
+
+```python
+out = out.transpose(1, 2).contiguous().view(B, T, self.n_heads * self.head_dim)
+return self.o_proj(out)
+```
+
+`.contiguous()` before `view` — attention output may be non-contiguous after SDPA.
 
 ---
 
-## 9. Edge cases & pitfalls
+## 10. Shape Reference
 
-- **`window >= T`**: the sliding-window mask degenerates to plain causality.
-  `full_causal_attention`'s sink path relies on exactly this when it delegates
-  to `sliding_window_attention` with `window = max(T_q, T_k)`.
-- **`T_q < T_k` (cached decode)**: the windowed mask builder assumes the query
-  sits at the *most recent* key position (`T_k − 1`). This is correct for
-  autoregressive decode but would be wrong for arbitrary cross-attention — the
-  module is only ever used autoregressively.
-- **Sink-bias cache key**: the SWA+sink mask is keyed by
-  `("sink_swa", T_q, T_k, H, window, device, dtype)`. The sink *value* is not
-  in the key (it varies with training), so the cached base mask has zeros in
-  the sink column and is overwritten per call. If you ever make the sink bias
-  shape-dependent in a new way, update the key.
-- **`attn_impl: "manual"`** in the config routes the production path through
-  `manual_causal_attention` instead of SDPA. This is ~10× slower and exists
-  only for debugging — never ship it.
+Assume production config: `B=1`, `T=4096`, `H=8`, `H_kv=4`, `D=96`, `d_model=768`.
+
+| Tensor | Shape | Notes |
+|--------|-------|-------|
+| `x` | `(B, T, 768)` | Input |
+| `q_proj(x)` | `(B, T, 768)` | `8 * 96` |
+| `query_states` (head-major) | `(B, 8, T, 96)` | After transpose |
+| `kv_proj(x)` | `(B, T, 768)` | `2 * 4 * 96` |
+| `key_states` (pre-repeat) | `(B, 4, T, 96)` | |
+| `key_states` (post-repeat) | `(B, 8, T, 96)` | GQA |
+| `cos`, `sin` | `(T, 48)` | `head_dim // 2` pairs |
+| `sink_bias` | `(8,)` | Per Q head |
+| `causal_attention` out | `(B, 8, T, 96)` | |
+| `o_proj` out | `(B, T, 768)` | |
+
+Decode step: `T_q=1`, `T_k` = cached length, shapes analogous with `T` replaced.
 
 ---
 
-## Implementation notes (extracted from code review)
+## 11. SDPA Backend Notes
 
-- **Sink bias clamping at forward time**: `GPTOSSAttention.forward` clamps
-  `sink_bias` to `[-10, 15]` on a detached copy before passing it into the
-  attention path. The clamp bounds are chosen so `exp(15) ≈ 3.3e6` stays
-  within BF16 range and `exp(-10) ≈ 4.5e-5` acts as a "disabled" sink. The
-  unclamped `nn.Parameter` retains its gradient — the clamp is a forward-only
-  numerical-stability guard against BF16 SDPA mask-add overflow when the
-  trained parameter grows large. See `ATTENTION_SINKS.md` for the full
-  theoretical treatment.
-- **Mask caching**: the sliding-window causal mask is cached module-level in
-  `_SLIDING_WINDOW_MASK_CACHE`, keyed by `(T, window, device, dtype)`. The
-  sink-bias SWA mask is cached under the key `("sink_swa", T_q, T_k, H,
-  window, device, dtype)` — the trailing sink-bias column is overwritten
-  per-call (it varies with training) but the rest of the mask is reused.
-  This amortises the per-forward mask build to one kernel launch.
-- **FP32 accumulation in the manual path**: `manual_causal_attention` casts
-  `query_states` and `key_states` to FP32 for the score matmul and runs
-  softmax in FP32, casting back to `value_states.dtype` only for the final
-  value matmul. This is the reference path used in tests; the SDPA path
-  handles FP32 accumulation internally.
-- **`repeat_kv` uses expand + reshape (no `.contiguous()`)**: SDPA's flash
-  path operates on strided tensors and calls `.contiguous()` internally only
-  when needed. Dropping the explicit `.contiguous()` avoids a fresh
-  `(B, H_kv × n_rep, T, D)` allocation on every forward.
-- **`MixedKVCache` ring + exponential growth**: windowed layers use a
-  fixed-size ring buffer of length `window` (O(window) append, O(1) amortised
-  decode step). Global layers use an exponentially-growing buffer
-  (1.5× growth capped at `_GLOBAL_CAP_TOKENS = 4_000_000`), giving O(N)
-  total work over an N-token generation instead of O(N²) from `torch.cat`
-  on every step.
-- **Pre-allocated `generate` output**: `generate()` allocates the full
-  `(B, T_prompt + max_new_tokens)` output tensor once and writes new tokens
-  in place, avoiding the O(T²) `torch.cat` per step.
-- **Fast T=1 RoPE path**: `YaRNRoPE.forward` special-cases
-  `positions.numel() == 1` to skip `torch.outer` and do a single scalar
-  multiply — saves a kernel launch per decode step across all 12 layers.
+### 11.1 Flash Attention eligibility
 
-<!-- docs:verified 2026-07-31 · fd4fe36 -->
+`is_causal=True` path (no sink, no window, square) triggers FA2 via PyTorch SDPA
+when available. Requires CUDA + compatible head dims.
+
+### 11.2 Explicit `attn_mask` paths
+
+Window and sink paths pass `attn_mask` — may fall back to math or memory-efficient
+kernel depending on GPU and PyTorch version. Still fused; not necessarily FA2.
+
+### 11.3 Dtype contract
+
+Q, K, V must share dtype for SDPA. `apply_rope` preserves `x.dtype` by casting
+`cos`/`sin` to match — see [rotary.md §2](rotary.md#2-apply_rope).
+
+### 11.4 `torch.compile`
+
+When `training.compile: true`, `GPTOSSAttention` is compiled as part of the model.
+`lru_cache` on mask helpers runs at trace time for static `T`; dynamic shapes may
+graph-break on cache miss.
+
+---
+
+## 12. Inference Integration
+
+`inference/generate.py` duplicates the attention forward with KV caching:
+
+```python
+from models.attention import SINK_CLAMP_MAX, SINK_CLAMP_MIN, causal_attention, repeat_kv
+from models.rotary import apply_rope  # canonical import
+```
+
+Note: `generate.py` lists `apply_rope` in the `models.attention` import block in
+some versions — the canonical definition is `models.rotary.apply_rope`.
+
+### 12.1 Cache stores rotated K
+
+```python
+k_new_rot = apply_rope(k_new, cos, sin)
+cache.append(layer_idx, k_new_rot, v_new, attn.is_windowed, attn.window_size)
+```
+
+RoPE is applied **before** caching. On decode, cached K is already position-encoded;
+only the new query receives fresh RoPE at `positions_step`.
+
+### 12.2 Sink bias cache
+
+```python
+sink_bias_clamped = attn.sink_bias.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)
+sink_bias_cache[id(attn)] = sink_bias_clamped
+```
+
+Clamp once per layer per generation.
+
+### 12.3 Windowed vs global dispatch
+
+```python
+if attn.is_windowed:
+    out = causal_attention(q, k_for_q, v_for_q, window=attn.window_size, sink_bias=...)
+else:
+    out = causal_attention(q, k_for_q, v_for_q, sink_bias=...)
+```
+
+Mirrors `GPTOSSAttention.forward` logic.
+
+---
+
+## 13. Config Knobs
+
+From `ModelConfig` in `models/transformer.py`:
+
+| Field | Default | Maps to |
+|-------|---------|---------|
+| `n_heads` | 8 | `self.n_heads` |
+| `n_kv_heads` | 4 | `self.n_kv_heads` |
+| `head_dim` | 96 | `self.head_dim` |
+| `window_size` | 128 | SWA window on even layers |
+| `sink_bias` | `True` | Whether `sink_bias` parameter exists |
+| `rope_theta` | 100000 | YaRN base \(\theta\) |
+| `yarn_scale_factor` | 32 | YaRN stretch factor |
+| `yarn_original_max_seq_len` | 4096 | Training context for YaRN |
+| `yarn_target_seq_len` | 131072 | Inference extrapolation target |
+| `yarn_prune_rope_global` | `True` | Prune 25% RoPE dims on global layers |
+
+---
+
+## 14. Common Pitfalls
+
+### 14.1 Forgetting GQA repeat
+
+Calling `causal_attention` with mismatched Q/K head counts raises shape errors in
+SDPA. Always `repeat_kv` before attention.
+
+### 14.2 Applying RoPE twice
+
+Cached inference stores rotated K. Do not call `apply_rope` on cached keys again.
+
+### 14.3 Unclamped sink in custom code
+
+Direct `causal_attention(..., sink_bias=raw_param)` bypasses clamp. Use
+`.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)` or go through `GPTOSSAttention`.
+
+### 14.4 Window on global layers
+
+Passing `window=` on odd layers changes the architecture — breaks KV math and
+headline metric. Only even layers should pass `window_size`.
+
+### 14.5 `positions` dtype/device
+
+`YaRNRoPE.forward` uses `positions.float()` for the outer product. Integer positions
+on the correct device work; floats are fine too.
+
+### 14.6 Mask convention confusion
+
+- `_causal_mask`: `True` = allowed
+- `manual_causal_attention`: `True` in `triu` = **forbidden**
+- Non-sink SDPA: `0.0` = allowed, `-inf` = forbidden
+- Sink SDPA: `causal.to(dtype)` → `1.0`/`0.0` for real keys, `sink_bias` for sink column
+
+When in doubt, trust `manual_causal_attention` for golden values.
+
+---
+
+## Related Documentation
+
+- [ATTENTION_SINKS.md](ATTENTION_SINKS.md) — sink theory, KV math, failure modes
+- [yarn.md](yarn.md) — `YaRNRoPE` module
+- [rotary.md](rotary.md) — `apply_rope` and frequency computation
+
+---
+
+<!-- docs:verified 2026-07-31 · fa6f918 -->

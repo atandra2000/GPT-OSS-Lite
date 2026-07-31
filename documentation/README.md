@@ -1,108 +1,135 @@
-# GPT-OSS-Lite — Documentation Index
+# GPT-OSS-Lite Documentation — Book Index
 
-Educational technical references for every component of this project. Each doc follows a consistent structure: theory, math, implementation walkthrough, invariants, and cross-links.
-
-**New here?** Start with [foundations.md](foundations.md) → [getting_started.md](getting_started.md) → [architecture.md](architecture.md).
-
----
-
-## Learning Path
-
-| Phase | Read | Learn |
-|---|---|---|
-| 0. Foundations | [foundations.md](foundations.md) | GQA, SWA, sinks, YaRN, Chinchilla |
-| 1. Overview | [getting_started.md](getting_started.md) | Key numbers, smoke tests, pitfalls |
-| 2. Big picture | [architecture.md](architecture.md) | How all components connect |
-| 3. Attention | [ATTENTION_SINKS.md](ATTENTION_SINKS.md), [attention.md](attention.md) | Sinks, SWA/full alt, GQA |
-| 4. MoE | [moe.md](moe.md) | Top-2-of-8, standard aux loss |
-| 5. Long context | [yarn.md](yarn.md), [rotary.md](rotary.md) | YaRN extrapolation, pruned RoPE |
-| 6. Wiring | [transformer.md](transformer.md) | Layer stack, weight tying |
-| 7. Training | [training.md](training.md) | Pretrain loop, NaN guard |
-| 8. Data | [data_pipeline.md](data_pipeline.md) | 8.0B-token corpus |
-| 9. Inference | [inference.md](inference.md) | Mixed KV cache, passkey eval |
-| 10. Ops | [configs.md](configs.md), [scripts.md](scripts.md), [utils.md](utils.md) | YAML, benchmarks, checkpoints |
-| 11. Quality | [testing.md](testing.md) | Test corpus as oracle |
-| 12. Advanced | [triton_kernels.md](triton_kernels.md), [OPTIMIZATIONS.md](OPTIMIZATIONS.md) | Fused MoE kernel, perf audit |
+> **Start here.** This directory is a textbook-style reference for the GPT-OSS-Lite
+> reproduction: ~502M total parameters, ~247M active, 12-layer alternating
+> sliding-window / full attention, YaRN 128K, top-2-of-8 MoE. For a one-page
+> project overview see the root [README.md](../README.md).
 
 ---
 
-## Documentation tiers
+## Overview
 
-| Tier | Files | When to read |
-|---|---|---|
-| **Essential** | [getting_started.md](getting_started.md), [architecture.md](architecture.md), [configs.md](configs.md), [testing.md](testing.md) | First run, debugging, YAML tuning |
-| **Deep dives** | [ATTENTION_SINKS.md](ATTENTION_SINKS.md), [attention.md](attention.md), [moe.md](moe.md), [yarn.md](yarn.md), [foundations.md](foundations.md) | GPT-OSS mechanisms in depth |
-| **Operations** | [training.md](training.md), [data_pipeline.md](data_pipeline.md), [inference.md](inference.md), [scripts.md](scripts.md), [utils.md](utils.md) | Full training run, data, checkpoints |
-| **Advanced** | [triton_kernels.md](triton_kernels.md), [OPTIMIZATIONS.md](OPTIMIZATIONS.md), [transformer.md](transformer.md) | Kernel opt-in, perf, wiring internals |
+GPT-OSS-Lite is a faithful from-scratch PyTorch implementation of the GPT-OSS
+long-context architecture. The documentation is organized as a **progressive
+book**: foundations and motivation first, then system design, then component
+deep-dives, then operations (training, data, scripts, utilities).
 
----
+**Headline metrics** (verify with scripts, not prose):
 
-## Component Docs
+| Metric | Target | Script |
+|--------|--------|--------|
+| KV-cache reduction at 128K | ≥ 1.8× vs pure GQA full attention | `scripts/kv_cache_benchmark.py` |
+| Passkey retrieval at 128K | ≥ 85% (trained checkpoint) | `scripts/passkey_eval.py` |
 
-| File | Component(s) | Source |
-|------|--------------|--------|
-| [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | Sink bias + SWA + YaRN theory | `models/attention.py` |
-| [attention.md](attention.md) | SWA, full, GQA, sink implementation | `models/attention.py` |
-| [moe.md](moe.md) | Top-2 MoE + aux loss | `models/moe.py` |
-| [yarn.md](yarn.md) | YaRN RoPE scaling | `models/yarn.py` |
-| [rotary.md](rotary.md) | RoPE helpers, prune | `models/rotary.py` |
-| [transformer.md](transformer.md) | Top-level wiring | `models/transformer.py` |
-| [training.md](training.md) | Pretrain loop | `training/pretrain.py` |
-| [inference.md](inference.md) | Generate + passkey | `inference/` |
-| [data_pipeline.md](data_pipeline.md) | 8.0B-token pipeline | `data/prepare_data.py` |
-| [utils.md](utils.md) | Checkpoint, memory, logging | `utils/` |
-| [triton_kernels.md](triton_kernels.md) | Fused MoE kernel | `models/moe_triton.py` |
+**Stack:** PyTorch 2.x, BF16, FA2 via SDPA, optional `torch.compile(max-autotune)`,
+opt-in Triton MoE via `moe_dispatch: triton_grouped`.
+
+**Authoritative project rules:** [AGENTS.md](../AGENTS.md) (sink clamp, aux loss,
+sliding/full alternation, Triton contract).
 
 ---
 
-## Operations Docs
+## Learning path
 
-| File | Purpose |
-|------|---------|
-| [getting_started.md](getting_started.md) | Onboarding, commands, pitfalls |
-| [architecture.md](architecture.md) | System diagram, data flows, file map |
-| [configs.md](configs.md) | YAML key reference |
-| [scripts.md](scripts.md) | Benchmarks, smoke tests, headline metrics |
-| [testing.md](testing.md) | Test suite guide + load-bearing tests |
+Read in this order for a first pass. Skip ahead if you already know transformers.
 
----
-
-## Configs
-
-| Config | Purpose |
-|---|---|
-| `configs/pretrain_a100_502m.yaml` | Canonical Chinchilla-optimal recipe, ~502M params, 1× A100 80GB |
-
-See [configs.md](configs.md) for every key.
-
----
-
-## ATTENTION_SINKS reference
-
-**[ATTENTION_SINKS.md](ATTENTION_SINKS.md)** is the single canonical doc for sink bias, sliding-window alternation, and YaRN theory. If prose and code disagree, **`models/attention.py` wins**.
+| Step | Chapter | Document | You'll learn |
+|------|---------|----------|--------------|
+| 0 | Onboarding | [getting_started.md](getting_started.md) | Clone, env, first commands |
+| 1 | Foundations | [foundations.md](foundations.md) | Why decoder-only, GQA, SWA, sinks, YaRN, MoE |
+| 2 | Architecture | [architecture.md](architecture.md) | 12-layer stack, file map, dataflow |
+| 3 | Transformer | [transformer.md](transformer.md) | `GPTOSS`, `GPTOSSBlock`, `ModelConfig` |
+| 4 | Attention | [attention.md](attention.md) | SWA/full alternation, SDPA paths |
+| 4b | Sinks (deep) | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | Learned sink bias — read before tuning sinks |
+| 5 | RoPE / YaRN | [rotary.md](rotary.md) → [yarn.md](yarn.md) | Position encoding + 128K extrapolation |
+| 6 | MoE | [moe.md](moe.md) | Top-2 routing, aux loss α=0.01 |
+| 6b | Triton (opt-in) | [triton_kernels.md](triton_kernels.md) | `moe_dispatch` kernel contract |
+| 7 | Training | [training.md](training.md) | `pretrain.py`, schedules, NaN guard |
+| 7b | Config | [configs.md](configs.md) | YAML reference |
+| 7c | Data | [data_pipeline.md](data_pipeline.md) | Shards, tokenization, loader |
+| 8 | Inference | [inference.md](inference.md) | `MixedKVCache`, `generate()` |
+| 9 | Optimizations | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) | OPT-1…24 catalog |
+| 10 | Scripts | [scripts.md](scripts.md) | Benchmarks and profilers |
+| 11 | Utilities | [utils.md](utils.md) | Checkpoints, logging, VRAM estimator |
 
 ---
 
-## Load-bearing invariants (do not break)
+## Doc tiers
 
-| Invariant | Doc |
-|---|---|
-| Even layers = SWA(128), odd = full | [attention.md](attention.md) |
-| Sink bias clamped `[-10, 15]` at forward | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
-| Standard aux loss (α=0.01), not aux-loss-free | [moe.md](moe.md) |
-| Weight tying — head.weight = embed.weight | [transformer.md](transformer.md) |
-| `moe_dispatch="stacked"` by default | [triton_kernels.md](triton_kernels.md) |
-| NaN guard with checkpoint rollback | [training.md](training.md) |
-| YaRN scale = 32 (128K / 4K) | [yarn.md](yarn.md) |
+### Tier 1 — Conceptual (read once)
+
+- [foundations.md](foundations.md) — mathematical and architectural motivation
+- [architecture.md](architecture.md) — system map tying modules together
+
+### Tier 2 — Component reference (read as needed)
+
+- [transformer.md](transformer.md), [attention.md](attention.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
+- [rotary.md](rotary.md), [yarn.md](yarn.md)
+- [moe.md](moe.md), [triton_kernels.md](triton_kernels.md)
+
+### Tier 3 — Operations (read when running experiments)
+
+- [getting_started.md](getting_started.md), [configs.md](configs.md)
+- [training.md](training.md), [data_pipeline.md](data_pipeline.md)
+- [inference.md](inference.md)
+- [scripts.md](scripts.md), [utils.md](utils.md)
+- [OPTIMIZATIONS.md](OPTIMIZATIONS.md)
 
 ---
 
-## Authoritative top-level references
+## Component docs
 
-- [`../AGENTS.md`](../AGENTS.md) — subagent rules and hard constraints
-- [`../SKILLS.md`](../SKILLS.md) — project-local workflows
-- [`../CONTEXT.md`](../CONTEXT.md) — agent working snapshot
-- [`../README.md`](../README.md) — public project summary
+| Component | Source | Documentation |
+|-----------|--------|---------------|
+| Top-level model | `models/transformer.py` | [transformer.md](transformer.md) |
+| Attention (SWA + full) | `models/attention.py` | [attention.md](attention.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
+| RoPE helpers | `models/rotary.py` | [rotary.md](rotary.md) |
+| YaRN scaling | `models/yarn.py` | [yarn.md](yarn.md) |
+| MoE FFN | `models/moe.py` | [moe.md](moe.md) |
+| Triton MoE kernel | `models/moe_triton.py` | [triton_kernels.md](triton_kernels.md) |
+| Training loop | `training/pretrain.py` | [training.md](training.md) |
+| Generation | `inference/generate.py` | [inference.md](inference.md) |
+| Long-context eval | `inference/long_context.py` | [inference.md](inference.md) |
+| Checkpoints | `utils/checkpoint.py` | [utils.md](utils.md) |
+| Logging | `utils/logging.py` | [utils.md](utils.md) |
+| VRAM estimator | `utils/memory.py` | [utils.md](utils.md) |
+| Production config | `configs/pretrain_a100_502m.yaml` | [configs.md](configs.md) |
+| Data pipeline | `data/` | [data_pipeline.md](data_pipeline.md) |
+
+---
+
+## Cross-cutting topics
+
+| Question | Go to |
+|----------|-------|
+| Why alternating SWA/full? | [foundations.md](foundations.md) §4, [architecture.md](architecture.md) §4 |
+| How does sink bias work? | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
+| What is `moe_dispatch`? | [moe.md](moe.md), [triton_kernels.md](triton_kernels.md) (YAML opt-in, not env vars) |
+| Memory at B=8, T=4096? | [utils.md](utils.md), `scripts/microbench_a100.py` |
+| All performance knobs? | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) |
+| How to run benchmarks? | [scripts.md](scripts.md) |
+| Doc lint / stale patterns? | `scripts/check_docs.py` |
+
+---
+
+## Maintaining documentation
+
+```bash
+# Lint links and stale patterns
+python3 scripts/check_docs.py
+
+# Refresh line counts in the table below
+python3 scripts/check_docs.py --update-sizes
+
+# Stamp verification footers (git short hash)
+python3 scripts/check_docs.py --stamp-footers
+```
+
+Every chapter file ends with a verification footer:
+
+```html
+<!-- docs:verified YYYY-MM-DD · <commit> -->
+```
 
 ---
 
@@ -110,25 +137,42 @@ See [configs.md](configs.md) for every key.
 
 | Doc | ~Lines | Status |
 |---|---|---|
-| ATTENTION_SINKS.md | 542 | Comprehensive |
-| OPTIMIZATIONS.md | 521 | Comprehensive |
-| moe.md | 426 | Comprehensive |
-| training.md | 409 | Comprehensive |
-| utils.md | 390 | Comprehensive |
-| attention.md | 370 | Comprehensive |
-| data_pipeline.md | 353 | Comprehensive |
-| inference.md | 350 | Comprehensive |
-| rotary.md | 266 | Comprehensive |
-| yarn.md | 264 | Comprehensive |
-| getting_started.md | 240 | Comprehensive |
-| architecture.md | 214 | Comprehensive |
-| foundations.md | 149 | Comprehensive |
-| scripts.md | 147 | Comprehensive |
-| configs.md | 131 | Comprehensive |
-| transformer.md | 129 | Comprehensive |
-| testing.md | 107 | Comprehensive |
-| triton_kernels.md | 101 | Comprehensive |
-| **Total** | **5,109** | |
+| training.md | 834 | Comprehensive |
+| moe.md | 754 | Comprehensive |
+| data_pipeline.md | 735 | Comprehensive |
+| ATTENTION_SINKS.md | 715 | Comprehensive |
+| OPTIMIZATIONS.md | 712 | Comprehensive |
+| attention.md | 669 | Comprehensive |
+| architecture.md | 650 | Comprehensive |
+| triton_kernels.md | 628 | Comprehensive |
+| foundations.md | 606 | Comprehensive |
+| inference.md | 549 | Comprehensive |
+| transformer.md | 532 | Comprehensive |
+| utils.md | 527 | Comprehensive |
+| scripts.md | 520 | Comprehensive |
+| yarn.md | 474 | Comprehensive |
+| getting_started.md | 454 | Comprehensive |
+| rotary.md | 396 | Comprehensive |
+| configs.md | 379 | Comprehensive |
+| **Total** | **10,134** | |
 
 
-<!-- docs:verified 2026-07-31 · fd4fe36 -->
+
+
+Run `python3 scripts/check_docs.py --update-sizes` to refresh this table and
+add the **Total** row automatically.
+
+---
+
+## External index
+
+| Resource | Location |
+|----------|----------|
+| Project README | [../README.md](../README.md) |
+| Agent rules | [../AGENTS.md](../AGENTS.md) |
+| Workflows | [../SKILLS.md](../SKILLS.md) |
+| LLM architecture skill | `../../.agents/skills/llm-architecture/SKILL.md` |
+
+---
+
+<!-- docs:verified 2026-07-31 · fa6f918 -->

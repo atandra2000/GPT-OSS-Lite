@@ -1,355 +1,735 @@
 # Data Pipeline — GPT-OSS-Lite
 
-> **The full pipeline that turns 8 B tokens of public web text into the
-> training corpus for the 502 M-param GPT-OSS-Lite model.**
+## From Raw Text to `PretrainDataset`
+
+> **Shim:** [`data/prepare_data.py`](../data/prepare_data.py) delegates to
+> `LLM/shared_data/` universal pipeline.
+
+> **Training consumer:** [`training/pretrain.py`](../training/pretrain.py)
+> `PretrainDataset` class.
+
+> **Related:** [training.md](training.md) (loader knobs, `train_data_path`).
 
 ---
 
-## 1. Overview
+## Table of Contents
 
-The pipeline has **four stages**, each independently resumable and
-independently testable. Outputs flow left-to-right:
+1. [Abstract](#abstract)
+2. [Design Goals](#design-goals)
+3. [Quick Start](#quick-start)
+4. [The Shim — `data/prepare_data.py`](#the-shim--dataprepare_datapy)
+5. [Pipeline Stages Overview](#pipeline-stages-overview)
+6. [Stage 1 — Download (`download_raw`)](#stage-1--download-download_raw)
+7. [Stage 2 — Clean (`clean`)](#stage-2--clean-clean)
+8. [Stage 3 — Tokenize (`tokenize`)](#stage-3--tokenize-tokenize)
+9. [Stage 4 — Pack Shards (`pack_shards`)](#stage-4--pack-shards-pack_shards)
+10. [Corpus Mix — `gptoss-default`](#corpus-mix--gptoss-default)
+11. [Tokenizer — LLaMA-3 BPE](#tokenizer--llama-3-bpe)
+12. [Shard Format](#shard-format)
+13. [Manifest Schema](#manifest-schema)
+14. [Output Layout — `data/pretrain_chinchilla`](#output-layout--datapretrain_chinchilla)
+15. [Training Loader — `PretrainDataset`](#training-loader--pretraindataset)
+16. [DataLoader Configuration](#dataloader-configuration)
+17. [Cross-Project Sharing](#cross-project-sharing)
+18. [Idempotency and Resume](#idempotency-and-resume)
+19. [Disk and Time Budgets](#disk-and-time-budgets)
+20. [Validation Checklist](#validation-checklist)
+21. [Appendix A — Token arithmetic](#appendix-a--token-arithmetic)
+22. [Appendix B — Window crossing shards](#appendix-b--window-crossing-shards)
+23. [Appendix C — Directory tree](#appendix-c--directory-tree)
+24. [Appendix D — Source dataset reference](#appendix-d--source-dataset-reference)
+25. [Load-Bearing Invariants](#load-bearing-invariants)
+26. [References](#references)
+
+---
+
+## Abstract
+
+GPT-OSS-Lite trains on an **8.0 billion-token** Chinchilla-optimal corpus
+assembled from quality-filtered web, code, math, and scientific prose sources.
+The corpus is prepared by a **four-stage pipeline** (download → clean →
+tokenize → pack) implemented in the shared `LLM/shared_data/` package and
+invoked through a thin project shim at [`data/prepare_data.py`](../data/prepare_data.py).
+
+Tokenised output is stored as **uint32 shards** of **50 million tokens** each,
+with **EOS-separated documents** and a JSON **manifest**. Training reads shards
+via mmap through [`PretrainDataset`](../training/pretrain.py) in
+[`training/pretrain.py`](../training/pretrain.py), yielding `(input_ids,
+target_ids)` windows of length `max_seq_len` (4096).
+
+---
+
+## Design Goals
+
+| Goal | How achieved |
+|---|---|
+| Chinchilla-optimal scale | 8.0 B tokens for ~502 M-param model |
+| Reproducible dedup | SHA-256 exact dedup with persisted seen-set |
+| Zero-copy training I/O | mmap `shard_*.bin` + `torch.from_file` |
+| Cross-project comparability | Universal mixture + shard format in `shared_data` |
+| Crash safety | Atomic shard writes; per-stage resume state |
+| Document integrity | EOS after every doc; no cross-shard doc splits |
+
+---
+
+## Quick Start
+
+```bash
+# From GPT-OSS-Lite project root
+python data/prepare_data.py --stage pretrain
+
+# Skip download if raw data already exists
+python data/prepare_data.py --stage pretrain --skip-download
+
+# Re-pack only (after shard config change)
+python data/prepare_data.py --stage pretrain \
+  --skip-download --skip-clean --skip-tokenize
+
+# Single source debug
+python data/prepare_data.py --stage pretrain --source fineweb-edu
+```
+
+Expected output directory for training (config default):
 
 ```
-┌────────────┐    ┌──────────────┐    ┌────────────┐    ┌────────────┐
-│  download  │ →  │ clean + dedup│ →  │  tokenize  │ →  │ pack shards│
-│ raw jsonl  │    │ clean jsonl  │    │ tokens.bin │    │ shard_N.bin│
-└────────────┘    └──────────────┘    └────────────┘    └────────────┘
-   HF datasets       quality + SHA-256    EOS-separated     round-robin
-   streaming         hash-sharded         uint32 stream     atomic write
-                                                          + manifest.json
+data/pretrain_chinchilla/
+  manifest.json
+  shard_00000.bin
+  shard_00001.bin
+  ...
 ```
 
-| Stage | Module(s) | Input → Output | Wall time (8 B tokens) |
-|-------|-----------|---------------|------------------------|
-| 1. download | `data/scripts/download_raw.py` | HF datasets → `data/raw/<src>/data.jsonl` | 4–8 h |
-| 2. clean + dedup | `data/scripts/tokenize.py::tokenize_source` (`_filter_and_dedup`) | raw JSONL → `data/clean/<src>/data.jsonl` | 30–60 min |
-| 3. tokenize | `data/shard_writer.py::TokenStream` | clean JSONL → `data/tokens/<src>/data.bin` | 1–2 h |
-| 4. pack + manifest | `data/scripts/pack_shards.py` | per-source tokens → `data/shards/shard_NNNNN.bin` + `data/manifest.json` | 30–60 min |
+Then train:
 
-The top-level orchestrator (`data/prepare_data.py`) runs the four
-stages in order, but each can be invoked standalone for re-runs or
-partial rebuilds.
+```bash
+python training/pretrain.py --config configs/pretrain_a100_502m.yaml --seed 42
+```
 
 ---
 
-## 2. Why this design
+## The Shim — `data/prepare_data.py`
 
-### 2.1 Per-source independence
+GPT-OSS-Lite does **not** duplicate the pipeline. The shim:
 
-Each source has its own download / clean / tokenize directory. This
-gives us:
+1. Adds `LLM/` (parent of `GPT-OSS-Lite/`) to `sys.path`.
+2. Prints an info banner (corpus size, tokenizer, shard size).
+3. Calls `shared_data.prepare_data.main()`.
 
-- **Resumability** — if FineWeb-Edu's 4 TB download stalls, the other
-  4 sources keep progressing.
-- **Per-source accounting** — the manifest records exactly how many
-  tokens each source contributed. Useful for ablations and for
-  diagnosing "where did my training data come from" questions.
-- **Parallelisation** — each source is a self-contained directory;
-  the four stages can run in parallel across machines (not
-  implemented here, but trivial to add).
+```python
+from shared_data.config import UNIVERSAL_TOTAL_TOKENS, load_universal_data_config
+cfg = load_universal_data_config()
+tok = cfg["pipeline"]["tokenizer"]
+print(f"[data/gptoss] universal corpus: {UNIVERSAL_TOTAL_TOKENS:,} tokens")
+print(f"[data/gptoss] tokenizer: {tok['name']} (vocab={tok['vocab_size']:,}, EOS={tok['eos_token_id']})")
 
-### 2.2 SHA-256 hash-sharded dedup
+from shared_data.prepare_data import main as shared_main
+return shared_main()
+```
 
-The naive approach (one global `set` of SHA-256 hashes) uses ~12 GB
-of RAM for 200 M documents. Our implementation:
+### Path resolution
 
-1. Hashes every document (SHA-256 of normalised text — strips
-   whitespace to defeat trivial evasion).
-2. Buckets by `hash → bucket` (256 buckets, modulo).
-3. Pass 1 writes per-bucket hash files; pass 2 dedups each bucket
-   independently with an in-memory set per bucket (~50 MB RAM).
-4. Bloom filters per bucket provide a constant-memory fallback when
-   bucket size exceeds `bloom_capacity_per_bucket` (200k by default).
+| Path | Role |
+|---|---|
+| `GPT-OSS-Lite/data/prepare_data.py` | Project shim |
+| `LLM/shared_data/` | Universal pipeline package |
+| `LLM/shared_data/config/mixture.yaml` | Source weights |
+| `LLM/shared_data/config/data_config.yaml` | Tokenizer, shard, dedup knobs |
 
-Constant memory, deterministic, resumable.
+The shim uses **universal defaults** — no project-local `data_config.yaml`
+override is required for GPT-OSS-Lite.
 
-### 2.3 EOS-separated token streams
+### CLI flags (delegated)
 
-Every document boundary is marked with the EOS token id (128009 for
-LLaMA-3 BPE). The `TokenStream` writer:
+All flags are parsed by `shared_data.prepare_data`:
 
-- Strips any trailing EOS that the tokenizer may have inserted.
-- Appends exactly one EOS after every document.
-- Validates every token id against `[0, vocab_size + 256)` to catch
-  silent token-id corruption.
-
-The training script's `PretrainDataset` reads the manifest to know
-the EOS id. When a training window straddles two documents, the
-EOS acts as a regular token (the model attends to it normally) — no
-silent cross-document context leakage.
-
-### 2.4 Atomic shard writes
-
-Each shard is written to `<shard>.bin.tmp` then atomically renamed.
-A crash mid-write leaves either the old shard or the new one — never
-a half-written one. This is the same pattern used by
-`utils/checkpoint.py::CheckpointManager` and is critical because the
-training script's NaN-guard relies on being able to roll back to a
-known-good shard boundary.
-
-### 2.5 Round-robin packing
-
-Sources are interleaved one-document-at-a-time into the shard buffer.
-Without this, the first N shards would be only FineWeb-Edu (the 50%
-source) and the last only arxiv (5%) — causing the loss curve to
-"drift" as the source mix shifts during training.
+| Flag | Purpose |
+|---|---|
+| `--stage pretrain` | Full pretrain pipeline |
+| `--mixture PATH` | Override mixture YAML |
+| `--data-config PATH` | Override pipeline YAML |
+| `--data-root PATH` | Override output root (`$LLM_DATA_ROOT` or project `data/`) |
+| `--source ID` | Process one mixture source only |
+| `--skip-download` | Skip HF download |
+| `--skip-clean` | Skip quality + dedup |
+| `--skip-tokenize` | Skip BPE tokenisation |
+| `--skip-pack` | Skip shard packing |
+| `--train-tokenizer` | Train custom BPE (HyMo path; not default) |
 
 ---
 
-## 3. The five data sources
+## Pipeline Stages Overview
 
-From `data/config/mixture.yaml`:
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  download   │───▶│    clean    │───▶│  tokenize   │───▶│ pack_shards │
+│  download_  │    │  quality +  │    │  LLaMA-3    │    │  uint32     │
+│  raw.py     │    │  SHA dedup  │    │  BPE        │    │  50M tokens │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+     │                  │                  │                  │
+ data/raw/         data/clean/        data/tokens/       data/shards/
+ <source>/         <source>/          <source>/          shard_*.bin
+ data.jsonl        data.jsonl         tokens.bin         manifest.json
+```
 
-| Source | Weight | Target tokens | Domain |
-|--------|-------:|--------------:|--------|
-| fineweb-edu | 0.50 | 4.00 B | Web, edu-filtered |
-| fineweb | 0.20 | 1.60 B | Web, unfiltered |
-| the-stack-python | 0.15 | 1.20 B | Python code |
-| openmath | 0.10 | 0.80 B | Math problems + solutions |
-| arxiv | 0.05 | 0.40 B | Scientific prose |
+Each stage runs as a **subprocess** (`_run_module`) so OOM in tokenisation
+does not kill the orchestrator.
+
+**Pipeline version:** `PIPELINE_VERSION = "1.0.0"` in
+`shared_data/config.py`.
+
+**Corpus target:** `UNIVERSAL_TOTAL_TOKENS = 8_000_000_000`.
+
+---
+
+## Stage 1 — Download (`download_raw`)
+
+**Script:** `shared_data/scripts/download_raw.py`
+
+**Input:** `mixture.yaml` source definitions.
+
+**Output:** `data/raw/<source_id>/data.jsonl` — one JSON object per line with
+a `text` field (or configured `text_field`).
+
+**Behaviour:**
+
+- Streams from HuggingFace `datasets` using each source's `dataset`, `config`,
+  `split`, and `text_field`.
+- OpenMath concatenates `problem` + `generated_solution` with separator
+  `\n\n### Solution\n\n` when `extra_text_field` is set.
+- Resumable via per-source state in `data/state/`.
+
+**Example sources** (see [Corpus Mix](#corpus-mix--gptoss-default)):
+
+| Source id | HF dataset |
+|---|---|
+| `fineweb-edu` | `HuggingFaceFW/fineweb-edu` |
+| `fineweb` | `HuggingFaceFW/fineweb` |
+| `the-stack-python` | `bigcode/the-stack-python` |
+| `openmath` | `nvidia/OpenMathInstruct-2` |
+| `arxiv` | `cdv/arxiv-classification` |
+
+---
+
+## Stage 2 — Clean (`clean`)
+
+**Script:** `shared_data/scripts/clean.py`
+
+**Input:** `data/raw/<source>/data.jsonl`
+
+**Output:** `data/clean/<source>/data.jsonl`
+
+### Quality filters
+
+From `data_config.yaml` `pipeline.quality`:
+
+| Filter | Default | Purpose |
+|---|---|---|
+| `drop_empty` | true | Remove blank docs |
+| `min_unique_chars_ratio` | 0.05 | Repetition detector |
+| `max_digit_ratio` | 0.50 | OCR garbage |
+| `max_punct_ratio` | 0.50 | Symbol spam |
+| `max_whitespace_ratio` | 0.50 | Whitespace spam |
+
+Per-source overrides in mixture YAML (`min_chars`, `max_chars`, `lang`).
+
+### Dedup
+
+```yaml
+dedup:
+  enabled: true
+  method: sha256
+  n_hash_buckets: 256
+  bloom_capacity_per_bucket: 200000
+  bloom_error_rate: 0.001
+```
+
+- **SHA-256** exact dedup on normalised text.
+- Seen-set persisted to `data/state/dedup_<source>.json` every 100k docs —
+  crash mid-clean does not lose dedup memory.
+
+---
+
+## Stage 3 — Tokenize (`tokenize`)
+
+**Script:** `shared_data/scripts/tokenize.py`
+
+**Input:** `data/clean/<source>/data.jsonl`
+
+**Output:** `data/tokens/<source>/tokens.bin` — raw uint32 token stream
+
+### Tokenizer config (universal default)
+
+```yaml
+tokenizer:
+  name: llama3
+  vocab_size: 128000
+  eos_token_id: 128009
+  pad_token_id: 128002
+  add_eos: true
+```
+
+### Tokenisation rules
+
+- **LLaMA-3 BPE** via HuggingFace tokenizer (`name: llama3`).
+- `add_special_tokens: false` during encode — EOS appended manually.
+- **EOS after every document** when `add_eos: true`.
+- Batch size 1024 docs; prefetch depth 16 for producer/consumer overlap.
+
+### Per-source token stream format
+
+`TokenStream` writes:
+
+```
+Header: version (uint32), eos_token_id (uint32)
+Body:   token_ids as uint32 little-endian, EOS after each doc
+```
+
+---
+
+## Stage 4 — Pack Shards (`pack_shards`)
+
+**Script:** `shared_data/scripts/pack_shards.py`
+
+**Input:** All `data/tokens/<source>/tokens.bin`
+
+**Output:**
+
+- `data/shards/shard_NNNNN.bin`
+- `data/manifest.json`
+
+### Packing rules
+
+```yaml
+pack:
+  docs_per_shard_target: 50000000
+  cross_document_boundary_ok: false   # CRITICAL
+```
+
+- **`cross_document_boundary_ok: false`** — a document never spans two shards.
+  Downstream `PretrainDataset` can align windows on EOS without stitching
+  unrelated text.
+- Target **50 M tokens per shard** (~190 MB as uint32).
+- `ShardWriter` atomic flush + `shard_writer_state.json` for crash resume.
+
+### Shard count estimate
+
+```
+8.0e9 tokens / 50e6 ≈ 160 shards
+```
+
+---
+
+## Corpus Mix — `gptoss-default`
+
+[`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml) documents:
+
+```yaml
+data_mix: "gptoss-default"
+# mix: fineweb-edu 0.5 / fineweb 0.2 / the-stack-python 0.15 / openmath 0.1 / arxiv 0.05
+```
+
+### GPT-OSS designated weights
+
+| Source | Weight | Tokens (of 8.0 B) | Role |
+|---|---:|---:|---|
+| FineWeb-Edu (`HuggingFaceFW/fineweb-edu`) | **0.50** | 4.00 B | Quality-gated educational web backbone |
+| FineWeb (`HuggingFaceFW/fineweb`) | **0.20** | 1.60 B | Raw web diversity |
+| the-stack-python (`bigcode/the-stack-python`) | **0.15** | 1.20 B | Python code reasoning |
+| OpenMathInstruct-2 (`nvidia/OpenMathInstruct-2`) | **0.10** | 0.80 B | Worked math solutions |
+| arxiv (`cdv/arxiv-classification`) | **0.05** | 0.40 B | Long scientific prose |
 | **Total** | **1.00** | **8.00 B** | |
 
-This is the Chinchilla-optimal mix for a 502 M-param model. Each
-source has its own quality filter thresholds (e.g. min/max chars)
-because code (the-stack-python) tolerates very different doc sizes
-than web text (fineweb-edu).
+### Mix design rationale
+
+- **Web 70%** (edu + raw): language modelling backbone; edu filter improves
+  sample efficiency on small models.
+- **Code 15%**: strongest lever for reasoning at ~500 M scale.
+- **Math 10%**: full problem+solution pairs for derivations.
+- **Arxiv 5%**: long documents — supports YaRN 128K extrapolation and
+  passkey-style eval readiness.
+
+### Long-context augmentation (training config note)
+
+The A100 config comments note **10% of sequences packed to 4096** with
+document-boundary awareness and passkey-style inserts for eval readiness.
+This is a **training-time packing policy** (when building the chinchilla
+subset path) — the universal pipeline produces EOS-separated shards; project
+pack scripts may further curate `data/pretrain_chinchilla/`.
+
+### Code + math combined
+
+Code (0.15) + math (0.10) = **25%** reasoning-heavy tokens — below the 30%
+"reasoning diet" ceiling but aligned with GPT-OSS long-context focus (more web
++ long-form arxiv).
 
 ---
 
-## 4. Manifest schema
+## Tokenizer — LLaMA-3 BPE
 
-The manifest (`data/manifest.json`) is the contract between the
-pipeline and the training script. Its top-level keys:
+| Field | Value |
+|---|---|
+| Family | Meta LLaMA-3 BPE |
+| `vocab_size` | **128,000** |
+| `eos_token_id` | **128009** (`<\|eot_id\|>`) |
+| `pad_token_id` | 128002 |
+| Config `model.vocab_size` | 128000 (must match) |
 
-```jsonc
+GPT-OSS-Lite and **LLaMA-3-Lite** share this tokenizer — their token shards are
+**bit-identical** when prepared with the universal pipeline.
+
+Token IDs are stored as **uint32** even though vocab fits in uint16 — uint32
+is the safe universal dtype up to 4.29 B tokens per shard file.
+
+---
+
+## Shard Format
+
+### Raw uint32 layout (primary format)
+
+Each `shard_NNNNN.bin`:
+
+```
+[token_0, token_1, ..., token_{N-1}]   as little-endian uint32
+```
+
+- Continuous token stream across documents.
+- Documents separated by **EOS token** (128009) in the stream.
+- No per-document length table in the shard — boundaries are EOS markers.
+
+### Alternative: torch_save format
+
+`PretrainDataset._detect_format` checks magic bytes:
+
+- `PK` prefix → `torch.save` tensor (legacy / debug)
+- Size divisible by 4 → raw uint32
+- Else → assume torch_save
+
+Production shards use **raw uint32**.
+
+### Shard metadata in manifest
+
+Per-shard: `index`, `path`, `n_tokens`, `sha256`, `n_eos`.
+
+---
+
+## Manifest Schema
+
+`data/manifest.json` (or the packed corpus under `data/pretrain_chinchilla` including its manifest):
+
+```json
 {
-  "version": "1",
-  "created_utc": "2026-06-29T01:23:45Z",
-  "vocab_size": 128000,            // regular vocab (0..127999)
-  "eos_token_id": 128009,          // LLaMA-3 <|eot_id|>
+  "version": "1.0.0",
+  "vocab_size": 128000,
+  "eos_token_id": 128009,
   "pad_token_id": 128002,
   "tokenizer_name": "llama3",
-  "dtype": "uint32",               // shard element dtype
-  "shard_size_tokens": 50000000,   // 50M tokens / shard
-  "total_tokens": 8000000000,      // sum across all shards
-  "shard_count": 161,              // 8B / 50M = 160 + 1 remainder
+  "dtype": "uint32",
+  "shard_size_tokens": 50000000,
+  "total_tokens": 8000000000,
+  "shard_count": 160,
   "shards_dir": "data/shards",
-  "shards": [                      // per-shard metadata
-    {"index": 0, "path": "data/shards/shard_00000.bin",
-     "n_tokens": 50000000, "sha256": "...", "n_eos": 1234567},
-    ...
-  ],
-  "sources": {                     // per-source attribution
-    "fineweb-edu": {
-      "target_tokens": 4000000000, "actual_tokens": 3998234567,
-      "n_docs": 12345678, "n_dedup_dropped": 23456, "shard_count": 80
-    },
-    ...
-  },
-  "config_hash": "sha256:...",
-  "mixture_hash": "sha256:..."
+  "shards": [ { "index": 0, "path": "...", "n_tokens": ..., "sha256": "...", "n_eos": ... } ],
+  "sources": { ... }
 }
 ```
 
-`tools/data_pipeline_checker.py --project gpt-oss-lite --data-dir ...`
-reads this file (or scans shards directly) and reports issues:
-shard count, total tokens, vocab coverage, EOS presence, mmap cache
-size, dedup ratio.
+[`PretrainDataset._load_manifest`](../training/pretrain.py) reads optional
+fields: `eos_token_id`, `vocab_size`, `total_tokens`, `shard_count`, `dtype`.
 
 ---
 
-## 5. Validation rules
+## Output Layout — `data/pretrain_chinchilla`
 
-The pipeline enforces correctness at every stage. Failures abort
-the stage with a clear error; the per-stage state file is preserved
-so the user can fix the input and resume.
+Training config:
 
-| Stage | What we check | Failure mode |
-|-------|---------------|--------------|
-| download | Streaming iterator returns | raises → state saved |
-| clean | Per-doc filter chain | doc dropped + reason counted |
-| clean | SHA-256 dedup | duplicate dropped + reason counted |
-| tokenize | Token id ≤ vocab_size + 256 | raises immediately |
-| tokenize | EOS appended after every doc | enforced by writer |
-| pack | No doc split across shards (default) | raises if doc > shard size |
-| pack | Atomic write | tmp + rename → no partial files |
-| verify | Re-read shard, confirm count + EOS + max | raises on mismatch |
+```yaml
+data:
+  train_data_path: "data/pretrain_chinchilla"
+```
+
+Expected structure:
+
+```
+data/pretrain_chinchilla/
+├── manifest.json
+├── shard_00000.bin
+├── shard_00001.bin
+└── ...                          # ~160 shards for 8B tokens
+```
+
+This path is a **project-local packed subset** or symlink/copy of universal
+`data/pretrain_chinchilla/` after pipeline completion. The name `pretrain_chinchilla`
+reflects Chinchilla-optimal 8B token budget for the 502M model.
+
+Intermediate pipeline dirs (under `data/` or `$LLM_DATA_ROOT`):
+
+```
+data/
+├── raw/<source_id>/data.jsonl
+├── clean/<source_id>/data.jsonl
+├── tokens/<source_id>/tokens.bin
+├── shards/shard_*.bin          # universal output
+├── state/                      # resume state
+└── pretrain_chinchilla/        # training consumption path
+```
 
 ---
 
-## 6. Resumability
+## Training Loader — `PretrainDataset`
 
-Every stage persists a JSON state file in `data/state/`:
+Defined in [`training/pretrain.py`](../training/pretrain.py).
 
-- `state/download_<src>.json`   — last row index + char count
-- `state/clean_<src>.json`      — last doc index + keep/drop counts + reasons
-- `state/tokenize_<src>.json`   — last doc index + token count + `complete` flag
-- `state/pack_shards.json`      — last shard index + per-source accumulators
+### Constructor
 
-Re-running the pipeline after a crash picks up exactly where it left
-off. The shard files are immutable once written (their content
-depends only on the immutable input tokens), so we never re-write
-existing shards — we only continue from the next shard index.
+```python
+PretrainDataset(data_path: str, max_seq_len: int)
+```
+
+- `data_path`: file or directory.
+- `max_seq_len`: 4096 for default config.
+
+Raises `FileNotFoundError` with hint to run `python data/prepare_data.py` if
+missing.
+
+### Layout modes
+
+| Mode | Trigger | Storage |
+|---|---|---|
+| `single` | `data_path` is a file | One mmap'd `torch.load` tensor |
+| `sharded` | `data_path` is directory with `shard_*.bin` | Multiple mmap shards |
+
+### Sharded initialisation
+
+```python
+shard_paths = sorted(Path(data_dir).glob("shard_*.bin"))
+shard_formats = [_detect_format(p) for p in shard_paths]
+raw_dtype = uint32 → torch.int32 for mmap
+shard_sizes, shard_offsets  # cumulative token offsets
+_n_samples = (total_tokens - 1) // max_seq_len
+```
+
+### `__getitem__` — sliding windows
+
+Returns `(input_ids, target_ids)` each shape `(max_seq_len,)`:
+
+```python
+chunk = tokens[start : start + max_seq_len + 1]
+return chunk[:-1], chunk[1:]   # next-token prediction
+```
+
+**Sample index `idx`:** window starts at token `idx × max_seq_len`.
+
+### Shard loading cache
+
+```python
+def _load_shard(shard_idx):
+    # mmap torch.load or torch.from_file(shared=True)
+    # caches last-loaded shard in self._cache_shard
+```
+
+Only one shard cached — sufficient for sequential-ish access; random shuffle
+across windows may reload shards frequently (acceptable with mmap).
+
+### Cross-shard windows
+
+`_get_window_sharded` handles windows spanning shard boundaries:
+
+1. Fast path: if window fits in one shard, slice locally.
+2. Slow path: concatenate slices from multiple shards, then split input/target.
+
+Windows may cross **shard** boundaries but individual **documents** never cross
+shards (packing invariant) — EOS alignment preserved within shard interior.
 
 ---
 
-## 7. Usage
+## DataLoader Configuration
 
-### Full pipeline (one command)
+From [`pretrain.py`](../training/pretrain.py) + [`AGENTS.md`](../AGENTS.md):
+
+```python
+DataLoader(
+    ds,
+    batch_size=8,              # micro_batch_size
+    shuffle=True,
+    num_workers=4,
+    pin_memory=True,
+    persistent_workers=True,
+    drop_last=True,
+)
+```
+
+| Knob | Value | Purpose |
+|---|---|---|
+| `batch_size` | 8 | Micro-batch |
+| `shuffle` | True | Random window order |
+| `num_workers` | 4 | Parallel decode |
+| `pin_memory` | True | Faster CPU→GPU transfer |
+| `persistent_workers` | True | Avoid worker respawn |
+| `drop_last` | True | Consistent batch shapes |
+
+Each batch: `input_ids` `(8, 4096)`, `target_ids` `(8, 4096)`.
+
+---
+
+## Cross-Project Sharing
+
+The universal pipeline at `LLM/shared_data/` is shared by five LLM projects.
+**Prepare once** if `$LLM_DATA_ROOT` points to a common directory:
 
 ```bash
-python3 data/prepare_data.py --stage pretrain
+export LLM_DATA_ROOT=/path/to/shared/llm_corpus
+python data/prepare_data.py --stage pretrain
 ```
 
-This downloads → cleans → tokenises → packs. Expect 6–12 hours on
-a single A100 for the full 8 B tokens.
+All projects mmap the same `shard_*.bin` files.
 
-### Just one source
+**GPT-OSS + LLaMA-3:** identical tokenizer → **bit-identical shards**.
 
-```bash
-python3 data/scripts/download_raw.py --source fineweb-edu
-python3 data/scripts/tokenize.py --source fineweb-edu
-python3 data/scripts/pack_shards.py
+**HyMo / DeepSeek:** different tokenizers → re-tokenise only (skip download/clean).
+
+---
+
+## Idempotency and Resume
+
+| Stage | Resume mechanism |
+|---|---|
+| download | Per-source state files |
+| clean | `data/state/dedup_<source>.json` every 100k docs |
+| tokenize | Per-source progress state |
+| pack | `shard_writer_state.json` + partial shard tmp |
+
+Re-running `prepare_data.py` picks up incomplete work. Manifest rebuilt from
+on-disk shards after pack — never references missing files.
+
+Orchestrator seeds RNG: `seed=42` from `data_config.yaml` for reproducible
+sampling during pack.
+
+---
+
+## Disk and Time Budgets
+
+| Item | Estimate |
+|---|---|
+| Raw JSONL (all sources) | ~1–2 TB (before dedup) |
+| Token shards (uint32) | ~32 GB for 8B tokens (8B × 4 bytes) |
+| Per-shard size | ~190 MB (50M × 4 bytes) |
+| Shard count | ~160 |
+| Full pipeline (1× A100) | ~27–40 h (download-bound) |
+
+`shard_size_tokens: 50000000` in config matches pipeline default.
+
+---
+
+## Validation Checklist
+
+Before launching 61k-step pretrain:
+
+- [ ] the packed corpus under `data/pretrain_chinchilla` including its manifest exists
+- [ ] `manifest.total_tokens` ≈ 8.0e9
+- [ ] `manifest.vocab_size == 128000`
+- [ ] `manifest.eos_token_id == 128009`
+- [ ] `manifest.dtype == "uint32"`
+- [ ] All `shard_*.bin` files present (count matches `shard_count`)
+- [ ] `python -c "from training.pretrain import PretrainDataset; d=PretrainDataset('data/pretrain_chinchilla', 4096); print(len(d), d[0][0].shape)"`
+- [ ] No token id ≥ vocab_size in random windows
+
+---
+
+## Appendix A — Token arithmetic
+
 ```
-
-### Validate an existing pipeline
-
-```bash
-python3 ../tools/data_pipeline_checker.py \
-    --project gpt-oss-lite \
-    --data-dir LLM/GPT-OSS-Lite/data
-```
-
-Expected output:
-```
-Project:    gpt-oss-lite
-Data dir:   LLM/GPT-OSS-Lite/data
-Shards:     161
-Tokens:     8,000,000,000
-Vocab exp:  128,000
-EOS in vocab: True
-mmap active:  True
-OK:         True
-```
-
-### Force a fresh rebuild
-
-```bash
-rm -rf data/state data/raw data/clean data/tokens data/shards data/manifest.json
-python3 data/prepare_data.py --stage pretrain
+Corpus:     8,000,000,000 tokens
+Seq len:    4,096
+Samples:    floor((8e9 - 1) / 4096) ≈ 1,953,125 windows
+Micro-bs:   8
+Accum:      4
+Tokens/step: 8 × 4 × 4096 = 131,072
+Steps:      61,000
+Train tokens: 61,000 × 131,072 = 7,995,392,000 ≈ 8.0B
 ```
 
 ---
 
-## 8. Implementation details
+## Appendix B — Window crossing shards
 
-### 8.1 Why `uint32` and not `torch.long` (int64)?
-
-`torch.long` is int64 (8 bytes/token). For 8 B tokens, that's 64 GB
-of shards. `uint32` (4 bytes/token) is 32 GB — same precision for
-tokens ≤ 4.29 B (we have ≤ 132 k). The training script reads via
-`torch.from_file(..., dtype=torch.int32, shared=True)` which mmaps
-the raw bytes without any conversion.
-
-For vocab ≤ 65 535 we could use `uint16` (16 GB), but GPT-OSS-Lite
-uses the LLaMA-3 128 k vocab, so `uint32` is the safe default.
-`select_token_dtype()` picks the smallest dtype automatically.
-
-### 8.2 Why per-document EOS?
-
-Without EOS, the training windows (max_seq_len = 4096) would
-silently concatenate unrelated documents, teaching the model that
-the last paragraph of FineWeb-Edu doc #1234 is followed by the
-first paragraph of FineWeb-Edu doc #1235. This is a form of data
-leakage that *does* hurt long-context modelling.
-
-With EOS after every doc, the windows can safely cross document
-boundaries — the EOS just acts as a regular token the model learns
-to predict at the end of "real" sequences.
-
-### 8.3 Why mmap the shards?
-
-`torch.from_file(..., shared=True)` mmaps the shard file into the
-process's virtual address space. Subsequent `tensor[a:b]` accesses
-are zero-copy — the OS pages in the requested range on demand and
-the page cache warms for repeat accesses. This is critical for the
-8 B-token corpus: we cannot afford to load 32 GB into RAM just to
-slice it.
-
-### 8.4 Why not NaN-safe arithmetic in the writer?
-
-The shard writer does arithmetic on Python ints (token counts,
-offsets), not on tensors. There is no NaN/Inf failure mode here.
-The NaN-guard in `training/pretrain.py` operates on the loss
-tensor, not on the data pipeline.
-
----
-
-## 9. Limitations / future work
-
-- **No incremental manifest updates.** Re-running `pack_shards`
-  recomputes the manifest from scratch. For very large rebuilds
-  this is fine (the verify step is fast), but it's a candidate
-  for optimisation.
-- **Single-process dedup.** The hash-sharded dedup is parallelisable
-  across processes (each process owns a bucket range), but we don't
-  ship a launcher. The current implementation is fast enough on a
-  single A100.
-- **No language identification model.** The language filter is a
-  cheap ASCII-ratio + bigram heuristic. For higher precision,
-  swap in `fasttext.langdetect` (~1 MB model, <1 ms/doc).
-- **No streaming tokenisation.** Tokenisation currently loads each
-  source's clean JSONL fully before tokenising. For 8 B tokens this
-  is fine (~200 GB peak RAM at 5 chars/token), but a streaming
-  path would let it run on a 64 GB machine. Tracked in the
-  backlog below.
-
-### Backlog (not yet implemented)
-
-- Streaming tokenisation (constant-RAM, single source at a time).
-- HF datasets cache eviction (free 5 TB after `download_raw`).
-- Multiprocess pack with one process per source.
-
----
-
-## 10. Tests
-
-60 unit + integration tests in `tests/test_data_pipeline.py`:
-- 12 IO / hashing / state tests
-- 8 quality-filter tests (incl. language hint)
-- 6 BloomFilter + Deduper tests (two-pass, resume)
-- 11 ShardWriter / TokenStream tests (atomicity, EOS, OOV, splits)
-- 6 Manifest tests (round-trip + 4 validation rules)
-- 5 PretrainDataset tests (new format + backward compat)
-- 1 end-to-end mini pipeline test (synthetic corpus)
-
-CPU-only, all <0.3 s. Run with:
-
-```bash
-python3 -m pytest tests/test_data_pipeline.py -v
 ```
+Shard 0: [ ... docA ... EOS ... docB ... EOS ... partial_docC ]
+Shard 1: [ ... rest_docC ... EOS ... docD ... ]
+
+Window at idx=k may start in shard 0 and extend into shard 1.
+PretrainDataset concatenates mmap slices — no extra RAM for full corpus.
+
+Document never split across shards:
+  docC entirely in shard 0 OR entirely in shard 1 — never both.
+```
+
 ---
 
-## Implementation notes (extracted from code review)
+## Appendix C — Directory tree
 
-- **mmap zero-copy slices**: `PretrainDataset._load_shard` mmaps each shard
-  via `torch.from_file(path, dtype=raw_dtype, shared=True, size=...)` (raw
-  bytes layout) or `torch.load(path, mmap=True)` (legacy torch.save layout).
-  Each `__getitem__` then returns a zero-copy slice of the mmap'd tensor —
-  the OS pages in the requested range on demand and the page cache warms
-  for repeat accesses. This is critical for the 8B-token corpus: we cannot
-  afford to load 32 GB into RAM just to slice it.
-- **DataLoader prefetch knobs**: `training/pretrain.py` constructs the
-  DataLoader with `num_workers=4`, `pin_memory=True` (on CUDA), and
-  `persistent_workers=(num_workers > 0)`. This enables async H2D transfer
-  and keeps the worker processes alive across epochs (avoids the per-epoch
-  re-import cost).
-- **`uint32` storage**: the manifest's `dtype` field records the shard
-  element dtype. GPT-OSS-Lite uses `uint32` (4 bytes/token) because the
-  LLaMA-3 vocab is 128K (fits in uint16 numerically, but uint32 is the
-  safe default for multi-trillion-token corpora with reserved special
-  tokens up to vocab+256). `select_token_dtype(vocab_size)` picks the
-  smallest dtype automatically.
+```
+GPT-OSS-Lite/
+├── data/
+│   ├── prepare_data.py          ← shim
+│   ├── pretrain_chinchilla/     ← train_data_path
+│   │   ├── manifest.json
+│   │   └── shard_*.bin
+│   └── (pipeline intermediates under data/ or $LLM_DATA_ROOT)
+├── configs/
+│   └── pretrain_a100_502m.yaml
+└── training/
+    └── pretrain.py              ← PretrainDataset
 
-<!-- docs:verified 2026-07-31 · fd4fe36 -->
+LLM/
+└── shared_data/                 ← universal pipeline (authoritative)
+    ├── prepare_data.py
+    ├── config/
+    │   ├── mixture.yaml
+    │   └── data_config.yaml
+    ├── scripts/
+    │   ├── download_raw.py
+    │   ├── clean.py
+    │   ├── tokenize.py
+    │   └── pack_shards.py
+    ├── shard_writer.py
+    ├── manifest.py
+    └── dedup.py
+```
+
+---
+
+## Appendix D — Source dataset reference
+
+| Mix id | HuggingFace | Text field | Notes |
+|---|---|---|---|
+| fineweb-edu | `HuggingFaceFW/fineweb-edu` | `text` | `sample-10BT` config |
+| fineweb | `HuggingFaceFW/fineweb` | `text` | Raw web diversity |
+| the-stack-python | `bigcode/the-stack-python` | `content` | Python only |
+| openmath | `nvidia/OpenMathInstruct-2` | `problem` + solution | Concatenated fields |
+| arxiv | `cdv/arxiv-classification` | `text` | Long papers |
+
+Quality bounds from mixture YAML per source (`min_chars`, `max_chars`).
+
+---
+
+## Load-Bearing Invariants
+
+1. **EOS after every document** — `add_eos: true`.
+2. **No cross-shard documents** — `cross_document_boundary_ok: false`.
+3. **uint32 shard dtype** for vocab 128000.
+4. **mmap consumption** — `weights_only=True` or `from_file(shared=True)`.
+5. **train_data_path** must exist before `pretrain.py` starts.
+6. **Vocab/EOS** in manifest must match `ModelConfig.vocab_size`.
+
+---
+
+## References
+
+- [`data/prepare_data.py`](../data/prepare_data.py) — project shim
+- `LLM/shared_data/README.md` — workspace canonical pipeline docs
+- `LLM/shared_data/documentation/prepare_data.md` — orchestrator detail
+- [`training/pretrain.py`](../training/pretrain.py) — `PretrainDataset`
+- [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)
+- [training.md](training.md) — DataLoader and batch arithmetic
+
+<!-- docs:verified 2026-07-31 · fa6f918 -->
