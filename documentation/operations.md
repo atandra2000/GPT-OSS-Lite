@@ -751,7 +751,7 @@ $$
 | Parameters | $P$ | All model weights in native dtype |
 | Optimizer | $O$ | 12 bytes/param (FP32 m, v, master) |
 | KV cache | $KV$ | Mixed windowed/global (§9) |
-| Activations | $A$ | Layer activations with checkpoint factor (§B.10) |
+| Activations | $A$ | Layer activations with checkpoint factor (§B.3 (activations)) |
 | Overhead | — | CUDA allocator + cudnn workspace heuristic |
 
 ---
@@ -1515,7 +1515,7 @@ if use_grad_ckpt and (layer_idx % grad_ckpt_every == 0):
 
 **Files:** `models/transformer.py`, `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`
 
-**Related:** [operations.md](operations.md) §B.10
+**Related:** [operations.md](operations.md) §B.3 (activations)
 
 ---
 
