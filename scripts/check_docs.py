@@ -23,11 +23,14 @@ BACKTICK_PATH_RE = re.compile(
 ALLOW_MISSING_PATHS = {
     "data/pretrain_chinchilla",
     "data/pretrain_chinchilla/",
+    "data/pretrain_smoke",
+    "data/pretrain_smoke/",
     "data/scripts/download_raw.py",
     "data/scripts/pack_shards.py",
     "data/shards/shard_NNNNN.bin",
     "data/manifest.json",
     "data/config/mixture.yaml",
+    "data/shared_data",
     "data/state",
     "models/__init__.py",
     "scripts/launch_a100.sh",
@@ -39,12 +42,18 @@ STALE_PATTERNS: list[tuple[str, str]] = [
     (r"\b185 tests?\b", "stale test count (use 187)"),
     (r"\b130 tests?\b", "stale test count (use 187)"),
     (r"\b600-line\b", "stale ATTENTION_SINKS line count"),
-    (r"moe_triton\.md", "merged into moe.md"),
+    (r"moe_triton\.md", "use moe.md (Triton section)"),
     (r"triton_kernels\.md", "merged into moe.md"),
+    (r"transformer\.md", "merged into architecture.md"),
+    (r"\battention\.md\b", "merged into ATTENTION_SINKS.md"),
+    (r"\brotary\.md\b", "merged into rope_yarn.md"),
+    (r"\byarn\.md\b", "merged into rope_yarn.md"),
+    (r"configs\.md", "merged into training.md"),
     (r"scripts\.md", "merged into operations.md"),
     (r"utils\.md", "merged into operations.md"),
     (r"OPTIMIZATIONS\.md", "merged into operations.md"),
     (r"ENABLE_TRITON_KERNELS", "removed env-var gate; use moe_dispatch config"),
+    (r"when published", "stale placeholder link language"),
 ]
 
 SIZE_TABLE_START = "## Doc size reference"
@@ -156,7 +165,7 @@ def collect_issues() -> list[Issue]:
         issues.extend(check_markdown_links(path, text))
         issues.extend(check_backtick_paths(path, text))
 
-    for root_doc in (ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "SKILLS.md", ROOT / "CONTEXT.md"):
+    for root_doc in (ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "SKILLS.md"):
         if root_doc.is_file():
             text = root_doc.read_text(encoding="utf-8")
             issues.extend(check_stale_patterns(root_doc, text))

@@ -768,4 +768,4 @@ Quality bounds from mixture YAML per source (`min_chars`, `max_chars`).
 - [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)
 - [training.md](training.md) — DataLoader and batch arithmetic
 
-<!-- docs:verified 2026-07-31 · path-alignment fix -->
+<!-- docs:verified 2026-07-31 · 123fd27 -->

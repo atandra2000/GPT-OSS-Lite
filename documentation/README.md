@@ -103,7 +103,18 @@ Every chapter file ends with a verification footer:
 
 | Doc | ~Lines | Status |
 |---|---|---|
-| *(run `python3 scripts/check_docs.py --update-sizes` to regenerate)* | | |
+| operations.md | 1,609 | Comprehensive |
+| training.md | 1,128 | Comprehensive |
+| ATTENTION_SINKS.md | 1,112 | Comprehensive |
+| architecture.md | 1,075 | Comprehensive |
+| moe.md | 920 | Comprehensive |
+| data_pipeline.md | 771 | Comprehensive |
+| rope_yarn.md | 753 | Comprehensive |
+| foundations.md | 630 | Comprehensive |
+| inference.md | 352 | Comprehensive |
+| getting_started.md | 283 | Comprehensive |
+| **Total** | **8,633** | |
+
 
 ---
 
@@ -118,4 +129,4 @@ Every chapter file ends with a verification footer:
 
 ---
 
-<!-- docs:verified 2026-07-31 · fa6f918 -->
+<!-- docs:verified 2026-07-31 · 123fd27 -->

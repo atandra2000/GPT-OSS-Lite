@@ -815,7 +815,7 @@ CLI overrides:
 | `total_steps` | 61000 | 5 |
 | `compile` | true | false |
 | `moe_dispatch` | omitted (stacked) | `"stacked"` explicit |
-| `train_data_path` | `data/pretrain_chinchilla` | `data/pretrain_chinchilla` |
+| `train_data_path` | `data/pretrain_chinchilla` | `data/pretrain_smoke` |
 | Checkpoints | `checkpoints/pretrain_a100` | `checkpoints/gpu_smoke` |
 
 Smoke config preserves **structural** invariants (alternation, sink, YaRN, MoE
@@ -994,7 +994,7 @@ above in this document.
 
 | Key | A100 | Smoke | Notes |
 |-----|------|-------|-------|
-| `train_data_path` | `data/pretrain_chinchilla` | `data/pretrain_chinchilla` | `shard_*.bin` dir; prepare first |
+| `train_data_path` | `data/pretrain_chinchilla` | `data/pretrain_smoke` | `shard_*.bin` dir; prepare first |
 | `tokenizer` | `llama3` | `smoke` | Universal pipeline name |
 | `shard_size_tokens` | `50000000` | `1024` | Tokens per shard at prepare time |
 | `max_tokens` | `8000000000` | `8192` | Total corpus budget |
@@ -1125,4 +1125,4 @@ python3 -m pytest tests/test_training.py tests/test_validation.py -v
 **Next:** [data_pipeline.md](data_pipeline.md) — corpus, tokenization, and
 `PretrainDataset` internals.
 
-<!-- docs:verified 2026-07-31 · fa6f918 -->
+<!-- docs:verified 2026-07-31 · 123fd27 -->

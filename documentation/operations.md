@@ -1083,7 +1083,7 @@ inference throughput.
 
 **Files:** `models/attention.py` (`_window_mask`), `inference/generate.py`
 
-**Related:** [inference.md](inference.md) when published
+**Related:** [inference.md](inference.md)
 
 ---
 
@@ -1607,3 +1607,5 @@ After changing `models/attention.py`, always run `test_sliding_window_matches_fu
 | YaRN / RoPE | [rope_yarn.md](rope_yarn.md) |
 | Book index | [README.md](README.md) |
 
+
+<!-- docs:verified 2026-07-31 · 123fd27 -->

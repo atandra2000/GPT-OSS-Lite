@@ -627,4 +627,4 @@ even/odd `W=128` alternation.
 
 ---
 
-<!-- docs:verified 2026-07-31 · task-9 -->
+<!-- docs:verified 2026-07-31 · 123fd27 -->
