@@ -18,28 +18,29 @@
 2. [Design Goals](#design-goals)
 3. [Quick Start](#quick-start)
 4. [The Shim — `data/prepare_data.py`](#the-shim--dataprepare_datapy)
-5. [Pipeline Stages Overview](#pipeline-stages-overview)
-6. [Stage 1 — Download (`download_raw`)](#stage-1--download-download_raw)
-7. [Stage 2 — Clean (`clean`)](#stage-2--clean-clean)
-8. [Stage 3 — Tokenize (`tokenize`)](#stage-3--tokenize-tokenize)
-9. [Stage 4 — Pack Shards (`pack_shards`)](#stage-4--pack-shards-pack_shards)
-10. [Corpus Mix — `gptoss-default`](#corpus-mix--gptoss-default)
-11. [Tokenizer — LLaMA-3 BPE](#tokenizer--llama-3-bpe)
-12. [Shard Format](#shard-format)
-13. [Manifest Schema](#manifest-schema)
-14. [Output Layout — `data/pretrain_chinchilla`](#output-layout--datapretrain_chinchilla)
-15. [Training Loader — `PretrainDataset`](#training-loader--pretraindataset)
-16. [DataLoader Configuration](#dataloader-configuration)
-17. [Cross-Project Sharing](#cross-project-sharing)
-18. [Idempotency and Resume](#idempotency-and-resume)
-19. [Disk and Time Budgets](#disk-and-time-budgets)
-20. [Validation Checklist](#validation-checklist)
-21. [Appendix A — Token arithmetic](#appendix-a--token-arithmetic)
-22. [Appendix B — Window crossing shards](#appendix-b--window-crossing-shards)
-23. [Appendix C — Directory tree](#appendix-c--directory-tree)
-24. [Appendix D — Source dataset reference](#appendix-d--source-dataset-reference)
-25. [Load-Bearing Invariants](#load-bearing-invariants)
-26. [References](#references)
+5. [Vendored Copy — `data/shared_data/`](#vendored-copy--datashared_data)
+6. [Pipeline Stages Overview](#pipeline-stages-overview)
+7. [Stage 1 — Download (`download_raw`)](#stage-1--download-download_raw)
+8. [Stage 2 — Clean (`clean`)](#stage-2--clean-clean)
+9. [Stage 3 — Tokenize (`tokenize`)](#stage-3--tokenize-tokenize)
+10. [Stage 4 — Pack Shards (`pack_shards`)](#stage-4--pack-shards-pack_shards)
+11. [Corpus Mix — `gptoss-default`](#corpus-mix--gptoss-default)
+12. [Tokenizer — LLaMA-3 BPE](#tokenizer--llama-3-bpe)
+13. [Shard Format](#shard-format)
+14. [Manifest Schema](#manifest-schema)
+15. [Output Layout — `data/pretrain_chinchilla`](#output-layout--datapretrain_chinchilla)
+16. [Training Loader — `PretrainDataset`](#training-loader--pretraindataset)
+17. [DataLoader Configuration](#dataloader-configuration)
+18. [Cross-Project Sharing](#cross-project-sharing)
+19. [Idempotency and Resume](#idempotency-and-resume)
+20. [Disk and Time Budgets](#disk-and-time-budgets)
+21. [Validation Checklist](#validation-checklist)
+22. [Appendix A — Token arithmetic](#appendix-a--token-arithmetic)
+23. [Appendix B — Window crossing shards](#appendix-b--window-crossing-shards)
+24. [Appendix C — Directory tree](#appendix-c--directory-tree)
+25. [Appendix D — Source dataset reference](#appendix-d--source-dataset-reference)
+26. [Load-Bearing Invariants](#load-bearing-invariants)
+27. [References](#references)
 
 ---
 
@@ -131,12 +132,57 @@ return shared_main()
 | Path | Role |
 |---|---|
 | `GPT-OSS-Lite/data/prepare_data.py` | Project shim |
-| `LLM/shared_data/` | Universal pipeline package |
+| `GPT-OSS-Lite/data/shared_data/` | Vendored pipeline (standalone clones) |
+| `LLM/shared_data/` | Workspace canonical pipeline |
 | `LLM/shared_data/config/mixture.yaml` | Source weights |
 | `LLM/shared_data/config/data_config.yaml` | Tokenizer, shard, dedup knobs |
 
 The shim uses **universal defaults** — no project-local `data_config.yaml`
 override is required for GPT-OSS-Lite.
+
+---
+
+## Vendored Copy — `data/shared_data/`
+
+`data/shared_data/` is a **verbatim copy** of the workspace-level
+`LLM/shared_data/` package (~160 KB, 24 source files). When GPT-OSS-Lite is
+cloned standalone, `LLM/shared_data/` is absent; vendoring keeps the repo
+fully runnable without the rest of the CoreProjects workspace.
+
+```
+data/
+├── prepare_data.py              ← project shim
+├── shared_data/                 ← vendored universal pipeline
+│   ├── config/
+│   │   ├── mixture.yaml
+│   │   └── data_config.yaml
+│   ├── scripts/                 ← download_raw, clean, tokenize, pack_shards
+│   ├── prepare_data.py          ← orchestrator
+│   ├── shard_writer.py
+│   ├── manifest.py
+│   └── ...
+└── pretrain_chinchilla/         ← training consumption path
+```
+
+The shim resolves `shared_data` with the vendored copy first, then falls back
+to the workspace package:
+
+```python
+sys.path.insert(0, <project_root>/data)   # vendored copy first
+sys.path.insert(0, <workspace_root>/LLM)    # workspace copy as fallback
+```
+
+### Updating the vendored copy
+
+When `LLM/shared_data/` changes, refresh the vendored copy from the workspace
+root:
+
+```bash
+rsync -a --delete --exclude='__pycache__' --exclude='*.pyc' --exclude='README.md' \
+    LLM/shared_data/  LLM/GPT-OSS-Lite/data/shared_data/
+```
+
+All five LLM project vendored copies are kept **bit-identical**.
 
 ### CLI flags (delegated)
 
@@ -374,8 +420,9 @@ Code (0.15) + math (0.10) = **25%** reasoning-heavy tokens — below the 30%
 | `pad_token_id` | 128002 |
 | Config `model.vocab_size` | 128000 (must match) |
 
-GPT-OSS-Lite and **LLaMA-3-Lite** share this tokenizer — their token shards are
-**bit-identical** when prepared with the universal pipeline.
+GPT-OSS-Lite and **LLaMA-3-Lite** share this tokenizer — the shards produced by
+both projects are **bit-identical** and can be shared verbatim (same BPE, same
+EOS, same uint32 pack format).
 
 Token IDs are stored as **uint32** even though vocab fits in uint16 — uint32
 is the safe universal dtype up to 4.29 B tokens per shard file.
@@ -671,6 +718,7 @@ Document never split across shards:
 GPT-OSS-Lite/
 ├── data/
 │   ├── prepare_data.py          ← shim
+│   ├── shared_data/             ← vendored copy (standalone clones)
 │   ├── pretrain_chinchilla/     ← train_data_path
 │   │   ├── manifest.json
 │   │   └── shard_*.bin

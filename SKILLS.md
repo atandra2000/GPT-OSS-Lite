@@ -135,7 +135,8 @@ retrieval, or unstable training at longer sequences.
    ```
 
 2. **Prepare data** (downloads + tokenizes the universal 8.0B-token corpus;
-   can take hours). See `data/DATA_PIPELINE.md` for the full guide.
+   can take hours). See `documentation/data_pipeline.md` for the full guide
+   (`data/DATA_PIPELINE.md` is a short pointer).
    ```bash
    python3 data/prepare_data.py --stage pretrain
    # Or skip the download if you've already run the pipeline once:
