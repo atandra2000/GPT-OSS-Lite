@@ -773,8 +773,7 @@ total_tokens     = 61,000 × 131,072 = 7,995,392,000 ≈ 8.0B
 > **YAML encyclopedia** for `configs/pretrain_a100_502m.yaml` and
 > `configs/pretrain_gpu_smoke.yaml`. Every `model`, `training`, and `data` key
 > is documented with defaults, valid ranges, and interaction effects. For how
-> configs connect to code, see [architecture.md](architecture.md) and
-> [transformer.md](transformer.md).
+> configs connect to code, see [architecture.md](architecture.md).
 
 ### B.1 How configs are loaded (`yaml.safe_load` → `ModelConfig` / dicts)
 

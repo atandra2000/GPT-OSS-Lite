@@ -30,8 +30,9 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
   grouped dispatch.
 - `models/yarn.py` — YaRN RoPE scaling + pruned RoPE.
 - `models/moe_triton.py` — sanctioned Triton path for fused W1/W3+silu
-  MoE dispatch. Opt-in via `moe_dispatch="triton_grouped"`. Verified
-  end-to-end on a 4 GB GPU (sm_75) via `scripts/e2e_gpu_smoke.py`.
+  MoE dispatch (`documentation/moe.md`). Opt-in via
+  `moe_dispatch="triton_grouped"`. Verified end-to-end on a 4 GB GPU
+  (sm_75) via `scripts/e2e_gpu_smoke.py`.
 - Training: BF16 + `torch.compile(max-autotune)` + TF32 + FA2 via SDPA,
   FP32 AdamW master weights + gradient checkpointing (every 3rd layer),
   NaN guard with rollback, aux load-balancing loss (α=0.01), chunked

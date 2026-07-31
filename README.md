@@ -191,14 +191,20 @@ python3 training/pretrain.py \
 
 ## 📚 Documentation
 
-Full technical references live in [`documentation/`](documentation/README.md). Start here:
+Full technical references live in [`documentation/`](documentation/README.md) (10 chapters + index). Start here:
 
 | Doc | Purpose |
 |---|---|
 | [getting_started.md](documentation/getting_started.md) | Onboarding, smoke runs, pitfalls |
-| [architecture.md](documentation/architecture.md) | System diagram, file map, invariants |
-| [ATTENTION_SINKS.md](documentation/ATTENTION_SINKS.md) | Authoritative sink-bias + SWA + YaRN theory |
+| [foundations.md](documentation/foundations.md) | Decoder-only, GQA, SWA, sinks, YaRN, MoE concepts |
+| [architecture.md](documentation/architecture.md) | System diagram, `GPTOSS` / `ModelConfig`, file map |
+| [ATTENTION_SINKS.md](documentation/ATTENTION_SINKS.md) | Authoritative sink-bias + SWA theory + implementation |
+| [rope_yarn.md](documentation/rope_yarn.md) | RoPE helpers, YaRN 128K extrapolation, pruned global layers |
+| [moe.md](documentation/moe.md) | Top-2 routing, aux loss, sanctioned Triton path |
 | [training.md](documentation/training.md) | Pretrain loop, NaN guard, checkpoints, YAML reference |
+| [data_pipeline.md](documentation/data_pipeline.md) | Shards, tokenization, `PretrainDataset` (canonical data guide) |
+| [inference.md](documentation/inference.md) | `MixedKVCache`, `generate()`, passkey eval |
+| [operations.md](documentation/operations.md) | Scripts, utils, OPT-1…24 catalog |
 
 Validate docs: `python3 scripts/check_docs.py`
 
@@ -258,6 +264,7 @@ GPT-OSS-Lite/
 │   ├── yarn.py                         # YaRN RoPE scaling
 │   ├── attention.py                    # ★ SWA + full + learned sink bias
 │   ├── moe.py                          # top-2 routed + 1 shared + aux loss
+│   ├── moe_triton.py                   # opt-in fused W1/W3+silu Triton dispatch
 │   └── transformer.py                  # top-level GPTOSS + ModelConfig
 ├── training/
 │   └── pretrain.py                     # full training loop + resume
@@ -272,10 +279,8 @@ GPT-OSS-Lite/
 ├── data/
 │   ├── prepare_data.py                 # Shim over data/shared_data/ universal pipeline
 │   ├── shared_data/                    # Vendored universal 8.0B-token pipeline
-│   └── DATA_PIPELINE.md                # Per-project pipeline guide
+│   └── DATA_PIPELINE.md                # stub → documentation/data_pipeline.md
 ├── scripts/
-│   ├── kv_cache_benchmark.py           # ★ headline metric
-│   ├── passkey_eval.py                 # ★ headline metric
 │   ├── kv_cache_benchmark.py           # ★ headline metric
 │   ├── passkey_eval.py                 # ★ headline metric
 │   ├── microbench_a100.py
@@ -294,12 +299,18 @@ GPT-OSS-Lite/
 │   ├── test_utils.py
 │   ├── test_data_pipeline.py
 │   └── test_validation.py
-├── documentation/                      # full design docs — see documentation/README.md
-│   ├── README.md                       # doc index + learning path
+├── documentation/                      # 10 chapters + index — see documentation/README.md
+│   ├── README.md                       # doc index + learning path + agent routing
 │   ├── getting_started.md              # onboarding
-│   ├── architecture.md                 # system map
+│   ├── foundations.md                  # concepts
+│   ├── architecture.md                 # system map + ModelConfig
 │   ├── ATTENTION_SINKS.md              # ★ sink-bias deep-dive
-│   └── … (16 component + ops docs)
+│   ├── rope_yarn.md                    # RoPE + YaRN
+│   ├── moe.md                          # MoE + Triton opt-in
+│   ├── training.md                     # pretrain loop + YAML reference
+│   ├── data_pipeline.md                # canonical data guide
+│   ├── inference.md                    # generation + long-context eval
+│   └── operations.md                   # scripts, utils, OPT catalog
 ├── AGENTS.md
 ├── SKILLS.md
 ├── LICENSE                             # Apache 2.0
