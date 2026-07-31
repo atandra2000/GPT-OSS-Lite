@@ -1608,4 +1608,4 @@ After changing `models/attention.py`, always run `test_sliding_window_matches_fu
 | Book index | [README.md](README.md) |
 
 
-<!-- docs:verified 2026-07-31 · 123fd27 -->
+<!-- docs:verified 2026-07-31 · 7fe1247 -->

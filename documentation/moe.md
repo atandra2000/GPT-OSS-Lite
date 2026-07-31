@@ -917,4 +917,4 @@ layers.
 - [`tests/test_moe_triton.py`](../tests/test_moe_triton.py) — Triton contract tests.
 - [training.md](training.md) — α=0.01 in the training loop.
 
-<!-- docs:verified 2026-07-31 · 123fd27 -->
+<!-- docs:verified 2026-07-31 · 7fe1247 -->

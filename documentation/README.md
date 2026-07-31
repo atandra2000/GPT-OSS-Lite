@@ -103,7 +103,7 @@ Every chapter file ends with a verification footer:
 
 | Doc | ~Lines | Status |
 |---|---|---|
-| operations.md | 1,609 | Comprehensive |
+| operations.md | 1,611 | Comprehensive |
 | training.md | 1,128 | Comprehensive |
 | ATTENTION_SINKS.md | 1,112 | Comprehensive |
 | architecture.md | 1,075 | Comprehensive |
@@ -113,7 +113,8 @@ Every chapter file ends with a verification footer:
 | foundations.md | 630 | Comprehensive |
 | inference.md | 352 | Comprehensive |
 | getting_started.md | 283 | Comprehensive |
-| **Total** | **8,633** | |
+| **Total** | **8,635** | |
+
 
 
 ---
@@ -129,4 +130,4 @@ Every chapter file ends with a verification footer:
 
 ---
 
-<!-- docs:verified 2026-07-31 · 123fd27 -->
+<!-- docs:verified 2026-07-31 · 7fe1247 -->

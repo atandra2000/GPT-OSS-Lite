@@ -1125,4 +1125,4 @@ python3 -m pytest tests/test_training.py tests/test_validation.py -v
 **Next:** [data_pipeline.md](data_pipeline.md) — corpus, tokenization, and
 `PretrainDataset` internals.
 
-<!-- docs:verified 2026-07-31 · 123fd27 -->
+<!-- docs:verified 2026-07-31 · 7fe1247 -->
