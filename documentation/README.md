@@ -47,9 +47,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | 7 | Training | [training.md](training.md) | `pretrain.py`, schedules, NaN guard, YAML reference |
 | 7c | Data | [data_pipeline.md](data_pipeline.md) | Shards, tokenization, loader |
 | 8 | Inference | [inference.md](inference.md) | `MixedKVCache`, `generate()` |
-| 9 | Optimizations | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) | OPT-1…24 catalog |
-| 10 | Scripts | [scripts.md](scripts.md) | Benchmarks and profilers |
-| 11 | Utilities | [utils.md](utils.md) | Checkpoints, logging, VRAM estimator |
+| 9 | Operations | [operations.md](operations.md) | Scripts, utils, OPT-1…24 catalog |
 
 ---
 
@@ -71,8 +69,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 - [getting_started.md](getting_started.md), [training.md](training.md)
 - [data_pipeline.md](data_pipeline.md)
 - [inference.md](inference.md)
-- [scripts.md](scripts.md), [utils.md](utils.md)
-- [OPTIMIZATIONS.md](OPTIMIZATIONS.md)
+- [operations.md](operations.md)
 
 ---
 
@@ -89,9 +86,9 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | Training loop | `training/pretrain.py` | [training.md](training.md) |
 | Generation | `inference/generate.py` | [inference.md](inference.md) |
 | Long-context eval | `inference/long_context.py` | [inference.md](inference.md) |
-| Checkpoints | `utils/checkpoint.py` | [utils.md](utils.md) |
-| Logging | `utils/logging.py` | [utils.md](utils.md) |
-| VRAM estimator | `utils/memory.py` | [utils.md](utils.md) |
+| Checkpoints | `utils/checkpoint.py` | [operations.md](operations.md#b1-checkpointmanager-atomic-safetensors-protocol) |
+| Logging | `utils/logging.py` | [operations.md](operations.md#b2-traininglogger--wandb) |
+| VRAM estimator | `utils/memory.py` | [operations.md](operations.md#b3-estimate_model_memory_gb--mixed-kv-term--assert_fits_in_available_gpu) |
 | Production config | `configs/pretrain_a100_502m.yaml` | [training.md](training.md#part-b--configuration-reference) |
 | Data pipeline | `data/` | [data_pipeline.md](data_pipeline.md) |
 
@@ -104,9 +101,9 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | Why alternating SWA/full? | [foundations.md](foundations.md) §4, [architecture.md](architecture.md) §4 |
 | How does sink bias work? | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
 | What is `moe_dispatch`? | [moe.md](moe.md) (YAML opt-in, not env vars) |
-| Memory at B=8, T=4096? | [utils.md](utils.md), `scripts/microbench_a100.py` |
-| All performance knobs? | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) |
-| How to run benchmarks? | [scripts.md](scripts.md) |
+| Memory at B=8, T=4096? | [operations.md](operations.md#b3-estimate_model_memory_gb--mixed-kv-term--assert_fits_in_available_gpu), `scripts/microbench_a100.py` |
+| All performance knobs? | [operations.md](operations.md#part-c--optimization-catalog-opt-1--opt-24) |
+| How to run benchmarks? | [operations.md](operations.md#part-a--scripts-scripts) |
 | Doc lint / stale patterns? | `scripts/check_docs.py` |
 
 ---
@@ -140,14 +137,12 @@ Every chapter file ends with a verification footer:
 | moe.md | 754 | Comprehensive |
 | data_pipeline.md | 735 | Comprehensive |
 | ATTENTION_SINKS.md | ~1200 | Comprehensive (theory + implementation) |
-| OPTIMIZATIONS.md | 712 | Comprehensive |
+| operations.md | ~1600 | Comprehensive |
 | architecture.md | 650 | Comprehensive |
 | moe.md | ~900 | Comprehensive (MoE + Triton contract) |
 | foundations.md | 606 | Comprehensive |
 | inference.md | 549 | Comprehensive |
 | transformer.md | 532 | Comprehensive |
-| utils.md | 527 | Comprehensive |
-| scripts.md | 520 | Comprehensive |
 | rope_yarn.md | ~730 | Comprehensive |
 | getting_started.md | 454 | Comprehensive |
 | **Total** | **10,134** | |

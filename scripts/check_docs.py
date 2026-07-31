@@ -41,6 +41,9 @@ STALE_PATTERNS: list[tuple[str, str]] = [
     (r"\b600-line\b", "stale ATTENTION_SINKS line count"),
     (r"moe_triton\.md", "merged into moe.md"),
     (r"triton_kernels\.md", "merged into moe.md"),
+    (r"scripts\.md", "merged into operations.md"),
+    (r"utils\.md", "merged into operations.md"),
+    (r"OPTIMIZATIONS\.md", "merged into operations.md"),
     (r"ENABLE_TRITON_KERNELS", "removed env-var gate; use moe_dispatch config"),
 ]
 

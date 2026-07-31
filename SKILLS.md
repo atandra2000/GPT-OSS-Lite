@@ -274,7 +274,7 @@ adding more complex optimisations (e.g. CUDA graphs, custom Triton kernels).
    python3 scripts/step_time_a100.py     # end-to-end training step (GPU)
    ```
 
-2. **Cross-reference with `documentation/OPTIMIZATIONS.md`.** The doc lists
+2. **Cross-reference with `documentation/operations.md` Part C.** The doc lists
    every optimisation applied, what it does, and how much it bought. If your
    hotspot is one of the listed items, you're done; if not, you're in
    uncharted territory and should design a new optimisation.
@@ -285,7 +285,7 @@ adding more complex optimisations (e.g. CUDA graphs, custom Triton kernels).
    python3 -m pytest tests/ -q
    ```
 
-4. **Document the new optimisation in `documentation/OPTIMIZATIONS.md`**
+4. **Document the new optimisation in `documentation/operations.md` Part C**
    following the same format (problem, fix, impact, risk, test coverage).
 
 **Optimisation ideas NOT yet applied (backlog):**
