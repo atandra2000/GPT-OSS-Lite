@@ -183,10 +183,10 @@ raise in `__post_init__`.
 | `yarn_scale_factor` | `32` | `4` | `1` = plain RoPE |
 | `yarn_original_max_seq_len` | `4096` | `64` | Training RoPE anchor |
 | `yarn_target_seq_len` | `131072` | `256` | Extrapolation target (128K) |
-| `yarn_beta_fast` | `32` | `4` | YaRN ramp — [yarn.md](yarn.md) |
+| `yarn_beta_fast` | `32` | `4` | YaRN ramp — [rope_yarn.md](rope_yarn.md) |
 | `yarn_beta_slow` | `1` | `1` | YaRN ramp slow boundary |
 | `yarn_mscale` | `true` | `true` | Magnitude scaling during extrapolation |
-| `yarn_prune_rope_global` | `true` | `true` | 25% dim freeze on global layers — [rotary.md](rotary.md) |
+| `yarn_prune_rope_global` | `true` | `true` | 25% dim freeze on global layers — [rope_yarn.md](rope_yarn.md) |
 | `max_seq_len` | `4096` | `64` | Training window size |
 | `eval_max_seq_len` | `131072` | `256` | Inference / passkey cap |
 
@@ -272,7 +272,7 @@ eval_max_seq_len <= yarn_target_seq_len    (recommended)
 ```
 
 Mismatch triggers `ModelConfig` validation errors or degenerate ramps (see
-[yarn.md](yarn.md)).
+[rope_yarn.md](rope_yarn.md)).
 
 ### `window_size` vs `max_seq_len`
 
@@ -371,7 +371,7 @@ Use the **same** config file as the original run.
 | Training loop | [training.md](training.md) |
 | Data preparation | [data_pipeline.md](data_pipeline.md) |
 | MoE + aux loss | [moe.md](moe.md) |
-| YaRN details | [yarn.md](yarn.md) |
+| YaRN details | [rope_yarn.md](rope_yarn.md) |
 | Architecture map | [architecture.md](architecture.md) |
 
 ---

@@ -41,7 +41,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | 3 | Transformer | [transformer.md](transformer.md) | `GPTOSS`, `GPTOSSBlock`, `ModelConfig` |
 | 4 | Attention | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | SWA/full alternation, sinks, SDPA paths |
 | 4b | Sinks (deep) | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | Learned sink bias — read before tuning sinks |
-| 5 | RoPE / YaRN | [rotary.md](rotary.md) → [yarn.md](yarn.md) | Position encoding + 128K extrapolation |
+| 5 | RoPE / YaRN | [rope_yarn.md](rope_yarn.md) | Position encoding + 128K extrapolation |
 | 6 | MoE | [moe.md](moe.md) | Top-2 routing, aux loss α=0.01 |
 | 6b | Triton (opt-in) | [triton_kernels.md](triton_kernels.md) | `moe_dispatch` kernel contract |
 | 7 | Training | [training.md](training.md) | `pretrain.py`, schedules, NaN guard |
@@ -64,7 +64,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 ### Tier 2 — Component reference (read as needed)
 
 - [architecture.md](architecture.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
-- [rotary.md](rotary.md), [yarn.md](yarn.md)
+- [rope_yarn.md](rope_yarn.md)
 - [moe.md](moe.md), [triton_kernels.md](triton_kernels.md)
 
 ### Tier 3 — Operations (read when running experiments)
@@ -83,8 +83,8 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 |-----------|--------|---------------|
 | Top-level model | `models/transformer.py` | [transformer.md](transformer.md) |
 | Attention (SWA + full) | `models/attention.py` | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
-| RoPE helpers | `models/rotary.py` | [rotary.md](rotary.md) |
-| YaRN scaling | `models/yarn.py` | [yarn.md](yarn.md) |
+| RoPE helpers | `models/rotary.py` | [rope_yarn.md](rope_yarn.md) |
+| YaRN scaling | `models/yarn.py` | [rope_yarn.md](rope_yarn.md) |
 | MoE FFN | `models/moe.py` | [moe.md](moe.md) |
 | Triton MoE kernel | `models/moe_triton.py` | [triton_kernels.md](triton_kernels.md) |
 | Training loop | `training/pretrain.py` | [training.md](training.md) |
@@ -149,9 +149,8 @@ Every chapter file ends with a verification footer:
 | transformer.md | 532 | Comprehensive |
 | utils.md | 527 | Comprehensive |
 | scripts.md | 520 | Comprehensive |
-| yarn.md | 474 | Comprehensive |
+| rope_yarn.md | ~730 | Comprehensive |
 | getting_started.md | 454 | Comprehensive |
-| rotary.md | 396 | Comprehensive |
 | configs.md | 379 | Comprehensive |
 | **Total** | **10,134** | |
 

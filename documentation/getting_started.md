@@ -55,8 +55,7 @@ A **12-layer decoder-only transformer** with:
   attend globally (see [ATTENTION_SINKS.md](ATTENTION_SINKS.md#7-sliding-window--full-alternation))
 - **Learned sink bias** per head — authoritative theory in
   [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
-- **YaRN RoPE** — train at 4K, extrapolate to 128K ([yarn.md](yarn.md),
-  [rotary.md](rotary.md))
+- **YaRN RoPE** — train at 4K, extrapolate to 128K ([rope_yarn.md](rope_yarn.md))
 - **MoE SwiGLU** — top-2 of 8 routed experts plus 1 shared ([moe.md](moe.md))
 - **Weight-tied** embedding and LM head
 

@@ -216,7 +216,7 @@ Differences from training `GPTOSSAttention.forward`:
 - Same sink clamp and window mask logic as training
 
 Rotary: `cos, sin = attn.yarn(positions, n_pruned_dims=...)` then
-`apply_rope` — matches [yarn.md](yarn.md) training behavior.
+`apply_rope` — matches [rope_yarn.md](rope_yarn.md) training behavior.
 
 ---
 
@@ -377,7 +377,7 @@ Returns `{ctx_len: accuracy}` dict.
 | 96K – 128K | ≥ 85% |
 
 These require a model trained with YaRN at 4K that successfully extrapolates —
-see [yarn.md](yarn.md). Untrained models score near zero.
+see [rope_yarn.md](rope_yarn.md). Untrained models score near zero.
 
 ---
 
@@ -538,7 +538,7 @@ step on a tiny model.
 |-------|----------|
 | Attention implementation | [ATTENTION_SINKS.md](ATTENTION_SINKS.md#part-b--implementation-modelsattentionpy) |
 | Sink theory | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
-| YaRN / RoPE | [yarn.md](yarn.md), [rotary.md](rotary.md) |
+| YaRN / RoPE | [rope_yarn.md](rope_yarn.md) |
 | Model composition | [transformer.md](transformer.md) |
 | Training (no KV cache) | [training.md](training.md) |
 | Config limits (`eval_max_seq_len`) | [configs.md](configs.md) |

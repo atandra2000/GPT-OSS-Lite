@@ -3,7 +3,7 @@
 > **Authoritative** reference for learned sink bias, sliding-window / full
 > alternation, and the `models/attention.py` implementation. Required reading
 > before changing attention code (see `AGENTS.md`). Positional encoding:
-> [yarn.md](yarn.md), [rotary.md](rotary.md).
+> [rope_yarn.md](rope_yarn.md).
 
 ---
 
@@ -422,7 +422,7 @@ Inference target: 131,072 tokens (`yarn_target_seq_len`).
 Scale factor: 32 (`yarn_scale_factor`).
 
 YaRN interpolates inverse frequencies between base RoPE and scaled-down frequencies
-so positions beyond 4K remain meaningful. See [yarn.md](yarn.md).
+so positions beyond 4K remain meaningful. See [rope_yarn.md](rope_yarn.md).
 
 Sinks do not alter RoPE — they operate after Q/K are rotated.
 
@@ -565,7 +565,7 @@ ablations.
 
 ### 12.6 Degenerate YaRN + long context
 
-If YaRN ramp is degenerate (see [yarn.md §5](yarn.md#5-degenerate-ramp-warning)),
+If YaRN ramp is degenerate (see [rope_yarn.md §11](rope_yarn.md#11-degenerate-ramp-warning)),
 RoPE provides no extrapolation — sinks cannot compensate for positional collapse.
 
 ---
@@ -622,8 +622,7 @@ DeepSeek-v3-Lite). Sink bias is unrelated to expert routing.
 ### Related documentation
 
 - [Part B](#part-b--implementation-modelsattentionpy) — line-level API walkthrough
-- [yarn.md](yarn.md) — YaRN scaling theory and config
-- [rotary.md](rotary.md) — RoPE math and `apply_rope`
+- [rope_yarn.md](rope_yarn.md) — RoPE, YaRN scaling, `apply_rope`
 
 ### Verification commands
 
@@ -944,7 +943,7 @@ self.yarn = YaRNRoPE(
 )
 ```
 
-See [yarn.md](yarn.md) for parameter semantics.
+See [rope_yarn.md](rope_yarn.md) for parameter semantics.
 
 **Pruned RoPE helper:**
 
@@ -1010,7 +1009,7 @@ query_states = apply_rope(query_states, cos, sin)
 key_states = apply_rope(key_states, cos, sin)
 ```
 
-`apply_rope` is imported from `models.rotary` — see [rotary.md](rotary.md).
+`apply_rope` is imported from `models.rotary` — see [rope_yarn.md](rope_yarn.md).
 
 **Step 5 — GQA expansion**
 

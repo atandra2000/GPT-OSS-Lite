@@ -214,7 +214,7 @@ return x * cos_full + x_rotated * sin_full
 ```
 
 **Impact:** Q and K remain BF16 through attention; required for production
-`dtype: bf16` config. Documented in [rotary.md](rotary.md).
+`dtype: bf16` config. Documented in [rope_yarn.md](rope_yarn.md).
 
 **Files:** `models/rotary.py` (`apply_rope`)
 
@@ -553,7 +553,7 @@ training prefill.
 
 **Files:** `models/yarn.py` (`YaRNRoPE.forward`)
 
-**Related:** [yarn.md](yarn.md), [rotary.md](rotary.md)
+**Related:** [rope_yarn.md](rope_yarn.md)
 
 ---
 
@@ -698,7 +698,7 @@ After changing `models/attention.py`, **always** run
 | Topic | Document |
 |-------|----------|
 | Attention masks + sinks | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
-| YaRN / RoPE | [yarn.md](yarn.md), [rotary.md](rotary.md) |
+| YaRN / RoPE | [rope_yarn.md](rope_yarn.md) |
 | MoE routing | [moe.md](moe.md) |
 | Triton kernel contract | [triton_kernels.md](triton_kernels.md) |
 | Training loop | [training.md](training.md) |
