@@ -35,11 +35,17 @@ A **decoder-only** transformer implements each conditional $P(x_t \mid x_{<t})$ 
 
 ### Why decoder-only for GPT-OSS-Lite?
 
-OpenAI's GPT-OSS family is decoder-only. GPT-OSS-Lite reproduces that choice faithfully because:
+OpenAI's GPT-OSS family is decoder-only. GPT-OSS-Lite reproduces that choice
+because long-context **decode** is dominated by KV-cache bytes in attention, not
+by FFN matmuls. With 12 layers, GQA 4 KV heads, `head_dim=96`, and BF16, a pure
+full-attention cache at `T=131072` already costs ~2.25 GB before batching —
+the architectural win is shrinking that footprint via six windowed layers at
+`W=128`, not adding an encoder that would cache a second sequence.
 
-1. **Long-context inference** is dominated by KV-cache size in the attention layers. Decoder-only stacks let us alternate sliding-window and full attention without an encoder bottleneck.
-2. **MoE feed-forward** layers replace dense FFNs per block. Routing decisions are local to each token position — natural in a decoder stack.
-3. **Weight tying** between the input embedding and output LM head is a well-understood ~98M-parameter savings at `vocab_size=128000`, `d_model=768`.
+MoE feed-forward replaces dense FFNs per block; routing is per token position,
+which fits a decoder stack. Weight tying between embedding and LM head saves
+~98M parameters at `vocab_size=128000`, `d_model=768` — meaningful on a 502M
+budget where every million params trades against Chinchilla token count.
 
 The training objective is standard next-token cross-entropy. Given logits $\ell_t \in \mathbb{R}^{|\mathcal{V}|}$ at position $t$:
 
@@ -322,9 +328,14 @@ Dot products $q_m^\top k_n$ depend on **relative** offset $m - n$ after rotation
 
 On **full-attention (odd) layers**, GPT-OSS **prunes** the first $D/4 = 24$ frequency dimensions (of 48 half-dims) by setting their rotation to identity ($\cos=1, \sin=0$). Only the **global** layers prune; windowed layers use full RoPE.
 
-Rationale: at 128K positions, the lowest-frequency components rotate through many cycles, causing **over-rotation** that hurts extrapolation. Neutralizing the slowest modes on layers that actually see the full sequence reduces that pathology.
+Rationale: at 128K positions, the lowest-frequency components rotate through many
+cycles, causing **over-rotation** that hurts extrapolation. Neutralizing the
+slowest modes on layers that actually see the full sequence reduces that pathology.
+Only odd-indexed global layers prune (`head_dim=96` → 24 of 48 half-dims); even
+windowed layers keep full RoPE because they never attend beyond `W=128` tokens.
 
-In code: `_n_pruned_dims() = head_dim // 4` when `not is_windowed` and `yarn_prune_rope_global=True`.
+In code: `_n_pruned_dims() = head_dim // 4` when `not is_windowed` and
+`yarn_prune_rope_global=True`.
 
 ---
 
@@ -376,7 +387,13 @@ If `beta_fast`/`beta_slow` misconfigure the ramp (low ≥ high), `compute_yarn_f
 
 ### Train and decode both use YaRN
 
-Unlike some reproductions that apply YaRN only at decode, GPT-OSS-Lite applies YaRN during **training** so the model learns representations consistent with 128K inference. Passkey retrieval at 128K (`inference/long_context.py`) is the canonical eval; target accuracy is **≥85%**.
+Unlike reproductions that apply YaRN only at decode, GPT-OSS-Lite trains with
+YaRN at `max_seq_len=4096` so gradients see the same frequency blend the model
+will use at `eval_max_seq_len=131072`. With `yarn_scale_factor=32`, mscale
+≈1.35 sharpens attention at long spans — if training stayed on plain RoPE, the
+model would optimize for 4K geometry then face a different temperature at 128K
+decode. Passkey retrieval (`inference/long_context.py`) is the canonical eval;
+target **≥85%** after the 8.0B-token schedule.
 
 ---
 
@@ -463,7 +480,16 @@ This $\alpha$ is deliberate portfolio distinction from DeepSeek-v3-Lite.
 | `"stacked"` (default) | PyTorch vectorized per-expert loop | CPU, default training |
 | `"triton_grouped"` | Fused W1/W3+silu Triton kernel | Opt-in GPU hot path |
 
-Set via `ModelConfig.moe_dispatch` or YAML `model.moe_dispatch`. Triton path **raises** if `triton` is unavailable — no silent fallback during a run configured for Triton.
+Set via `ModelConfig.moe_dispatch` or YAML `model.moe_dispatch`. Triton path
+**raises** if `triton` is unavailable — no silent fallback during a run configured
+for Triton.
+
+**Why two paths?** Default `"stacked"` keeps every training run on the pure-PyTorch
+oracle (`tests/test_moe.py`); Triton fuses W1/W3+silu for throughput on GPU but
+W2 stays in PyTorch and backward uses the reference path. Opt-in via YAML avoids
+silent kernel fallback when Triton fails to compile — a misconfigured
+`triton_grouped` run must error loudly, not drift onto stacked mid-epoch and
+invalidate throughput comparisons.
 
 ### Active vs total parameters
 
@@ -584,23 +610,21 @@ No other project in the CoreProjects LLM portfolio combines all of the following
 
 ## 12. Where to go next
 
-| Topic | Document / path |
-|-------|-----------------|
-| Layer stack, `GPTOSS.forward`, param budget | [architecture.md](architecture.md) |
-| Sink bias implementation detail | `documentation/ATTENTION_SINKS.md` |
-| Canonical training config | `configs/pretrain_a100_502m.yaml` |
-| Attention masks and SDPA | `models/attention.py` |
-| YaRN frequency math | `models/yarn.py`, `models/rotary.py` |
-| MoE routing and aux loss | `models/moe.py` |
-| Triton grouped dispatch | `models/moe_triton.py` |
-| Training loop | `training/pretrain.py` |
-| Mixed KV-cache generation | `inference/generate.py` |
-| Passkey eval | `inference/long_context.py` |
-| KV benchmark | `scripts/kv_cache_benchmark.py` |
-| Portfolio overview | `README.md` |
+| Topic | Document |
+|-------|----------|
+| Layer stack, `GPTOSS`, `ModelConfig`, param budget | [architecture.md](architecture.md) |
+| Sink bias + SWA/full implementation | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
+| RoPE geometry, YaRN ramp, pruned global layers | [rope_yarn.md](rope_yarn.md) |
+| Top-2 routing, aux α=0.01, Triton opt-in | [moe.md](moe.md) |
+| Training loop, YAML encyclopedia | [training.md](training.md) |
+| `MixedKVCache`, passkey eval | [inference.md](inference.md) |
+| Scripts, checkpoints, OPT catalog | [operations.md](operations.md) |
+| Canonical YAML | `configs/pretrain_a100_502m.yaml` |
 
-Read [architecture.md](architecture.md) next for the system diagram, per-layer table for indices 0–11, and `ModelConfig` field wiring.
+Read [ATTENTION_SINKS.md](ATTENTION_SINKS.md) next — Part A theory plus Part B
+`models/attention.py` walkthrough before changing masks, sink clamp, or the
+even/odd `W=128` alternation.
 
 ---
 
-<!-- docs:verified 2026-07-31 · fa6f918 -->
+<!-- docs:verified 2026-07-31 · task-9 -->

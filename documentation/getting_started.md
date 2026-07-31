@@ -1,9 +1,7 @@
 # Getting Started — GPT-OSS-Lite
 
-> **Chapter 0 of the GPT-OSS-Lite documentation.** This chapter is the onboarding
-> path: what the project is, how to install it, how to prepare data, and which
-> commands to run first. For mathematical motivation, read
-> [foundations.md](foundations.md). For the full layer stack, see
+> **Chapter 0.** Onboarding: install, layout, first commands, smoke train, headline
+> metrics, pitfalls. Math motivation: [foundations.md](foundations.md). Layer stack:
 > [architecture.md](architecture.md).
 
 ---
@@ -11,7 +9,7 @@
 ## Table of contents
 
 1. [What is GPT-OSS-Lite?](#1-what-is-gpt-oss-lite)
-2. [Key numbers at a glance](#2-key-numbers-at-a-glance)
+2. [Headline metrics](#2-headline-metrics)
 3. [Prerequisites](#3-prerequisites)
 4. [Installation](#4-installation)
 5. [Repository layout](#5-repository-layout)
@@ -28,78 +26,33 @@
 
 ## 1. What is GPT-OSS-Lite?
 
-**GPT-OSS-Lite** is a from-scratch PyTorch reproduction of OpenAI's GPT-OSS
-architecture (Apache 2.0). It is not a wrapper around HuggingFace Transformers or
-Lightning — every primitive (attention, YaRN RoPE, MoE routing, training loop,
-inference cache) is implemented directly in this repository.
+From-scratch PyTorch reproduction of OpenAI's GPT-OSS (Apache 2.0) — not a
+HuggingFace or Lightning wrapper. Top-level model: `GPTOSS` in
+`models/transformer.py`; training via `training/pretrain.py`; decode via
+`inference/generate.py` with `MixedKVCache`.
 
-The project exists for two overlapping audiences:
-
-1. **Researchers** who want a faithful, testable reference for GPT-OSS-specific
-   ideas: learned attention sinks, sliding-window / full-attention alternation,
-   and YaRN applied at training time (not decode-only).
-2. **Practitioners** who want a Chinchilla-optimal recipe that fits on a single
-   A100 80GB and trains in roughly 16–20 hours.
-
-Within the CoreProjects LLM portfolio, GPT-OSS-Lite is the first project to
-combine **long-context MoE** with **learned sink bias**. Sibling repos cover
-MLA (DeepSeek-v3-Lite), pure GQA (LLaMA-3-Lite), and SSMs (Mamba-3-Lite) —
-see the comparison table in the root [README](../README.md).
-
-### What you will build
-
-A **12-layer decoder-only transformer** with:
-
-- **GQA** — 8 query heads, 4 KV heads, `head_dim=96`
-- **Alternating attention** — even layers use sliding window `W=128`; odd layers
-  attend globally (see [ATTENTION_SINKS.md](ATTENTION_SINKS.md#7-sliding-window--full-alternation))
-- **Learned sink bias** per head — authoritative theory in
-  [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
-- **YaRN RoPE** — train at 4K, extrapolate to 128K ([rope_yarn.md](rope_yarn.md))
-- **MoE SwiGLU** — top-2 of 8 routed experts plus 1 shared ([moe.md](moe.md))
-- **Weight-tied** embedding and LM head
-
-The top-level model class is `GPTOSS` in `models/transformer.py`. Training runs
-through `training/pretrain.py`. Autoregressive decoding uses
-`inference/generate.py` with a mixed KV cache.
+Portfolio context and the sibling-project comparison table live in the root
+[README](../README.md). Architectural primitives (GQA 8Q/4KV, sliding window
+`W=128` on six layers, learned sink bias, YaRN 128K, top-2-of-8 MoE) are
+documented in [architecture.md](architecture.md) and
+[ATTENTION_SINKS.md](ATTENTION_SINKS.md).
 
 ---
 
-## 2. Key numbers at a glance
+## 2. Headline metrics
 
-These are the production targets from
-[`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml). Every
-field is explained in [training.md](training.md#part-b--configuration-reference).
-
-| Quantity | Value | Notes |
-|----------|-------|-------|
-| Total parameters | ~502M | `GPTOSS.num_parameters()` |
-| Active parameters / token | ~247M | Top-2 routed + 1 shared expert |
-| Sparsity | ~50.8% | Inactive expert weights per forward |
-| Vocabulary | 128,000 | LLaMA-3 BPE tokenizer |
-| `d_model` | 768 | `n_heads × head_dim` |
-| Layers | 12 | 6 windowed + 6 global |
-| Training context | 4,096 | `max_seq_len` |
-| Eval / inference context | 131,072 | YaRN target (`eval_max_seq_len`) |
-| Sliding window | 128 | GPT-OSS default |
-| MoE aux loss α | 0.01 | Standard Switch Transformer scale |
-| Training tokens | 8.0B | Chinchilla-optimal for ~502M |
-| Optimizer steps | 61,000 | See derived arithmetic below |
-| Warmup steps | 3,000 | ~4.9% of total — MoE stability |
-| Peak learning rate | 4.0×10⁻⁴ | Cosine decay to 5% |
-| Micro-batch × accum | 8 × 4 | Effective batch 32 sequences |
-| Tokens per optimizer step | 131,072 | `8 × 4 × 4096` |
-| Total tokens seen | ~8.0B | `61,000 × 131,072` |
-
-### Headline metrics (measured, not assumed)
+Both targets are **measured**, not assumed. Production YAML and derived
+arithmetic (~502M total, ~247M active, 8.0B tokens, 61k steps) are in
+[`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml) and
+[training.md](training.md#part-b--configuration-reference).
 
 | Metric | Target | Script |
 |--------|--------|--------|
 | KV-cache reduction at 128K | ≥ 1.8× vs pure GQA | `scripts/kv_cache_benchmark.py` |
 | Passkey retrieval at 128K | ≥ 85% accuracy | `scripts/passkey_eval.py` |
 
-The KV benchmark is analytical (no GPU required). Passkey eval requires a
-**trained** checkpoint — untrained models will not hit 85%.
+KV benchmark is analytical (no GPU). Passkey eval needs a **trained**
+checkpoint — untrained models will not hit 85%.
 
 ---
 
@@ -113,20 +66,15 @@ The KV benchmark is analytical (no GPU required). Passkey eval requires a
 | GPU (smoke / dev) | 4 GB VRAM | GTX 1650 or better |
 | Disk (data + checkpoints) | ~50 GB | 100 GB+ for 8B-token shards |
 
-CPU-only development is supported for architecture verification and the KV-cache
-analytical benchmark. Full pretraining and `torch.compile` require CUDA.
+CPU-only works for architecture tests and the KV analytical benchmark. Full
+pretrain and `torch.compile` need CUDA.
 
-Optional:
-
-- **Triton** — only if you opt into `moe_dispatch: "triton_grouped"` (see
-  [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped)). Default is `"stacked"` (pure PyTorch).
-- **Weights & Biases** — `wandb` is in `requirements.txt`; logging is optional.
+Optional: **Triton** only for `moe_dispatch: "triton_grouped"` ([moe.md](moe.md));
+default is `"stacked"`. **W&B** is optional (`wandb` in `requirements.txt`).
 
 ---
 
 ## 4. Installation
-
-Clone the repository and install dependencies:
 
 ```bash
 git clone https://github.com/atandra2000/GPT-OSS-Lite.git
@@ -134,93 +82,46 @@ cd GPT-OSS-Lite
 pip install -r requirements.txt
 ```
 
-`requirements.txt` pins the core stack:
-
-```
-torch>=2.1
-safetensors>=0.4
-pyyaml>=6.0
-tqdm>=4.65
-wandb>=0.16
-```
-
-Verify PyTorch sees your GPU (if present):
+Verify GPU visibility:
 
 ```bash
 python3 -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 ```
 
-No separate `setup.py` install step is required — scripts add the project root
-to `sys.path` automatically.
+No `setup.py` step — scripts add the project root to `sys.path` automatically.
 
 ---
 
 ## 5. Repository layout
 
-Key paths: `configs/` (YAML recipes), `models/` (`transformer.py`, `attention.py`,
-`moe.py`, `yarn.py`), `training/pretrain.py`, `inference/generate.py` +
-`long_context.py`, `data/prepare_data.py`, `scripts/kv_cache_benchmark.py` and
-`passkey_eval.py`. Full map: [architecture.md](architecture.md).
+`configs/` (YAML), `models/` (`transformer.py`, `attention.py`, `moe.py`,
+`yarn.py`), `training/pretrain.py`, `inference/generate.py` +
+`long_context.py`, `data/prepare_data.py`, `scripts/kv_cache_benchmark.py`,
+`passkey_eval.py`, `utils/`. Full map: [architecture.md](architecture.md).
 
 ---
 
 ## 6. Prepare training data
 
-GPT-OSS-Lite does not ship pre-tokenized shards. You must build them before
-launching `pretrain.py`.
+No pre-tokenized shards ship with the repo. Run before `pretrain.py`.
 
-### What the pipeline produces
-
-The shim at `data/prepare_data.py` delegates to the shared CoreProjects pipeline
-under `LLM/shared_data/`. For GPT-OSS-Lite the defaults are:
-
-- **Tokenizer:** LLaMA-3 BPE, `vocab_size=128000`
-- **Corpus mix:** `gptoss-default` (FineWeb-Edu, FineWeb, The Stack Python,
-  OpenMath, arXiv — see comments in the A100 config)
-- **Shard size:** 50M tokens per `shard_*.bin`
-- **Total budget:** 8.0B tokens
-
-### Command
-
-From the project root:
+`data/prepare_data.py` delegates to the vendored CoreProjects pipeline under
+`LLM/shared_data/`. Defaults: LLaMA-3 BPE (`vocab_size=128000`), `gptoss-default`
+mix, 50M tokens per `shard_*.bin`, 8.0B total → `data/pretrain_chinchilla/`
+(matching the A100 config). `manifest.json` records `eos_token_id`, `vocab_size`,
+`total_tokens`, `shard_count`.
 
 ```bash
 python3 data/prepare_data.py
 ```
 
-This prints a banner with tokenizer and shard settings, then runs the universal
-prepare script. Output lands in `data/pretrain_chinchilla/` (matching
-`train_data_path` in the A100 config).
-
-A `manifest.json` in that directory records `eos_token_id`, `vocab_size`,
-`total_tokens`, and `shard_count`. The training `PretrainDataset` reads this
-manifest when present.
-
-### Smoke data
-
-For `configs/pretrain_gpu_smoke.yaml`, point `train_data_path` at
-`data/pretrain_chinchilla`. The universal pipeline can emit a tiny smoke corpus when
-invoked with the smoke tokenizer — see [data_pipeline.md](data_pipeline.md) for
-flags and directory layout.
-
-### If data is missing
-
-`training/pretrain.py` raises `FileNotFoundError` with an explicit message:
-
-```
-Training data not found at data/pretrain_chinchilla.
-Run `python data/prepare_data.py` first.
-```
-
-Do not point `train_data_path` at an empty directory — sharded layout requires
-at least one `shard_*.bin` file.
+Smoke corpus flags: [data_pipeline.md](data_pipeline.md). Missing data raises
+`FileNotFoundError` with an explicit `prepare_data.py` hint — do not point
+`train_data_path` at an empty directory.
 
 ---
 
 ## 7. Your first commands
-
-Run these in order after installation. Each step validates a different layer of
-the stack.
 
 ### Step 1 — KV-cache headline metric (CPU, seconds)
 
@@ -228,16 +129,14 @@ the stack.
 python3 scripts/kv_cache_benchmark.py
 ```
 
-Expected output ends with:
+Expected tail:
 
 ```
 ✅ HEADLINE METRIC PASSED: 2.00× KV-cache reduction at 128K (≥ 1.8×)
 ```
 
-This script is **analytical** — it computes KV bytes from architecture constants
-(12 layers, 6 windowed at `W=128`, 6 global, GQA with 4 KV heads). No model
-weights are loaded. See [inference.md](inference.md) for how this relates to
-`MixedKVCache`.
+Analytical only — architecture constants, no weights loaded. Cache design:
+[inference.md](inference.md).
 
 ### Step 2 — Doc link checker (optional)
 
@@ -245,13 +144,9 @@ weights are loaded. See [inference.md](inference.md) for how this relates to
 python3 scripts/check_docs.py
 ```
 
-Flags broken cross-references in the documentation tree.
-
 ---
 
 ## 8. Smoke training on a small GPU
-
-If you have a CUDA GPU with as little as 4 GB VRAM, use the smoke config:
 
 ```bash
 python3 training/pretrain.py \
@@ -259,40 +154,25 @@ python3 training/pretrain.py \
     --seed 42
 ```
 
-`pretrain_gpu_smoke.yaml` mirrors the **structural** choices of the production
-model (alternating SWA/full, sink bias, YaRN, MoE top-2) at 1/100th scale:
+`pretrain_gpu_smoke.yaml` mirrors structural choices (SWA/full alt, sink bias,
+YaRN, MoE top-2) at 1/100th scale (`d_model=128`, `n_layers=4`,
+`max_seq_len=64`, `total_steps=5`, `compile=false`).
 
-- `d_model=128`, `n_layers=4`, `max_seq_len=64`
-- `total_steps=5`, `compile=false`
-- Checkpoints under `checkpoints/gpu_smoke/`
-
-For a broader GPU integration test (forward, backward, checkpoint round-trip,
-`MixedKVCache` generation, YaRN extrapolation), run:
+Broader GPU integration (forward, backward, checkpoint round-trip, generation,
+YaRN extrapolation):
 
 ```bash
 python3 scripts/e2e_gpu_smoke.py
 ```
 
-This script exercises the full pipeline without pytest as the primary interface.
-
 ---
 
 ## 9. Reproduce the headline metrics
 
-### Metric 1 — KV-cache reduction
+**KV reduction** — Step 1 above. At `T=131072`, `W=128`, ratio ≈ **2.0×**; at
+`T=4096` windowed layers see the full sequence, so ratio ≈ **1.0×** (expected).
 
-Already covered in Step 1. The benchmark compares:
-
-- **Pure GQA:** all 12 layers cache the full sequence length
-- **SWA/Full mix:** 6 layers cache `min(W, T)` tokens; 6 layers cache `T`
-
-At `T=131072` and `W=128`, the ratio approaches **2.0×**. At `T=4096`, the
-window equals the sequence length on windowed layers, so reduction is **1.0×**
-— this is expected.
-
-### Metric 2 — Passkey retrieval at 128K
-
-After training (or with a downloaded checkpoint):
+**Passkey at 128K** — after training:
 
 ```bash
 python3 scripts/passkey_eval.py \
@@ -301,19 +181,12 @@ python3 scripts/passkey_eval.py \
     --context-lengths 4096 8192 32768 65536 131072
 ```
 
-The evaluator (`inference/long_context.py`) embeds a random 5-digit passkey in
-filler text, asks the model to recall it, and scores exact match. Protocol
-details are in [inference.md](inference.md).
-
-On an **untrained** model, accuracy will be near chance — the script still
-exits 0 but prints a warning that ≥ 85% requires a trained checkpoint.
+Protocol: [inference.md](inference.md). Untrained weights → near-chance accuracy
+(exit 0, warning printed).
 
 ---
 
 ## 10. Launch full pretraining
-
-Once `data/pretrain_chinchilla/` exists and you have an A100 80GB (or
-equivalent):
 
 ```bash
 python3 training/pretrain.py \
@@ -321,21 +194,11 @@ python3 training/pretrain.py \
     --seed 42
 ```
 
-What happens internally (full detail in [training.md](training.md)):
+Loop internals (compile, AdamW FP32 master, warmup 3000 steps, aux α=0.01, NaN
+guard, checkpoints every 2000 steps): [training.md](training.md). Expected wall
+time **16–20 hours** on A100 80GB.
 
-1. `ModelConfig` is built from YAML `model:` block
-2. `GPTOSS` is constructed; param counts are printed
-3. `torch.compile(mode="max-autotune")` on CUDA when `compile: true`
-4. AdamW with FP32 master weights, `foreach=True`, `fused=True` on GPU
-5. Linear warmup (3000 steps) → cosine decay to 5% of peak LR
-6. BF16 autocast forward; chunked cross-entropy; aux loss scaled by α=0.01
-7. Gradient checkpointing every 3rd block
-8. Checkpoints every 2000 steps to `checkpoints/pretrain_a100/`
-9. NaN guard with rollback after 5 consecutive non-finite losses
-
-Expected wall time: **16–20 hours** at ~35–40% MFU on A100 80GB.
-
-Override step count for debugging:
+Debug override:
 
 ```bash
 python3 training/pretrain.py \
@@ -355,14 +218,8 @@ python3 training/pretrain.py \
     --resume-from 40000
 ```
 
-This restores:
-
-- Model weights from `model_step_40000.safetensors`
-- Optimizer and scheduler state
-- RNG state from `rng_step_40000.pt` (when present)
-
-Reproducibility knobs (`--seed`, `CUBLAS_WORKSPACE_CONFIG`, stable MoE
-`argsort`) are documented in [training.md](training.md) and the root README.
+Restores weights, optimizer/scheduler, and `rng_step_*.pt` when present.
+Reproducibility knobs: [training.md](training.md).
 
 ---
 
@@ -370,66 +227,40 @@ Reproducibility knobs (`--seed`, `CUBLAS_WORKSPACE_CONFIG`, stable MoE
 
 ### Missing training data
 
-**Symptom:** `FileNotFoundError` at startup.
-
-**Fix:** Run `python3 data/prepare_data.py`. Confirm `data/pretrain_chinchilla/shard_*.bin`
-exists and `manifest.json` is present.
+`FileNotFoundError` at startup → run `python3 data/prepare_data.py`; confirm
+`shard_*.bin` and `manifest.json` exist.
 
 ### NaN guard rollback loop
 
-**Symptom:** Log spam `[nan-guard] step N: non-finite loss`.
-
-**Causes:** Learning rate too high, bad data shard, or numerical edge case in
-MoE routing. The guard skips the step and, after 5 consecutive failures, reloads
-the latest checkpoint.
-
-**Fix:** Lower `lr`, verify data integrity, ensure `aux_loss_alpha` stays at
-0.01. Do **not** disable `nan_guard` in production without explicit intent —
-see [training.md](training.md).
+`[nan-guard] step N: non-finite loss` — LR too high, bad shard, or MoE edge case.
+Guard skips steps; after five consecutive failures reloads latest checkpoint.
+Lower `lr`, verify data, keep `aux_loss_alpha=0.01`. Do not disable `nan_guard`
+without intent — [training.md](training.md).
 
 ### Replacing sliding-window layers with full attention
 
-**Symptom:** KV benchmark still passes analytically, but you changed
-`models/attention.py` layer alternation.
-
-**Impact:** Breaks the architectural claim of ~2× KV-cache reduction at 128K.
-The even/odd `is_windowed` pattern is load-bearing. Read
-[ATTENTION_SINKS.md](ATTENTION_SINKS.md) before editing attention code.
+Breaks the ~2× KV headline at 128K. Even/odd `is_windowed` is load-bearing —
+read [ATTENTION_SINKS.md](ATTENTION_SINKS.md) before editing `models/attention.py`.
 
 ### Triton opt-in confusion
 
-**Symptom:** `ImportError` mentioning Triton on a Mac or CPU machine.
-
-**Cause:** `model.moe_dispatch: "triton_grouped"` in YAML without Triton/CUDA.
-
-**Fix:** Omit `moe_dispatch` (defaults to `"stacked"`) or set explicitly:
-
-```yaml
-model:
-  moe_dispatch: "stacked"
-```
-
-There is **no** environment variable gate — configuration is the only switch.
-See [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
+`ImportError` on Mac/CPU when `moe_dispatch: "triton_grouped"` without Triton/CUDA.
+Fix: omit field (defaults `"stacked"`) or set explicitly. No env-var gate —
+[moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
 
 ### Passkey eval on untrained weights
 
-**Symptom:** Accuracy ~0% at 128K.
-
-**Expected.** Passkey retrieval tests whether YaRN extrapolation **learned**
-something during pretraining. Run eval only after meaningful training steps.
+~0% at 128K is expected — tests YaRN extrapolation **after** pretraining.
 
 ### `torch.compile` first-step latency
 
-**Symptom:** First optimizer step takes several minutes.
-
-**Expected.** `max-autotune` benchmarks kernel variants once. Subsequent steps
-are fast. Set `compile: false` in smoke configs or for debugging.
+`max-autotune` benchmarks once; first step can take minutes. Set `compile: false`
+for smoke/debug.
 
 ### OOM on A100
 
-Confirm `grad_checkpoint: true`, reduce `micro_batch_size`, or disable `compile`
-temporarily. See `utils/memory.py` estimates at startup.
+Confirm `grad_checkpoint: true`, reduce `micro_batch_size`, or disable `compile`.
+VRAM estimates at startup: [operations.md](operations.md).
 
 ---
 
@@ -438,16 +269,15 @@ temporarily. See `utils/memory.py` estimates at startup.
 | Goal | Document |
 |------|----------|
 | Math behind sinks, SWA, YaRN | [foundations.md](foundations.md) |
-| System diagram and file map | [architecture.md](architecture.md) |
+| System diagram, `GPTOSS`, `ModelConfig` | [architecture.md](architecture.md) |
 | Sink bias authoritative reference | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
-| `GPTOSS`, `GPTOSSBlock`, RMSNorm | [transformer.md](transformer.md) |
-| `MixedKVCache`, `generate()`, passkey | [inference.md](inference.md) |
-| Every YAML key | [training.md](training.md#part-b--configuration-reference) |
-| Training loop internals | [training.md](training.md) |
+| RoPE / YaRN 128K | [rope_yarn.md](rope_yarn.md) |
+| MoE routing, aux loss, Triton opt-in | [moe.md](moe.md) |
+| Training loop + YAML encyclopedia | [training.md](training.md) |
+| `MixedKVCache`, passkey eval | [inference.md](inference.md) |
+| Scripts, checkpoints, OPT catalog | [operations.md](operations.md) |
 | Tokenization and shards | [data_pipeline.md](data_pipeline.md) |
-| MoE routing and aux loss | [moe.md](moe.md) |
-| Optional Triton MoE kernel | [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) |
 
 ---
 
-<!-- docs:verified 2026-07-31 · fa6f918 -->
+<!-- docs:verified 2026-07-31 · task-9 -->
