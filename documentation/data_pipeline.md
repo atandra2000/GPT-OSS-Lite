@@ -18,7 +18,7 @@
 2. [Design Goals](#design-goals)
 3. [Quick Start](#quick-start)
 4. [The Shim — `data/prepare_data.py`](#the-shim--dataprepare_datapy)
-5. [Vendored Copy — `data/shared_data/`](#vendored-copy--datashared_data)
+5. [Shared Package — `LLM/shared_data/`](#shared-package--llmshared_data)
 6. [Pipeline Stages Overview](#pipeline-stages-overview)
 7. [Stage 1 — Download (`download_raw`)](#stage-1--download-download_raw)
 8. [Stage 2 — Clean (`clean`)](#stage-2--clean-clean)
@@ -112,17 +112,20 @@ python training/pretrain.py --config configs/pretrain_a100_502m.yaml --seed 42
 
 GPT-OSS-Lite does **not** duplicate the pipeline. The shim:
 
-1. Adds `LLM/` (parent of `GPT-OSS-Lite/`) to `sys.path`.
+1. Prepends `GPT-OSS-Lite/` (`_PROJECT_ROOT`) and `LLM/` (`_LLM_ROOT`) to
+   `sys.path`.
 2. Prints an info banner (corpus size, tokenizer, shard size).
 3. Calls `shared_data.prepare_data.main()`.
 
 ```python
-from shared_data.config import UNIVERSAL_TOTAL_TOKENS, load_universal_data_config
-cfg = load_universal_data_config()
-tok = cfg["pipeline"]["tokenizer"]
-print(f"[data/gptoss] universal corpus: {UNIVERSAL_TOTAL_TOKENS:,} tokens")
-print(f"[data/gptoss] tokenizer: {tok['name']} (vocab={tok['vocab_size']:,}, EOS={tok['eos_token_id']})")
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]   # GPT-OSS-Lite/
+_LLM_ROOT = Path(__file__).resolve().parents[2]       # .../LLM/
+for _p in (_PROJECT_ROOT, _LLM_ROOT):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
+from shared_data.config import UNIVERSAL_TOTAL_TOKENS, load_universal_data_config
+# ... info banner ...
 from shared_data.prepare_data import main as shared_main
 return shared_main()
 ```
@@ -132,27 +135,28 @@ return shared_main()
 | Path | Role |
 |---|---|
 | `GPT-OSS-Lite/data/prepare_data.py` | Project shim |
-| `GPT-OSS-Lite/data/shared_data/` | Vendored pipeline (standalone clones) |
-| `LLM/shared_data/` | Workspace canonical pipeline |
+| `GPT-OSS-Lite/` | On `sys.path` as `_PROJECT_ROOT` |
+| `LLM/` | On `sys.path` as `_LLM_ROOT`; `import shared_data` resolves here |
+| `LLM/shared_data/` | Workspace universal pipeline (required) |
 | `LLM/shared_data/config/mixture.yaml` | Source weights |
 | `LLM/shared_data/config/data_config.yaml` | Tokenizer, shard, dedup knobs |
 
-The shim uses **universal defaults** — no project-local `data_config.yaml`
-override is required for GPT-OSS-Lite.
+There is **no** `data/shared_data/` vendored copy in this repo. The shim uses
+**universal defaults** — no project-local `data_config.yaml` override is
+required for GPT-OSS-Lite.
 
 ---
 
-## Vendored Copy — `data/shared_data/`
+## Shared Package — `LLM/shared_data/`
 
-`data/shared_data/` is a **verbatim copy** of the workspace-level
-`LLM/shared_data/` package (~160 KB, 24 source files). When GPT-OSS-Lite is
-cloned standalone, `LLM/shared_data/` is absent; vendoring keeps the repo
-fully runnable without the rest of the CoreProjects workspace.
+The four-stage pipeline lives in the **workspace-level** package at
+`LLM/shared_data/` (sibling of `GPT-OSS-Lite/` under `LLM/`). Run
+`data/prepare_data.py` from a CoreProjects-style layout where that package
+exists, or ensure `LLM/` is on `PYTHONPATH`.
 
 ```
-data/
-├── prepare_data.py              ← project shim
-├── shared_data/                 ← vendored universal pipeline
+LLM/
+├── shared_data/                 ← universal pipeline (required)
 │   ├── config/
 │   │   ├── mixture.yaml
 │   │   └── data_config.yaml
@@ -161,28 +165,14 @@ data/
 │   ├── shard_writer.py
 │   ├── manifest.py
 │   └── ...
-└── pretrain_chinchilla/         ← training consumption path
+└── GPT-OSS-Lite/
+    └── data/
+        ├── prepare_data.py      ← project shim
+        └── pretrain_chinchilla/ ← training consumption path
 ```
 
-The shim resolves `shared_data` with the vendored copy first, then falls back
-to the workspace package:
-
-```python
-sys.path.insert(0, <project_root>/data)   # vendored copy first
-sys.path.insert(0, <workspace_root>/LLM)    # workspace copy as fallback
-```
-
-### Updating the vendored copy
-
-When `LLM/shared_data/` changes, refresh the vendored copy from the workspace
-root:
-
-```bash
-rsync -a --delete --exclude='__pycache__' --exclude='*.pyc' --exclude='README.md' \
-    LLM/shared_data/  LLM/GPT-OSS-Lite/data/shared_data/
-```
-
-All five LLM project vendored copies are kept **bit-identical**.
+Other LLM projects in the portfolio may vendor `data/shared_data/` for
+standalone clones; GPT-OSS-Lite does not in this repository.
 
 ### CLI flags (delegated)
 
@@ -715,21 +705,8 @@ Document never split across shards:
 ## Appendix C — Directory tree
 
 ```
-GPT-OSS-Lite/
-├── data/
-│   ├── prepare_data.py          ← shim
-│   ├── shared_data/             ← vendored copy (standalone clones)
-│   ├── pretrain_chinchilla/     ← train_data_path
-│   │   ├── manifest.json
-│   │   └── shard_*.bin
-│   └── (pipeline intermediates under data/ or $LLM_DATA_ROOT)
-├── configs/
-│   └── pretrain_a100_502m.yaml
-└── training/
-    └── pretrain.py              ← PretrainDataset
-
 LLM/
-└── shared_data/                 ← universal pipeline (authoritative)
+├── shared_data/                 ← universal pipeline (required)
     ├── prepare_data.py
     ├── config/
     │   ├── mixture.yaml
@@ -742,6 +719,17 @@ LLM/
     ├── shard_writer.py
     ├── manifest.py
     └── dedup.py
+└── GPT-OSS-Lite/
+    ├── data/
+    │   ├── prepare_data.py      ← shim
+    │   ├── pretrain_chinchilla/ ← train_data_path
+    │   │   ├── manifest.json
+    │   │   └── shard_*.bin
+    │   └── (pipeline intermediates under data/ or $LLM_DATA_ROOT)
+    ├── configs/
+    │   └── pretrain_a100_502m.yaml
+    └── training/
+        └── pretrain.py          ← PretrainDataset
 ```
 
 ---
@@ -780,4 +768,4 @@ Quality bounds from mixture YAML per source (`min_chars`, `max_chars`).
 - [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)
 - [training.md](training.md) — DataLoader and batch arithmetic
 
-<!-- docs:verified 2026-07-31 · fa6f918 -->
+<!-- docs:verified 2026-07-31 · path-alignment fix -->
