@@ -52,7 +52,7 @@ A **12-layer decoder-only transformer** with:
 
 - **GQA** — 8 query heads, 4 KV heads, `head_dim=96`
 - **Alternating attention** — even layers use sliding window `W=128`; odd layers
-  attend globally (see [attention.md](attention.md))
+  attend globally (see [ATTENTION_SINKS.md](ATTENTION_SINKS.md#7-sliding-window--full-alternation))
 - **Learned sink bias** per head — authoritative theory in
   [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
 - **YaRN RoPE** — train at 4K, extrapolate to 128K ([yarn.md](yarn.md),

@@ -810,7 +810,7 @@ class GPTOSSBlock(nn.Module):
 - **Even** `layer_idx` → sliding-window attention (`is_windowed=True`)
 - **Odd** `layer_idx` → full attention (`is_windowed=False`)
 
-See [attention.md](attention.md) for mask construction and sink bias.
+See [ATTENTION_SINKS.md](ATTENTION_SINKS.md#part-b--implementation-modelsattentionpy) for mask construction and sink bias.
 
 ```python
 def forward(self, x, positions) -> tuple[torch.Tensor, torch.Tensor]:

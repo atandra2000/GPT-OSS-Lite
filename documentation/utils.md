@@ -515,7 +515,7 @@ logger.finish()
 | Topic | Document |
 |-------|----------|
 | Training loop wiring | [training.md](training.md) |
-| KV cache architecture | [architecture.md](architecture.md) §9, [attention.md](attention.md) |
+| KV cache architecture | [architecture.md](architecture.md) §9, [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
 | KV benchmark script | [scripts.md](scripts.md) §4 |
 | Optimization catalog | [OPTIMIZATIONS.md](OPTIMIZATIONS.md) |
 | MoE memory heuristic | [moe.md](moe.md) |

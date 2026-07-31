@@ -1,9 +1,9 @@
-# Attention Sinks in GPT-OSS-Lite
+# Attention Sinks & Alternating Attention — GPT-OSS-Lite
 
-> **Canonical deep dive.** This document is the authoritative reference for learned
-> attention-sink bias, sliding-window attention (SWA), and their interaction in
-> GPT-OSS-Lite. For API-level walkthroughs see [attention.md](attention.md); for
-> positional encoding see [yarn.md](yarn.md) and [rotary.md](rotary.md).
+> **Authoritative** reference for learned sink bias, sliding-window / full
+> alternation, and the `models/attention.py` implementation. Required reading
+> before changing attention code (see `AGENTS.md`). Positional encoding:
+> [yarn.md](yarn.md), [rotary.md](rotary.md).
 
 ---
 
@@ -23,6 +23,19 @@
 12. [Failure Modes and Debugging](#12-failure-modes-and-debugging)
 13. [Design Decisions vs Alternatives](#13-design-decisions-vs-alternatives)
 14. [Quick Reference](#14-quick-reference)
+
+**Part B — Implementation**
+
+- [B.1 Module overview and public surface](#b1-module-overview-and-public-surface)
+- [B.2 Constants (`SINK_CLAMP_MIN`, `SINK_CLAMP_MAX`)](#b2-constants-sink_clamp_min-sink_clamp_max)
+- [B.3 `manual_causal_attention`](#b3-manual_causal_attention-fp32-scores-window-sink)
+- [B.4 Mask helpers](#b4-mask-helpers-_causal_mask-_window_mask-cache-key)
+- [B.5 `causal_attention` SDPA paths](#b5-causal_attention-sdpa-paths-fast--window--sink-column)
+- [B.6 `repeat_kv`](#b6-repeat_kv-expand--reshape-no-contiguous)
+- [B.7 `GPTOSSAttention` construction](#b7-gptossattention-construction-sink-param-yarn-pruned-rope)
+- [B.8 Forward path trace](#b8-forward-path-trace-positions--out-proj)
+- [B.9 Shape reference](#b9-shape-reference)
+- [B.10 How to verify](#b10-how-to-verify)
 
 ---
 
@@ -89,7 +102,7 @@ Advantages of the learned-bias formulation:
 - **Zero KV overhead.** No reserved prefix slots in the cache.
 - **Per-head specialization.** Different heads can learn different sink strengths.
 - **Composable with SDPA.** Implemented as an extra mask column + zero K/V column
-  (see [attention.md §4](attention.md#4-sink-path-sdpa-with-zero-kv-column)).
+  (see [Part B §B.5](#b5-causal_attention-sdpa-paths-fast--window--sink-column)).
 - **Gradient-friendly.** The parameter is always in the graph; clamping is forward-only.
 
 ---
@@ -210,102 +223,14 @@ some heads to be "sink-heavy" (local pattern matchers) and others "sink-light"
 
 ## 5. Implementation in `models/attention.py`
 
-All symbols below refer to `models/attention.py` unless noted.
+All symbols refer to `models/attention.py`. Constants are clamped to
+`[SINK_CLAMP_MIN, SINK_CLAMP_MAX] = [-10, 15]` at forward time (see [§6](#6-bf16-clamp-rationale)).
+The reference path (`manual_causal_attention`) and production path (`causal_attention`
+via SDPA) are mathematically equivalent when masks align.
 
-### 5.1 Constants
-
-```python
-SINK_CLAMP_MIN = -10.0
-SINK_CLAMP_MAX = 15.0
-```
-
-See [§6](#6-bf16-clamp-rationale) for why these bounds exist.
-
-### 5.2 Reference path: `manual_causal_attention`
-
-Used in tests as the numerical oracle. Flow:
-
-1. **FP32 scores:** `scores = (query_states.float() @ key_states.float().T) / sqrt(D)`
-2. **Causal mask:** upper-triangular boolean → `masked_fill(-inf)`
-3. **Window mask (optional):** `outside = (i - j) >= window` → `masked_fill(-inf)`
-4. **Sink augmentation:**
-   ```python
-   sink_logit = sink_bias.view(1, H, 1, 1)
-   augmented = torch.cat([scores, sink_logit.expand(B, H, T, 1)], dim=-1)
-   attn_weights = F.softmax(augmented, dim=-1)
-   attn_weights = attn_weights[..., :T]  # strip sink column
-   return attn_weights @ value_states
-   ```
-
-Key properties:
-
-- Scores accumulated in FP32 (numerical-stability rule).
-- Sink enters as an extra column, then stripped before `@ value_states`.
-- Value dtype restored after softmax.
-
-### 5.3 Production path: `causal_attention`
-
-Uses `F.scaled_dot_product_attention` (SDPA) with Flash Attention when available.
-
-**No sink, no window:** `is_causal=True` fast path when `T_q == T_k`.
-
-**Window, no sink:** builds boolean mask via cached helpers:
-
-```python
-@functools.lru_cache(maxsize=None)
-def _causal_mask(T, device, dtype) -> Tensor  # (T, T), True = allowed
-
-@functools.lru_cache(maxsize=None)
-def _window_mask(T_q, T_k, window, device, dtype) -> Tensor
-```
-
-Prefill (`T_q == T_k`): `mask = causal & window`.
-Decode (`T_q = 1`, `T_k` grows): query index is `T_k - 1`; only window check applied.
-
-**Sink path:** extends K/V with one zero column each:
-
-```python
-sink_k = torch.zeros(B, H, 1, D_q, ...)
-sink_v = torch.zeros(B, H, 1, D_v, ...)
-k_ext = torch.cat([key_states, sink_k], dim=2)
-v_ext = torch.cat([value_states, sink_v], dim=2)
-```
-
-Mask shape `(H, T_q, T_k + 1)`:
-
-- Columns `0..T_k-1`: causal/window allowed positions (0.0), forbidden (-inf
-  converted via `torch.where` in non-sink paths; here `causal.to(dtype)`).
-- Column `T_k` (sink): `sink_bias[h]` broadcast across queries.
-
-```python
-mask[:, :, :T_k] = causal.to(dtype)
-mask[:, :, T_k] = sink_bias.to(dtype).unsqueeze(1).expand(H, T_q)
-```
-
-SDPA adds this mask to \(QK^\top / \sqrt{d}\). The zero K column contributes score 0
-from the dot product; the sink bias is entirely mask-driven — matching the reference
-concatenation semantics.
-
-### 5.4 Module integration: `GPTOSSAttention`
-
-```python
-if self.sink_bias is not None:
-    sink_bias_clamped = self.sink_bias.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)
-else:
-    sink_bias_clamped = None
-
-out = causal_attention(
-    query_states, key_states, value_states,
-    window=self.window_size if self.is_windowed else None,
-    sink_bias=sink_bias_clamped,
-)
-```
-
-Initialization: `sink_bias` is `nn.Parameter(torch.zeros(n_heads))` when
-`cfg.sink_bias=True`. Zero initial bias → \(e^0 = 1\) added to denominator →
-training starts near "mild sink" behavior.
-
-See [attention.md](attention.md) for the full forward path including GQA and YaRN.
+**Full walkthrough in [Part B](#part-b--implementation-modelsattentionpy)** — module
+overview, mask helpers, SDPA paths (including the zero K/V sink column),
+`GPTOSSAttention` forward trace, shape reference, and verification.
 
 ---
 
@@ -696,7 +621,7 @@ DeepSeek-v3-Lite). Sink bias is unrelated to expert routing.
 
 ### Related documentation
 
-- [attention.md](attention.md) — line-level API walkthrough
+- [Part B](#part-b--implementation-modelsattentionpy) — line-level API walkthrough
 - [yarn.md](yarn.md) — YaRN scaling theory and config
 - [rotary.md](rotary.md) — RoPE math and `apply_rope`
 
@@ -704,7 +629,7 @@ DeepSeek-v3-Lite). Sink bias is unrelated to expert routing.
 
 ```bash
 # Attention + sink tests
-pytest tests/test_attention.py -v
+python3 -m pytest tests/test_attention.py -v
 
 # KV reduction headline metric
 python scripts/kv_cache_benchmark.py
@@ -712,4 +637,477 @@ python scripts/kv_cache_benchmark.py
 
 ---
 
-<!-- docs:verified 2026-07-31 · fa6f918 -->
+## Part B — Implementation (`models/attention.py`)
+
+### B.1 Module overview and public surface
+
+`models/attention.py` implements the complete attention stack for GPT-OSS-Lite:
+
+```
+Input x (B, T, d_model)
+    │
+    ├─ q_proj ──► Q (B, H, T, D)
+    ├─ kv_proj ─► K, V (B, H_kv, T, D) ──► repeat_kv ──► (B, H, T, D)
+    │
+    ├─ YaRNRoPE(positions) ──► cos, sin
+    ├─ apply_rope(Q), apply_rope(K)          [rotary.py]
+    │
+    ├─ clamp(sink_bias)  [optional]
+    └─ causal_attention(Q, K, V, window?, sink_bias?)
+           │
+           └─ o_proj ──► (B, T, d_model)
+```
+
+There is a single module class `GPTOSSAttention` — not separate SWA/Full classes.
+Layer behaviour is selected by `is_windowed = (layer_idx % 2 == 0)`.
+
+Public symbols: `SINK_CLAMP_MIN`, `SINK_CLAMP_MAX`, `manual_causal_attention`,
+`causal_attention`, `repeat_kv`, `GPTOSSAttention`.
+
+### B.2 Constants (`SINK_CLAMP_MIN`, `SINK_CLAMP_MAX`)
+
+```python
+from models.yarn import YaRNRoPE
+from models.rotary import apply_rope
+
+SINK_CLAMP_MIN = -10.0
+SINK_CLAMP_MAX = 15.0
+```
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `SINK_CLAMP_MIN` | -10.0 | Forward clamp lower bound |
+| `SINK_CLAMP_MAX` | 15.0 | Forward clamp upper bound |
+
+Clamping prevents BF16 SDPA mask-add overflow. See [§6](#6-bf16-clamp-rationale).
+
+### B.3 `manual_causal_attention` (FP32 scores, window, sink)
+
+```python
+def manual_causal_attention(
+    query_states: torch.Tensor,   # (B, H, T, D)
+    key_states: torch.Tensor,     # (B, H, T, D)
+    value_states: torch.Tensor,   # (B, H, T, D)
+    sink_bias: torch.Tensor | None = None,  # (H,)
+    window: int | None = None,
+) -> torch.Tensor:               # (B, H, T, D)
+```
+
+**Purpose:** Naive \(O(T^2)\) attention for tests and numerical oracle. Not used in
+training or inference hot paths.
+
+**Score computation (FP32):**
+
+```python
+B, H, T, D = query_states.shape
+scores = (query_states.float() @ key_states.float().transpose(-2, -1)) / math.sqrt(D)
+```
+
+Scores are computed in FP32 regardless of input dtype. Result shape: `(B, H, T, T)`.
+
+**Causal mask:**
+
+```python
+causal = torch.triu(torch.ones(T, T, dtype=torch.bool, device=...), diagonal=1)
+scores = scores.masked_fill(causal, float("-inf"))
+```
+
+`causal[i, j] = True` when `j > i` (future positions).
+
+**Sliding-window mask:**
+
+```python
+if window is not None and window < T:
+    idx = torch.arange(T, device=...)
+    outside = idx.unsqueeze(0) - idx.unsqueeze(1) >= window
+    scores = scores.masked_fill(outside, float("-inf"))
+```
+
+For query index `i` and key index `j`: masked when `i - j >= window`.
+When `window >= T`, the window constraint is vacuous — behaves as full causal.
+
+**Sink augmentation:**
+
+```python
+if sink_bias is not None:
+    sink_logit = sink_bias.view(1, H, 1, 1).to(scores.dtype)
+    augmented = torch.cat([scores, sink_logit.expand(B, H, T, 1)], dim=-1)
+    attn_weights = F.softmax(augmented, dim=-1)
+    attn_weights = attn_weights[..., :T]
+    return (attn_weights.to(value_states.dtype) @ value_states)
+```
+
+Steps: concat sink column → softmax over `T+1` columns → strip sink column → matmul
+with `value_states`. When `sink_bias is None`, standard softmax over `T` columns.
+
+### B.4 Mask helpers (`_causal_mask`, `_window_mask`, cache key)
+
+Two cached functions build boolean masks for the SDPA path.
+
+**`_causal_mask`:**
+
+```python
+@functools.lru_cache(maxsize=None)
+def _causal_mask(T: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    idx = torch.arange(T, device=device)
+    return idx.unsqueeze(1) >= idx.unsqueeze(0)  # (T, T)
+```
+
+Returns `True` where attention is **allowed** (lower-triangular including diagonal).
+Opposite convention from `manual_causal_attention` (which masks `True` = forbidden).
+
+**`_window_mask`:**
+
+```python
+@functools.lru_cache(maxsize=None)
+def _window_mask(T_q, T_k, window, device, dtype) -> torch.Tensor:
+```
+
+Prefill branch (`T_q == T_k`):
+
+```python
+idx = torch.arange(T_q, device=device)
+return (idx.unsqueeze(0) - idx.unsqueeze(1) < window) & _causal_mask(T_q, device, dtype)
+```
+
+Decode branch (`T_q = 1`, `T_k` = cached length):
+
+```python
+idx_q = torch.tensor([T_k - 1], device=device)
+idx_k = torch.arange(T_k, device=device)
+return (idx_q.unsqueeze(-1) - idx_k.unsqueeze(0) < window)
+```
+
+Decode assumes a single new query at position `T_k - 1` attending to cached keys
+`0 .. T_k-1`. No separate causal check needed — all cached keys are in the past.
+
+**Cache key semantics:** `lru_cache` keys on `(T, device, dtype)` or
+`(T_q, T_k, window, device, dtype)`. `maxsize=None` — unbounded cache; typical
+training sees few distinct `(T, window)` pairs per run.
+
+### B.5 `causal_attention` SDPA paths (fast / window / sink column)
+
+```python
+def causal_attention(
+    query_states: torch.Tensor,   # (B, H, T_q, D)
+    key_states: torch.Tensor,     # (B, H, T_k, D)
+    value_states: torch.Tensor,   # (B, H, T_k, D_v)
+    window: int | None = None,
+    sink_bias: torch.Tensor | None = None,  # (H,)
+) -> torch.Tensor:               # (B, H, T_q, D_v)
+```
+
+Production attention via `F.scaled_dot_product_attention`. Supports rectangular
+`T_q \ne T_k` for decode.
+
+**Fast path: no sink, no window**
+
+```python
+if sink_bias is None:
+    if window is None:
+        if T_q == T_k:
+            return F.scaled_dot_product_attention(
+                query_states, key_states, value_states, is_causal=True
+            )
+        return F.scaled_dot_product_attention(
+            query_states, key_states, value_states
+        )
+```
+
+Square + causal → `is_causal=True` enables Flash Attention fusion.
+
+**Window path without sink**
+
+```python
+if T_q == T_k:
+    mask = _causal_mask(T_q, device, dtype) & _window_mask(T_q, T_k, window, device, dtype)
+else:
+    mask = _window_mask(T_q, T_k, window, device, dtype)
+
+attn_mask = torch.where(mask, 0.0, float("-inf")).to(dtype).unsqueeze(0).unsqueeze(0)
+return F.scaled_dot_product_attention(query_states, key_states, value_states, attn_mask=attn_mask)
+```
+
+| `sink_bias` | `window` | Path |
+|-------------|----------|------|
+| `None` | `None` | `is_causal=True` or bare SDPA |
+| `None` | set | Cached boolean → `where(0, -inf)` mask |
+| set | `None`/set | Sink K/V extension + head-specific mask |
+
+**Sink path: SDPA with zero K/V column**
+
+When `sink_bias is not None`:
+
+```python
+sink_k = torch.zeros(B, H, 1, query_states.shape[-1], device=device, dtype=dtype)
+sink_v = torch.zeros(B, H, 1, value_states.shape[-1], device=device, dtype=value_states.dtype)
+k_ext = torch.cat([key_states, sink_k], dim=2)   # (B, H, T_k+1, D)
+v_ext = torch.cat([value_states, sink_v], dim=2)
+```
+
+The sink key is all zeros → dot product \(q \cdot k_{\text{sink}} = 0\). The learned
+bias enters **only** through the attention mask, not through K.
+
+```python
+if window is None or window >= T_k:
+    causal = _causal_mask(T_q, device, dtype) if T_q == T_k \
+        else torch.ones(T_q, T_k, dtype=torch.bool, device=device)
+elif T_q == T_k:
+    causal = _causal_mask(T_q, device, dtype) & _window_mask(T_q, T_k, window, device, dtype)
+else:
+    causal = _window_mask(T_q, T_k, window, device, dtype)
+
+mask = torch.zeros(H, T_q, T_k + 1, device=device, dtype=dtype)
+mask[:, :, :T_k] = causal.to(dtype)
+mask[:, :, T_k] = sink_bias.to(dtype).unsqueeze(1).expand(H, T_q)
+return F.scaled_dot_product_attention(query_states, k_ext, v_ext, attn_mask=mask.unsqueeze(0))
+```
+
+| Column range | Value | Meaning |
+|--------------|-------|---------|
+| `0 .. T_k-1` | `1.0` if allowed, `0.0` if forbidden | Boolean `causal` cast to float |
+| `T_k` (sink) | `sink_bias[h]` | Per-head learned logit |
+
+**Important:** The non-sink window path uses `torch.where(mask, 0.0, -inf)` to block
+forbidden positions. The sink path uses `causal.to(dtype)` (`1.0`/`0.0`) instead.
+When validating sink behaviour, compare against `manual_causal_attention` (the test
+oracle), not against the no-sink SDPA path.
+
+**SDPA backend notes:** `is_causal=True` path (no sink, no window, square) triggers
+FA2 via PyTorch SDPA when available. Window and sink paths pass `attn_mask` — may
+fall back to math or memory-efficient kernel. Q, K, V must share dtype for SDPA.
+
+### B.6 `repeat_kv` (`expand` + `reshape`, no `.contiguous()`)
+
+Grouped-query attention (GQA) uses fewer KV heads than Q heads:
+
+| Config field | Default | Meaning |
+|--------------|---------|---------|
+| `n_heads` | 8 | Query heads \(H\) |
+| `n_kv_heads` | 4 | Key/value heads \(H_{\text{kv}}\) |
+| `n_rep` | `n_heads // n_kv_heads` | Replication factor (2) |
+
+```python
+def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
+    if n_rep == 1:
+        return x
+    B, H_kv, T, D = x.shape
+    x = x[:, :, None, :, :]           # (B, H_kv, 1, T, D)
+    x = x.expand(B, H_kv, n_rep, T, D) # no memory copy
+    return x.reshape(B, H_kv * n_rep, T, D)
+```
+
+`expand` creates a broadcast view — no `.contiguous()` copy. SDPA's Flash Attention
+backend handles non-contiguous K/V internally. KV head `h_kv` maps to Q heads
+`2*h_kv` and `2*h_kv + 1` when `n_rep=2`.
+
+### B.7 `GPTOSSAttention` construction (sink param, YaRN, pruned RoPE)
+
+```python
+class GPTOSSAttention(nn.Module):
+    def __init__(self, cfg, layer_idx: int):
+```
+
+**Construction:**
+
+```python
+self.is_windowed = (layer_idx % 2 == 0)
+self.prune_rope_global = bool(getattr(cfg, "yarn_prune_rope_global", True))
+self.n_rep = self.n_heads // self.n_kv_heads
+
+self.q_proj = nn.Linear(d_model, n_heads * head_dim, bias=False)
+self.kv_proj = nn.Linear(d_model, 2 * n_kv_heads * head_dim, bias=False)
+self.o_proj = nn.Linear(n_heads * head_dim, d_model, bias=False)
+```
+
+**Sink parameter:**
+
+```python
+if cfg.sink_bias:
+    self.sink_bias = nn.Parameter(torch.zeros(self.n_heads))
+else:
+    self.register_parameter("sink_bias", None)
+```
+
+**YaRN module:**
+
+```python
+self.yarn = YaRNRoPE(
+    head_dim=self.head_dim,
+    theta=cfg.rope_theta,
+    scale_factor=cfg.yarn_scale_factor,
+    original_max_seq_len=cfg.yarn_original_max_seq_len,
+    target_seq_len=cfg.yarn_target_seq_len,
+    beta_fast=cfg.yarn_beta_fast,
+    beta_slow=cfg.yarn_beta_slow,
+    mscale=cfg.yarn_mscale,
+)
+```
+
+See [yarn.md](yarn.md) for parameter semantics.
+
+**Pruned RoPE helper:**
+
+```python
+def _n_pruned_dims(self) -> int:
+    if (not self.is_windowed) and self.prune_rope_global:
+        return self.head_dim // 4
+    return 0
+```
+
+Returns number of frequency **pairs** to prune (not individual dims). For
+`head_dim=96` → 24 pairs → 48 scalar dimensions frozen to identity rotation.
+Applied only on **global** (odd-indexed) layers when `yarn_prune_rope_global=True`.
+
+**Config knobs** (from `ModelConfig` in `models/transformer.py`):
+
+| Field | Default | Maps to |
+|-------|---------|---------|
+| `n_heads` | 8 | `self.n_heads` |
+| `n_kv_heads` | 4 | `self.n_kv_heads` |
+| `head_dim` | 96 | `self.head_dim` |
+| `window_size` | 128 | SWA window on even layers |
+| `sink_bias` | `True` | Whether `sink_bias` parameter exists |
+| `rope_theta` | 100000 | YaRN base \(\theta\) |
+| `yarn_scale_factor` | 32 | YaRN stretch factor |
+| `yarn_original_max_seq_len` | 4096 | Training context for YaRN |
+| `yarn_target_seq_len` | 131072 | Inference extrapolation target |
+| `yarn_prune_rope_global` | `True` | Prune 25% RoPE dims on global layers |
+
+### B.8 Forward path trace (positions → out proj)
+
+Complete `forward(x, positions=None)` execution:
+
+**Step 1 — Positions**
+
+```python
+B, T, _ = x.shape
+if positions is None:
+    positions = torch.arange(T, device=x.device)
+```
+
+**Step 2 — Projections**
+
+```python
+query_states = self.q_proj(x).view(B, T, self.n_heads, self.head_dim)
+kv = self.kv_proj(x).view(B, T, 2, self.n_kv_heads, self.head_dim)
+key_states, value_states = kv[:, :, 0], kv[:, :, 1]
+```
+
+**Step 3 — Head-major layout**
+
+```python
+query_states = query_states.transpose(1, 2)   # (B, H, T, D)
+key_states = key_states.transpose(1, 2)         # (B, H_kv, T, D)
+value_states = value_states.transpose(1, 2)
+```
+
+**Step 4 — RoPE**
+
+```python
+cos, sin = self.yarn(positions, n_pruned_dims=self._n_pruned_dims())
+query_states = apply_rope(query_states, cos, sin)
+key_states = apply_rope(key_states, cos, sin)
+```
+
+`apply_rope` is imported from `models.rotary` — see [rotary.md](rotary.md).
+
+**Step 5 — GQA expansion**
+
+```python
+key_states = repeat_kv(key_states, self.n_rep)
+value_states = repeat_kv(value_states, self.n_rep)
+```
+
+**Step 6 — Sink clamp**
+
+```python
+if self.sink_bias is not None:
+    sink_bias_clamped = self.sink_bias.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)
+else:
+    sink_bias_clamped = None
+```
+
+**Step 7 — Attention**
+
+```python
+out = causal_attention(
+    query_states, key_states, value_states,
+    window=self.window_size if self.is_windowed else None,
+    sink_bias=sink_bias_clamped,
+)
+```
+
+| Layer type | `window` argument | Effect |
+|------------|-------------------|--------|
+| Even (`is_windowed=True`) | `cfg.window_size` (128) | SWA |
+| Odd (`is_windowed=False`) | `None` | Full causal |
+
+**Step 8 — Output projection**
+
+```python
+out = out.transpose(1, 2).contiguous().view(B, T, self.n_heads * self.head_dim)
+return self.o_proj(out)
+```
+
+**Inference integration** (`inference/generate.py`): duplicates this forward with KV
+caching. RoPE is applied **before** caching; cached K is already position-encoded.
+Sink bias is clamped once per layer per generation via `sink_bias_cache[id(attn)]`.
+Windowed vs global dispatch mirrors `GPTOSSAttention.forward` logic.
+
+### B.9 Shape reference
+
+Assume production config: `B=1`, `T=4096`, `H=8`, `H_kv=4`, `D=96`, `d_model=768`.
+
+| Tensor | Shape | Notes |
+|--------|-------|-------|
+| `x` | `(B, T, 768)` | Input |
+| `q_proj(x)` | `(B, T, 768)` | `8 * 96` |
+| `query_states` (head-major) | `(B, 8, T, 96)` | After transpose |
+| `kv_proj(x)` | `(B, T, 768)` | `2 * 4 * 96` |
+| `key_states` (pre-repeat) | `(B, 4, T, 96)` | |
+| `key_states` (post-repeat) | `(B, 8, T, 96)` | GQA |
+| `cos`, `sin` | `(T, 48)` | `head_dim // 2` pairs |
+| `sink_bias` | `(8,)` | Per Q head |
+| `causal_attention` out | `(B, 8, T, 96)` | |
+| `o_proj` out | `(B, T, 768)` | |
+
+Decode step: `T_q=1`, `T_k` = cached length, shapes analogous with `T` replaced.
+
+### B.10 How to verify
+
+Run:
+
+```bash
+python3 -m pytest tests/test_attention.py -v
+```
+
+Must include: `test_sliding_window_matches_full`.
+
+KV reduction headline metric:
+
+```bash
+python scripts/kv_cache_benchmark.py
+```
+
+**Common pitfalls:**
+
+- **GQA repeat:** Always `repeat_kv` before attention — mismatched Q/K head counts
+  raise SDPA shape errors.
+- **RoPE twice:** Cached inference stores rotated K; do not `apply_rope` on cached
+  keys again.
+- **Unclamped sink:** Direct `causal_attention(..., sink_bias=raw_param)` bypasses
+  clamp — use `.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)` or `GPTOSSAttention`.
+- **Window on global layers:** Only even layers should pass `window_size` — breaks
+  KV math and the ≥ 1.8× headline metric otherwise.
+- **Mask convention confusion:**
+  - `_causal_mask`: `True` = allowed
+  - `manual_causal_attention`: `True` in `triu` = **forbidden**
+  - Non-sink SDPA: `0.0` = allowed, `-inf` = forbidden
+  - Sink SDPA: `causal.to(dtype)` → `1.0`/`0.0` for real keys, `sink_bias` for sink column
+
+When in doubt, trust `manual_causal_attention` for golden values.
+
+---
+
+<!-- docs:verified 2026-07-31 · task-2 -->

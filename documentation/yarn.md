@@ -4,7 +4,7 @@
 > Module: `models/yarn.py` (`YaRNRoPE`). Frequency math lives in
 > `models/rotary.py` (`compute_yarn_freqs`, `compute_yarn_mscale`).
 > Application: `models/rotary.py` (`apply_rope`). Attention integration:
-> [attention.md](attention.md). Sink interaction: [ATTENTION_SINKS.md §9](ATTENTION_SINKS.md#9-interaction-with-yarn-and-pruned-rope).
+> [ATTENTION_SINKS.md](ATTENTION_SINKS.md#part-b--implementation-modelsattentionpy). Sink interaction: [ATTENTION_SINKS.md §9](ATTENTION_SINKS.md#9-interaction-with-yarn-and-pruned-rope).
 
 ---
 
@@ -466,7 +466,7 @@ Ensure eval scripts pass positions up to `eval_max_seq_len`, not `max_seq_len`.
 ## Related Documentation
 
 - [rotary.md](rotary.md) — `apply_rope`, `compute_yarn_freqs` source
-- [attention.md](attention.md) — `GPTOSSAttention` integration
+- [ATTENTION_SINKS.md §B.7](ATTENTION_SINKS.md#b7-gptossattention-construction-sink-param-yarn-pruned-rope) — `GPTOSSAttention` integration
 - [ATTENTION_SINKS.md](ATTENTION_SINKS.md) — sinks + YaRN at 128K
 
 ---

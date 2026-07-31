@@ -79,7 +79,7 @@ calls `_window_mask` alone for decode ($T_q = 1$, $T_k$ growing).
 
 **Files:** `models/attention.py` (`_causal_mask`, `_window_mask`, `causal_attention`)
 
-**Related:** [attention.md](attention.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
+**Related:** [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
 
 ---
 
@@ -697,7 +697,7 @@ After changing `models/attention.py`, **always** run
 
 | Topic | Document |
 |-------|----------|
-| Attention masks + sinks | [attention.md](attention.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
+| Attention masks + sinks | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
 | YaRN / RoPE | [yarn.md](yarn.md), [rotary.md](rotary.md) |
 | MoE routing | [moe.md](moe.md) |
 | Triton kernel contract | [triton_kernels.md](triton_kernels.md) |

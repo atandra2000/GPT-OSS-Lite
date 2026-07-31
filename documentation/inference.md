@@ -4,7 +4,7 @@
 > chapter explains how GPT-OSS-Lite decodes autoregressively with a heterogeneous
 > per-layer KV cache, how sink-bias clamping is cached for decode, the passkey
 > retrieval protocol, and what the KV-cache benchmark measures. Prerequisites:
-> [attention.md](attention.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md),
+> [ATTENTION_SINKS.md](ATTENTION_SINKS.md),
 > [transformer.md](transformer.md).
 
 ---
@@ -247,7 +247,7 @@ Properties:
 - Cache is per `generate()` call, not global — reflects current parameter values
 - Identical numerics to training forward for a given `sink_bias` parameter
 
-See [attention.md](attention.md) for why clamp prevents BF16 mask-add overflow.
+See [ATTENTION_SINKS.md §6](ATTENTION_SINKS.md#6-bf16-clamp-rationale) for why clamp prevents BF16 mask-add overflow.
 
 ---
 
@@ -536,7 +536,7 @@ step on a tiny model.
 
 | Topic | Document |
 |-------|----------|
-| Attention implementation | [attention.md](attention.md) |
+| Attention implementation | [ATTENTION_SINKS.md](ATTENTION_SINKS.md#part-b--implementation-modelsattentionpy) |
 | Sink theory | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
 | YaRN / RoPE | [yarn.md](yarn.md), [rotary.md](rotary.md) |
 | Model composition | [transformer.md](transformer.md) |

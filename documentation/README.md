@@ -39,7 +39,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | 1 | Foundations | [foundations.md](foundations.md) | Why decoder-only, GQA, SWA, sinks, YaRN, MoE |
 | 2 | Architecture | [architecture.md](architecture.md) | 12-layer stack, file map, dataflow |
 | 3 | Transformer | [transformer.md](transformer.md) | `GPTOSS`, `GPTOSSBlock`, `ModelConfig` |
-| 4 | Attention | [attention.md](attention.md) | SWA/full alternation, SDPA paths |
+| 4 | Attention | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | SWA/full alternation, sinks, SDPA paths |
 | 4b | Sinks (deep) | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) | Learned sink bias — read before tuning sinks |
 | 5 | RoPE / YaRN | [rotary.md](rotary.md) → [yarn.md](yarn.md) | Position encoding + 128K extrapolation |
 | 6 | MoE | [moe.md](moe.md) | Top-2 routing, aux loss α=0.01 |
@@ -63,7 +63,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 
 ### Tier 2 — Component reference (read as needed)
 
-- [transformer.md](transformer.md), [attention.md](attention.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
+- [architecture.md](architecture.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md)
 - [rotary.md](rotary.md), [yarn.md](yarn.md)
 - [moe.md](moe.md), [triton_kernels.md](triton_kernels.md)
 
@@ -82,7 +82,7 @@ Read in this order for a first pass. Skip ahead if you already know transformers
 | Component | Source | Documentation |
 |-----------|--------|---------------|
 | Top-level model | `models/transformer.py` | [transformer.md](transformer.md) |
-| Attention (SWA + full) | `models/attention.py` | [attention.md](attention.md), [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
+| Attention (SWA + full) | `models/attention.py` | [ATTENTION_SINKS.md](ATTENTION_SINKS.md) |
 | RoPE helpers | `models/rotary.py` | [rotary.md](rotary.md) |
 | YaRN scaling | `models/yarn.py` | [yarn.md](yarn.md) |
 | MoE FFN | `models/moe.py` | [moe.md](moe.md) |
@@ -140,9 +140,8 @@ Every chapter file ends with a verification footer:
 | training.md | 834 | Comprehensive |
 | moe.md | 754 | Comprehensive |
 | data_pipeline.md | 735 | Comprehensive |
-| ATTENTION_SINKS.md | 715 | Comprehensive |
+| ATTENTION_SINKS.md | ~1200 | Comprehensive (theory + implementation) |
 | OPTIMIZATIONS.md | 712 | Comprehensive |
-| attention.md | 669 | Comprehensive |
 | architecture.md | 650 | Comprehensive |
 | triton_kernels.md | 628 | Comprehensive |
 | foundations.md | 606 | Comprehensive |

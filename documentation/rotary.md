@@ -2,7 +2,7 @@
 
 > Mathematical foundation and implementation of RoPE in GPT-OSS-Lite.
 > Source: `models/rotary.py`. YaRN scaling wrapper: [yarn.md](yarn.md).
-> Attention consumer: [attention.md](attention.md).
+> Attention consumer: [ATTENTION_SINKS.md](ATTENTION_SINKS.md#part-b--implementation-modelsattentionpy).
 
 ---
 
@@ -352,7 +352,7 @@ x'_1 = x_0 \sin\theta_0 + x_1 \cos\theta_0
 | Extrapolation | Poor beyond train length | YaRN extends |
 
 GPT-OSS caches **rotated** K in `MixedKVCache` — see
-[attention.md §12](attention.md#12-inference-integration).
+[ATTENTION_SINKS.md §B.8](ATTENTION_SINKS.md#b8-forward-path-trace-positions--out-proj).
 
 ---
 
@@ -388,7 +388,7 @@ from models.rotary import apply_rope, compute_yarn_freqs, compute_yarn_mscale
 ## Related Documentation
 
 - [yarn.md](yarn.md) — `YaRNRoPE` module, pruning, config
-- [attention.md](attention.md) — where RoPE sits in the forward path
+- [ATTENTION_SINKS.md §B.8](ATTENTION_SINKS.md#b8-forward-path-trace-positions--out-proj) — where RoPE sits in the forward path
 - [ATTENTION_SINKS.md](ATTENTION_SINKS.md) — sinks independent of RoPE
 
 ---
