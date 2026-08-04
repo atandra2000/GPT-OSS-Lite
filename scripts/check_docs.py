@@ -261,7 +261,6 @@ def main() -> int:
         return 1
 
     if args.check_symbols:
-        import subprocess
         checker = Path(__file__).resolve().parents[1] / "tests" / "test_doc_refs.py"
         result = subprocess.run(
             [sys.executable, str(checker), "--strict-coverage"],

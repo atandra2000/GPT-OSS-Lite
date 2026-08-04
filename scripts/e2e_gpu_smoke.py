@@ -19,14 +19,11 @@ from __future__ import annotations
 
 import dataclasses
 import math
-import os
 import sys
 import tempfile
 from pathlib import Path
 
 import torch
-import torch.nn.functional as F
-import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from models.attention import GPTOSSAttention

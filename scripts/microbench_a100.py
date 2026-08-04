@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Microbenchmark: peak VRAM for GPT-OSS-Lite at production batch/seq."""
 import argparse
-import os
 import sys
 from pathlib import Path
 

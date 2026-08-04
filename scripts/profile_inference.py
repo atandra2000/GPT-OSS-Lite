@@ -2,7 +2,7 @@
 import time
 import torch
 
-from _bootstrap import micro_cfg, time_fn
+from _bootstrap import micro_cfg
 from inference.generate import generate
 from models.transformer import GPTOSS
 
