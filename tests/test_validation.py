@@ -111,6 +111,28 @@ def test_anchor_metric_247m_active(model_cfg):
     )
 
 
+def test_active_params_router_not_double_counted(model_cfg):
+    """num_active_parameters must equal total minus inactive routed experts.
+
+    Regression for a bug where the router gate (no "experts" in its param name)
+    was counted in `non_moe` AND re-added via `router_params * n_layers`,
+    inflating the headline 247M figure by 12 * d_model * n_routed_experts
+    (73,728 for the production config).
+    """
+    cfg = model_cfg
+    model = GPTOSS(cfg)
+    total = model.num_parameters()
+    inactive_per_layer = (
+        (cfg.n_routed_experts - cfg.n_activated_experts)
+        * 3 * cfg.d_model * cfg.ffn_dim
+    )
+    expected_active = total - inactive_per_layer * cfg.n_layers
+    assert model.num_active_parameters() == expected_active, (
+        f"num_active_parameters()={model.num_active_parameters():,} != "
+        f"expected {expected_active:,} (router double-count regression)"
+    )
+
+
 def test_active_params_correct_with_tied_weights():
     """When weight_tying=True, num_active_parameters must not double-count embed/head."""
     cfg = ModelConfig(

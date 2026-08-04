@@ -20,7 +20,7 @@ from models.transformer import ModelConfig
 def test_sliding_window_matches_full_small(attn_inputs_small, attn_small):
     """SWA must match full causal attention for positions within the window."""
     q, k, v = attn_inputs_small
-    B, T, H, D = q.shape
+    B, H, T, D = q.shape
     window = attn_small["window"]
 
     # Ground truth: full causal attention
@@ -39,7 +39,7 @@ def test_sliding_window_matches_full_small(attn_inputs_small, attn_small):
 def test_sliding_window_zeros_outside_window(attn_inputs_small, attn_small):
     """SWA must not attend to positions outside the window — verify via attn weights."""
     q, k, v = attn_inputs_small
-    B, T, H, D = q.shape
+    B, H, T, D = q.shape
     window = attn_small["window"]
 
     # Use manual_causal_attention with window to expose weights
@@ -69,6 +69,65 @@ def test_sliding_window_window_matches_full_inside(attn_inputs_small, attn_small
 
     # All positions t < window: full mask fits in window
     assert torch.allclose(full[:, :, :window], sw[:, :, :window], atol=1e-5)
+
+
+# Regression: window must bind at PREFILL (T_q == T_k), not only at decode.
+# Historical bug: the square mask computed (j - i < window), which is vacuous
+# under causality — windowed layers attended fully causally during training.
+
+def test_sliding_window_sdpa_matches_manual(attn_inputs_small, attn_small):
+    """SDPA windowed path must equal the manual windowed oracle at every position."""
+    q, k, v = attn_inputs_small
+    window = attn_small["window"]
+    sw = causal_attention(q, k, v, window=window)
+    mw = manual_causal_attention(q, k, v, window=window)
+    assert torch.allclose(sw, mw, atol=1e-5), \
+        f"SDPA windowed != manual windowed (max diff {(sw - mw).abs().max():.2e})"
+
+
+def test_sliding_window_blocks_past_keys_at_prefill(attn_inputs_small, attn_small):
+    """At prefill, position t >= window must NOT see keys j <= t - window."""
+    q, k, v = attn_inputs_small
+    B, H, T, D = q.shape
+    window = attn_small["window"]
+
+    out = causal_attention(q, k, v, window=window)
+    # Corrupt keys outside the window: output at t must be unchanged.
+    for t in range(window, min(T, window + 4)):
+        k_masked = k.clone()
+        k_masked[:, :, : t - window + 1, :] = 0.0
+        out_masked = causal_attention(q, k_masked, v, window=window)
+        assert torch.allclose(out[:, :, t], out_masked[:, :, t], atol=1e-5), \
+            f"Prefill SWA attended outside window at t={t}"
+
+
+# Regression: the SDPA sink path must enforce causality at prefill.
+# Historical bug: the float mask was a bool->float cast (1.0/0.0); SDPA float
+# masks are ADDITIVE, so "blocked" positions (0.0) were never masked and future
+# tokens leaked into every position's softmax.
+
+def test_sink_path_matches_manual_at_prefill(attn_inputs_small):
+    """SDPA sink path must equal the manual sink oracle (causal, with sink column)."""
+    q, k, v = attn_inputs_small
+    sink = torch.tensor([0.0, 1.0, -2.0, 0.5])[: q.shape[1]]
+    out_sdp = causal_attention(q, k, v, sink_bias=sink)
+    out_man = manual_causal_attention(q, k, v, sink_bias=sink)
+    assert torch.allclose(out_sdp, out_man, atol=1e-5), \
+        f"Sink SDPA != manual oracle (max diff {(out_sdp - out_man).abs().max():.2e})"
+
+
+def test_sink_path_is_causal(attn_inputs_tiny):
+    """Position 0 output must not change when future keys are corrupted (sink on)."""
+    q, k, v = attn_inputs_tiny
+    sink = torch.zeros(q.shape[1])
+    out = causal_attention(q, k, v, sink_bias=sink)
+    k_corrupt = k.clone()
+    k_corrupt[:, :, 1:, :] = 1e6
+    v_corrupt = v.clone()
+    v_corrupt[:, :, 1:, :] = 0.0
+    out_corrupt = causal_attention(q, k_corrupt, v_corrupt, sink_bias=sink)
+    assert torch.allclose(out[:, :, 0], out_corrupt[:, :, 0], atol=1e-5), \
+        "Position 0 attended to future keys (sink path not causal)"
 
 
 # Learned sink bias tests

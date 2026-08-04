@@ -30,7 +30,8 @@ def manual_causal_attention(
 
     if window is not None and window < T:
         idx = torch.arange(T, device=query_states.device)
-        outside = idx.unsqueeze(0) - idx.unsqueeze(1) >= window
+        # Past window: query i excludes keys j with i - j >= window.
+        outside = idx.unsqueeze(1) - idx.unsqueeze(0) >= window
         scores = scores.masked_fill(outside, float("-inf"))
 
     if sink_bias is not None:
@@ -55,7 +56,9 @@ def _window_mask(T_q: int, T_k: int, window: int, device: torch.device, dtype: t
     """Sliding-window mask of shape ``(T_q, T_k)``: True where attention is allowed."""
     if T_q == T_k:
         idx = torch.arange(T_q, device=device)
-        return (idx.unsqueeze(0) - idx.unsqueeze(1) < window) & _causal_mask(T_q, device, dtype)
+        # Query i sees keys j with i - j < window (past window), AND causal (j <= i).
+        # The window term is NOT redundant: for window < T it blocks keys j <= i - window.
+        return (idx.unsqueeze(1) - idx.unsqueeze(0) < window) & _causal_mask(T_q, device, dtype)
     # Decode: T_q=1, T_k grows. Query position is T_k - 1.
     idx_q = torch.tensor([T_k - 1], device=device)
     idx_k = torch.arange(T_k, device=device)
@@ -109,7 +112,9 @@ def causal_attention(
         causal = _window_mask(T_q, T_k, window, device, dtype)
 
     mask = torch.zeros(H, T_q, T_k + 1, device=device, dtype=dtype)
-    mask[:, :, :T_k] = causal.to(dtype)
+    # SDPA float masks are ADDITIVE: 0.0 = allowed, -inf = blocked. A bool->float
+    # cast (1.0/0.0) would leave "blocked" positions unmasked, leaking future tokens.
+    mask[:, :, :T_k] = torch.where(causal, 0.0, float("-inf")).to(dtype)
     mask[:, :, T_k] = sink_bias.to(dtype).unsqueeze(1).expand(H, T_q)
     return F.scaled_dot_product_attention(query_states, k_ext, v_ext, attn_mask=mask.unsqueeze(0))
 
