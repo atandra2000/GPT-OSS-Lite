@@ -413,8 +413,8 @@ structures:
 - `global_lengths` — valid prefix length per global layer (`≤` capacity).
 - `global_caps` — allocated capacity per global layer.
 
-The class constant `_GLOBAL_CAP_TOKENS = 4_000_000` is the §4.6 cap, overridable
-per instance via `global_cap_tokens`. `inference/generate.py:MixedKVCache.__len__`
+The class constant `_GLOBAL_CAP_TOKENS = 4_000_000` is the §4.6 cap.
+`inference/generate.py:MixedKVCache.__len__`
 returns `max(len(windowed_kv), len(global_kv))` — the number of layers that
 have written anything.
 

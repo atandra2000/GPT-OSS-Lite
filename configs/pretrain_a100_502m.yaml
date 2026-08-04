@@ -70,10 +70,6 @@ training:
 
 data:
   train_data_path:      "data/pretrain_chinchilla"
-  tokenizer:            "llama3"
-  shard_size_tokens:    50000000
-  max_tokens:           8000000000
-  data_mix:             "gptoss-default"
   # mix: fineweb-edu 0.5 / fineweb 0.2 / the-stack-python 0.15 / openmath 0.1 / arxiv 0.05
   # Long-context augmentation: 10% of sequences packed to 4096 with
   # document-boundary awareness (passkey-style inserts for eval readiness)

@@ -54,7 +54,3 @@ training:
 
 data:
   train_data_path:      "data/pretrain_smoke"
-  tokenizer:            "smoke"
-  shard_size_tokens:    1024
-  max_tokens:           8192
-  data_mix:             "gptoss-default"

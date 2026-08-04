@@ -1124,15 +1124,13 @@ Training integration: [§10](#10-training-pipeline-integration).
 
 **502M / 247M breakdown and KV math:** [§5](#5-parameter-accounting).
 
-`num_parameters(only_trainable=False)` deduplicates weight tying:
+`num_parameters()` deduplicates weight tying:
 
 ```python
-def num_parameters(self, only_trainable: bool = False) -> int:
+def num_parameters(self) -> int:
     seen_ids = set()
     total = 0
     for p in self.parameters():
-        if only_trainable and not p.requires_grad:
-            continue
         if id(p) in seen_ids:
             continue
         seen_ids.add(id(p))

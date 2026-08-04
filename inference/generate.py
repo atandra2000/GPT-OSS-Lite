@@ -19,15 +19,12 @@ class MixedKVCache:
 
     _GLOBAL_CAP_TOKENS = 4_000_000
 
-    def __init__(self, global_cap_tokens: int | None = None):
+    def __init__(self):
         self.windowed_kv: List[List[Optional[torch.Tensor]]] = []
         self.global_kv: List[List[Optional[torch.Tensor]]] = []
         self.global_lengths: List[int] = []
         self.global_caps: List[int] = []
-        self._global_cap_tokens = (
-            global_cap_tokens if global_cap_tokens is not None
-            else self._GLOBAL_CAP_TOKENS
-        )
+        self._global_cap_tokens = self._GLOBAL_CAP_TOKENS
 
     def reset(self) -> None:
         """Empty the cache (call between independent generations)."""

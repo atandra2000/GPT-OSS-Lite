@@ -4,7 +4,6 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from models.attention import GPTOSSAttention
 from models.moe import MoELayer
@@ -215,10 +214,8 @@ class GPTOSS(nn.Module):
         logits = self.head(x)
         return logits, aux_loss
 
-    def num_parameters(self, only_trainable: bool = False) -> int:
+    def num_parameters(self) -> int:
         """Count parameters (excludes duplicates from weight tying)."""
-        if only_trainable:
-            return sum(p.numel() for p in self.parameters() if p.requires_grad)
         seen_ids = set()
         total = 0
         for p in self.parameters():
@@ -229,11 +226,15 @@ class GPTOSS(nn.Module):
         return total
 
     def num_active_parameters(self) -> int:
-        """Estimate active parameters per token (top-2 routed + 1 shared)."""
+        """Estimate active parameters per token (top-2 routed + 1 shared).
+
+        The router gate is always active (one small Linear per layer): it is
+        excluded from `non_moe` and re-added once via `router_params * n_layers`.
+        """
         seen_ids: set[int] = set()
         non_moe = 0
         for name, p in self.named_parameters():
-            if "experts" in name:
+            if "experts" in name or "router" in name:
                 continue
             if id(p) in seen_ids:
                 continue

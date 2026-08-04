@@ -482,7 +482,7 @@ allocator behavior.
 | OOM at 128K prefill | Batch > 1 or insufficient VRAM | `batch=1`; BF16; shorter eval |
 | Slower than expected decode | `use_cache=False` | Enable cache |
 | Position bugs / repeated tokens | Wrong `positions` during decode | Use absolute index `cur_pos-1` |
-| Global cap hit | Sequence > 4M tokens | Raise `global_cap_tokens` |
+| Global cap hit | Sequence > 4M tokens | Use a longer-context model or reduce sequence length |
 | Sink overflow / NaN logits | Missing clamp | Ensure `SINK_CLAMP_*` path used |
 
 ---

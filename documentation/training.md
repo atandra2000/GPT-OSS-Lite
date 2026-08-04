@@ -1275,10 +1275,6 @@ above in this document.
 | Key | A100 | Smoke | Notes |
 |-----|------|-------|-------|
 | `train_data_path` | `data/pretrain_chinchilla` | `data/pretrain_smoke` | `shard_*.bin` dir; prepare first |
-| `tokenizer` | `llama3` | `smoke` | Universal pipeline name |
-| `shard_size_tokens` | `50000000` | `1024` | Tokens per shard at prepare time |
-| `max_tokens` | `8000000000` | `8192` | Total corpus budget |
-| `data_mix` | `gptoss-default` | `gptoss-default` | Mixture preset |
 
 **`gptoss-default` mixture** (from A100 YAML comments): FineWeb-Edu 50%,
 FineWeb 20%, The Stack Python 15%, OpenMath 10%, arXiv 5%. Includes 10%
