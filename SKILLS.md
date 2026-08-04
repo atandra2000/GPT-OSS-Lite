@@ -135,8 +135,7 @@ retrieval, or unstable training at longer sequences.
    ```
 
 2. **Prepare data** (downloads + tokenizes the universal 8.0B-token corpus;
-   can take hours). See `documentation/data_pipeline.md` for the full guide
-   (`data/DATA_PIPELINE.md` is a short pointer).
+   can take hours). See `docs/training.md` (Data Pipeline part) for the full guide.
    ```bash
    python3 data/prepare_data.py --stage pretrain
    # Or skip the download if you've already run the pipeline once:
@@ -274,7 +273,7 @@ adding more complex optimisations (e.g. CUDA graphs, custom Triton kernels).
    python3 scripts/step_time_a100.py     # end-to-end training step (GPU)
    ```
 
-2. **Cross-reference with `documentation/operations.md` Part C.** The doc lists
+2. **Cross-reference with `docs/guides/operations.md` Part C.** The doc lists
    every optimisation applied, what it does, and how much it bought. If your
    hotspot is one of the listed items, you're done; if not, you're in
    uncharted territory and should design a new optimisation.
@@ -285,7 +284,7 @@ adding more complex optimisations (e.g. CUDA graphs, custom Triton kernels).
    python3 -m pytest tests/ -q
    ```
 
-4. **Document the new optimisation in `documentation/operations.md` Part C**
+4. **Document the new optimisation in `docs/guides/operations.md` Part C**
    following the same format (problem, fix, impact, risk, test coverage).
 
 **Optimisation ideas NOT yet applied (backlog):**
@@ -314,14 +313,14 @@ adding more complex optimisations (e.g. CUDA graphs, custom Triton kernels).
 **When to use:** Before claiming docs are accurate, after any doc edit, or
 when expanding documentation (the 2026-08-04 massive expansion is complete;
 the writing contract lives in
-[`documentation/README.md`](documentation/README.md#maintaining-documentation)).
+[`docs/README.md`](docs/README.md#maintaining-documentation)).
 
 **Steps:**
 
 1. **Run the alignment checker.** Every doc citation must be a
    `file.py:Symbol` anchor that resolves, and every public symbol in
    `models/`, `training/pretrain.py`, `inference/`, `utils/` must be
-   anchored somewhere in `documentation/` or the root README:
+   anchored somewhere in `docs/` or the root README:
    ```bash
    python3 tests/test_doc_refs.py --strict-coverage
    # Coverage: N public symbol(s) without an anchor → 0 for green

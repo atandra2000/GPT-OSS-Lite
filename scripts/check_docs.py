@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DOC_DIR = ROOT / "documentation"
+DOC_DIR = ROOT / "docs"
 README = DOC_DIR / "README.md"
 FOOTER_RE = re.compile(r"\n<!-- docs:verified .+ -->\s*$")
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -85,9 +85,10 @@ def git_short_head() -> str:
 
 
 def iter_doc_files() -> list[Path]:
-    """All markdown under documentation/ (chapters + theory/), plus the index."""
+    """All markdown under docs/ (top-level + concepts/ + references/ + guides/), plus the index."""
     files = sorted(DOC_DIR.glob("*.md"))
-    files += sorted(DOC_DIR.glob("theory/*.md"))
+    for sub in ("concepts", "references", "guides"):
+        files += sorted(DOC_DIR.glob(f"{sub}/*.md"))
     return files
 
 
@@ -125,7 +126,7 @@ def resolve_link(source: Path, target: str) -> Path | None:
 
 def is_doc_link(target: str) -> bool:
     path_part = target.strip().partition("#")[0]
-    return path_part.endswith(".md") or path_part.startswith("documentation/")
+    return path_part.endswith(".md") or path_part.startswith("docs/")
 
 
 def check_markdown_links(path: Path, text: str) -> list[Issue]:
@@ -180,7 +181,7 @@ def line_counts() -> list[tuple[str, int]]:
     for path in iter_doc_files():
         if path.name == "README.md":
             continue
-        label = f"theory/{path.name}" if path.parent.name == "theory" else path.name
+        label = f"{path.parent.name}/{path.name}" if path.parent.name in ("concepts", "references", "guides") else path.name
         rows.append((label, sum(1 for _ in path.open(encoding="utf-8"))))
     rows.sort(key=lambda item: item[1], reverse=True)
     return rows
@@ -209,7 +210,7 @@ def update_size_table() -> bool:
         r"## Doc size reference\n\n\| Doc \| ~Lines \| Status \|\n\|---\|---\|---\|\n(?:\|[^\n]+\n)+",
     )
     if not pattern.search(text):
-        print("check_docs: could not find doc size table in documentation/README.md", file=sys.stderr)
+        print("check_docs: could not find doc size table in docs/README.md", file=sys.stderr)
         return False
     updated = pattern.sub(new_block + "\n", text, count=1)
     if updated == text:
@@ -245,7 +246,7 @@ def main() -> int:
 
     if args.update_sizes:
         if update_size_table():
-            print("Updated documentation/README.md doc size table")
+            print("Updated docs/README.md doc size table")
         else:
             print("Doc size table already up to date")
 

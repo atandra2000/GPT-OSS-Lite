@@ -6,9 +6,9 @@
 > **Project:** `LLM/GPT-OSS-Lite/` · **Type:** faithful GPT-OSS reproduction
 > **Scale:** ~502M total / ~247M active · 8.0B tokens planned · 16–20h on A100 80GB
 > **Stack:** PyTorch 2.x, BF16, `torch.compile(max-autotune)`, FA2 via SDPA
-> **Architecture detail:** see `documentation/architecture.md`; cross-architecture explainer
+> **Architecture detail:** see `docs/concepts/foundations-and-architecture.md`; cross-architecture explainer
 > at `.agents/skills/llm-architecture/SKILL.md §2, §5`; **authoritative
-> sink-bias deep-dive at `documentation/ATTENTION_SINKS.md`.**
+> sink-bias deep-dive at `docs/concepts/attention-sinks.md`.**
 
 ## 1. Subagent: `gptoss-long-context-engineer`
 
@@ -30,7 +30,7 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
   grouped dispatch.
 - `models/yarn.py` — YaRN RoPE scaling + pruned RoPE.
 - `models/moe_triton.py` — sanctioned Triton path for fused W1/W3+silu
-  MoE dispatch (`documentation/moe.md`). Opt-in via
+  MoE dispatch (`docs/concepts/moe.md`). Opt-in via
   `moe_dispatch="triton_grouped"`. Verified end-to-end on a 4 GB GPU
   (sm_75) via `scripts/e2e_gpu_smoke.py`.
 - Training: BF16 + `torch.compile(max-autotune)` + TF32 + FA2 via SDPA,
@@ -67,12 +67,12 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
    the "Triton kernel contract" section above; the current sanctioned
    path is the fused W1/W3+silu MoE grouped-GEMM
    (`models/moe_triton.py`). No new component gets a custom kernel
-   without updating `AGENTS.md` and adding a `documentation/<name>.md`
+   without updating `AGENTS.md` and adding a `docs/concepts/<name>.md`
    plan.
 2. **Always** preserve the sliding-window / full-attention alternation
    — replacing it with pure full-attention breaks the headline metric
    (≥ 1.8× KV-cache reduction at 128K).
-3. **Always** read `documentation/ATTENTION_SINKS.md` before answering
+3. **Always** read `docs/concepts/attention-sinks.md` before answering
    sink-bias questions.
 4. **Always** verify `test_sliding_window_matches_full` passes after
    any change to `models/attention.py`

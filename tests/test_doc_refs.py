@@ -21,7 +21,7 @@ import sys
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 LLM_ROOT = REPO_ROOT.parent  # sibling workspace package (LLM/shared_data)
-DOC_GLOBS = ("documentation/**/*.md", "README.md")
+DOC_GLOBS = ("docs/**/*.md", "README.md")
 CORE_MODULES = (
     "models/transformer.py",
     "models/attention.py",

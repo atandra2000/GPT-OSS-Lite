@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the code↔doc coverage map from `file.py:Symbol` anchors.
 
-Reads every anchor in documentation/**/*.md + README.md and prints a per-module
+Reads every anchor in docs/**/*.md + README.md and prints a per-module
 table of documented vs undocumented public symbols (same inventory as
 tests/test_doc_refs.py --coverage).
 
