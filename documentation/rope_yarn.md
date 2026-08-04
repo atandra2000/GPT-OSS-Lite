@@ -49,10 +49,10 @@ GPT-OSS-Lite implements YaRN via precomputed `inv_freq` buffers and optional
 
 | Function / class | File | Role |
 |------------------|------|------|
-| `apply_rope` | `rotary.py` | Apply rotation to Q/K tensors |
-| `compute_yarn_freqs` | `rotary.py` | Build YaRN-scaled inverse frequencies |
-| `compute_yarn_mscale` | `rotary.py` | Attention temperature correction |
-| `YaRNRoPE` | `yarn.py` | Module wrapping freq table + forward |
+| `models/rotary.py:apply_rope` | `rotary.py` | Apply rotation to Q/K tensors |
+| `models/rotary.py:compute_yarn_freqs` | `rotary.py` | Build YaRN-scaled inverse frequencies |
+| `models/rotary.py:compute_yarn_mscale` | `rotary.py` | Attention temperature correction |
+| `models/yarn.py:YaRNRoPE` | `yarn.py` | Module wrapping freq table + forward |
 
 Standard RoPE is the `scale_factor=1`, zero-ramp limit of YaRN.
 
@@ -461,10 +461,17 @@ Same `inv_freq` table; only position values change.
 
 ### 8.1 Motivation
 
-At very long context, the lowest-frequency RoPE dimensions rotate slowly — they
-encode absolute position over huge spans. On **global** (full-attention) layers,
-freezing the lowest 25% of frequency pairs to identity reduces spurious long-range
-positional aliasing while preserving fine local structure in higher pairs.
+The `cos`/`sin` tables are ordered **fastest-first**: pair \(m\) has angular
+frequency \(\omega_m = \theta^{-m/\text{half}}\) (with YaRN blending), so \(m=0\)
+rotates fastest. At 128K the fastest pairs complete thousands of full rotations —
+\(\omega_0 = 1.0\) rad/token means ~20,861 turns at position 131072 — and a
+rotation of \(\phi\) is indistinguishable from \(\phi + 2\pi k\), so those channels
+**over-rotate and alias**. On **global** (full-attention) layers, freezing the
+fastest 25% of frequency pairs (\(m = 0 \ldots 23\) for `head_dim=96`, 48 of 96
+scalar channels) to identity removes the aliasing channels while preserving the
+slow pairs that carry long-range position. Verified 2026-08-04 against
+`models/rotary.py:compute_yarn_freqs` + `models/yarn.py:YaRNRoPE.forward`
+(`inv_freq[0] = 1.0`, `inv_freq[47] ≈ 4.0e-7`; `cos[:, :24]` set to 1).
 
 ### 8.2 Selection rule
 
@@ -491,7 +498,8 @@ if n_pruned_dims > 0:
     sin[:, :n_pruned_dims] = 0.0
 ```
 
-For the first `n_pruned_dims` **frequency pairs** (lowest indices):
+For the first `n_pruned_dims` **frequency pairs** (lowest indices \(m=0\ldots\)), i.e. the
+**fastest-rotating** channels:
 
 - `cos → 1`, `sin → 0` → identity rotation (no positional encoding on those pairs).
 - Remaining pairs use full YaRN-scaled rotation.
@@ -503,7 +511,7 @@ This is applied **after** mscale multiplication.
 `apply_rope` repeats each pair's cos/sin across the two scalars via
 `repeat_interleave(2, dim=-1)`. Pruning 24 pairs affects 48 of 96 head dimensions.
 
-When `n_pruned_dims > 0` (global layers only), lowest-frequency pairs become
+When `n_pruned_dims > 0` (global layers only), the fastest-rotating pairs become
 identity — equivalent to not rotating those subspaces. `apply_rope` is unaware of
 pruning; it receives modified cos/sin.
 
@@ -517,8 +525,8 @@ pruning; it receives modified cos/sin.
 Windowed layers see only local context — they rely on **full** RoPE (no pruning) for
 fine-grained relative position within the 128-token window.
 
-Global layers carry long-range dependencies — pruning lowest frequencies reduces
-absolute-position interference at 128K.
+Global layers carry long-range dependencies — pruning the fastest pairs removes
+channels that would otherwise over-rotate (alias) across 131K positions.
 
 YaRN and sink bias are orthogonal — see
 [ATTENTION_SINKS.md §9](ATTENTION_SINKS.md#9-interaction-with-yarn-and-pruned-rope).
@@ -595,20 +603,22 @@ x'_1 = x_0 \sin\theta_0 + x_1 \cos\theta_0
 
 ### 10.2 YaRN ramp boundaries (defaults)
 
-With `half=48`, `L_orig=4096`, `beta_slow=1`, `beta_fast=32`:
+With `half=48`, `L_orig=4096`, `beta_slow=1`, `beta_fast=32`, the code evaluates
+`L_orig / beta * math.pi` (division first, then multiply):
 
 \[
-\log_2\!\left(\frac{4096}{\pi}\right) \approx 10.35 \quad\Rightarrow\quad
-\text{low} = \lfloor 48 / 10.35 \rfloor = 4
+\log_2\!\left(\frac{4096}{1} \cdot \pi\right) \approx 13.65 \quad\Rightarrow\quad
+\text{low} = \lfloor 48 / 13.65 \rfloor = 3
 \]
 
 \[
-\log_2\!\left(\frac{4096}{32\pi}\right) \approx 5.35 \quad\Rightarrow\quad
-\text{high} = \lceil 48 / 5.35 \rceil = 9
+\log_2\!\left(\frac{4096}{32} \cdot \pi\right) \approx 8.65 \quad\Rightarrow\quad
+\text{high} = \lceil 48 / 8.65 \rceil = 6
 \]
 
-Ramp transitions from \(m=4\) to \(m=9\). Dimensions 0–3 keep base freq; 9–47 use
-scaled freq; 4–8 blend.
+Ramp transitions from \(m=3\) to \(m=6\). Dimensions 0–2 keep base freq; 7–47 use
+scaled freq; 3–6 blend. Verified against `models/rotary.py:compute_yarn_freqs`
+with the production config (2026-08-04).
 
 ### 10.3 Frequency at dimension 0
 
@@ -750,4 +760,4 @@ Additional checks:
 
 ---
 
-<!-- docs:verified 2026-07-31 · 263838e -->
+<!-- docs:verified 2026-08-04 · 5da1a80 -->

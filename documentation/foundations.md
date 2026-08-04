@@ -107,7 +107,9 @@ Naive attention is $O(T^2 \cdot H \cdot D)$ in time and $O(T^2)$ for the attenti
 
 ### Manual reference path
 
-`manual_causal_attention` in `models/attention.py` implements the naive $O(T^2)$ path in FP32 accumulation for test oracles. Production forward uses `causal_attention`, which routes to SDPA.
+`models/attention.py:manual_causal_attention` implements the naive $O(T^2)$ path in FP32 accumulation for test oracles. Production forward uses `models/attention.py:causal_attention`, which routes to SDPA.
+
+Softmax, the $\sqrt{D}$ temperature, mask-add versus mask-fill, and the fused SDPA backends are derived in [attention math](theory/attention_math.md).
 
 ---
 
@@ -141,7 +143,7 @@ $$
 Q \in \mathbb{R}^{B \times 8 \times T \times 96},\quad K, V \in \mathbb{R}^{B \times 4 \times T \times 96}
 $$
 
-`repeat_kv` expands $K$ and $V$ to shape $(B, 8, T, 96)$ without `.contiguous()` — SDPA's flash path accepts the expanded layout.
+`models/attention.py:repeat_kv` expands $K$ and $V$ to shape $(B, 8, T, 96)$ without `.contiguous()` — SDPA's flash path accepts the expanded layout.
 
 ### Why $H_{\text{kv}} < H$?
 
@@ -154,6 +156,47 @@ $$
 At 128K context, KV-cache dominates VRAM. Halving KV head count halves the per-layer KV footprint before any sliding-window trick.
 
 GPT-OSS-Lite pairs GQA with sliding-window layers for a multiplicative reduction (Section 4).
+
+### KV-parameter savings over MHA
+
+GQA's second win is in the projection matrices. MHA with $H = 8$ heads needs a $d_{\text{model}} \times 2HD$ key-value projection; GQA needs only $d_{\text{model}} \times 2H_{\text{kv}}D$:
+
+$$
+N_{\text{kv,MHA}} = 2 H D\, d_{\text{model}} = 2 \times 8 \times 96 \times 768 = 1179648, \qquad
+N_{\text{kv,GQA}} = 2 H_{\text{kv}} D\, d_{\text{model}} = 2 \times 4 \times 96 \times 768 = 589824
+\tag{1}
+$$
+
+The per-layer saving is $2(H - H_{\text{kv}}) D\, d_{\text{model}} = 589824$ parameters; over 12 layers that is $7077888 \approx 7.1$M — about 1.4% of the 501.8M total budget — with no loss of query-side expressivity, because $Q$ still gets 8 independent heads. Only the $K/V$ side is shared.
+
+### KV-cache bytes per head
+
+The cache holds one copy of $K$ and one of $V$ per KV head. One head, one token, one layer costs $2D$ elements; in BF16 ($s = 2$ bytes/element):
+
+$$
+b_{\text{head}} = 2 D s = 2 \times 96 \times 2 = 384 \text{ bytes/token/layer}
+\tag{2}
+$$
+
+MHA multiplies this by $H = 8$ → 3072 B/token/layer; GQA by $H_{\text{kv}} = 4$ → 1536 B/token/layer. The 2× factor is exactly the head-count ratio $H / H_{\text{kv}}$, and it applies to **every** layer and every cached token, so it multiplies the Section 4 sliding-window savings rather than adding to them.
+
+### The cost of `repeat_kv` at matmul time
+
+GQA does not buy FLOPs. After `models/attention.py:repeat_kv` broadcasts $K, V$ from $(B, 4, T, 96)$ to $(B, 8, T, 96)$, the score matmul costs exactly what MHA costs:
+
+$$
+C_{QK^\top} = 2 B H T^2 D
+\tag{3}
+$$
+
+What GQA changes is *where bytes live and how often they are read*. `repeat_kv` first `expand`s to a stride-0 view (free), then `reshape`s — the merged head dimension cannot be a view over the stride-0 layout, so the reshape materializes one contiguous $(B, 8, T, 96)$ copy per layer per forward. That is a memory op, not a matmul, and it is dwarfed by the score matmul:
+
+$$
+\frac{\text{copy bytes}}{\text{QK}^\top \text{ FLOPs}} = \frac{2 H_{\text{kv}} T D s}{2 B H T^2 D} = \frac{H_{\text{kv}} s}{B H T} = \frac{4 \times 2}{1 \times 8 \times 4096} \approx 2.4 \times 10^{-4}
+\tag{4}
+$$
+
+at prefill $T = 4096$, batch 1 ($\approx 7.6 \times 10^{-6}$ at 128K). The real savings show up at decode, where DRAM traffic per step is proportional to cached KV bytes — the bandwidth side of the 2× head-count reduction is derived in [kv cache engineering](theory/kv_cache_engineering.md) §4.4.
 
 ### Parameter accounting for GQA projections
 
@@ -237,6 +280,47 @@ Measured by `scripts/kv_cache_benchmark.py`: **2.00×** (2.25 GB pure GQA vs 1.1
 
 This ≥1.8× headline metric is architectural — it holds even before training.
 
+### Compute: windowed vs full attention
+
+The mask also cuts prefill FLOPs, because attention cost is proportional to the number of *allowed* key positions, not $T^2$. Full causal attention allows the lower triangle, $N_{\text{full}} = T(T+1)/2$ pairs. A window of width $W$ allows row $i$ only $\min(i+1, W)$ keys:
+
+$$
+N_{\text{sw}}(T, W) = \sum_{i=0}^{T-1} \min(i+1, W) = \frac{W(W+1)}{2} + (T - W)\, W \;\approx\; W\, T \quad (T \gg W)
+\tag{5}
+$$
+
+The first $W$ rows fill the triangle $\sum_{i=0}^{W-1}(i+1) = W(W+1)/2$; every later row sees exactly $W$ keys. Each allowed pair costs one $2D$-FLOP query-key dot product and one $2D$-FLOP value accumulation, so attention FLOPs per layer are
+
+$$
+C_{\text{attn}} = 4 H D \cdot N_{\text{allowed}} = 4 \times 8 \times 96 \cdot N_{\text{allowed}} = 3072\, N_{\text{allowed}}
+\tag{6}
+$$
+
+and the full-to-windowed ratio (softmax and the output projection excluded — identical for both) is
+
+$$
+\frac{C_{\text{full}}}{C_{\text{sw}}} = \frac{T(T+1)}{W(W+1) + 2(T-W)W} \approx \frac{T}{2W} = \begin{cases} 16 & T = 4096 \\ 512 & T = 131072 \end{cases}
+\tag{7}
+$$
+
+| $T$ | full FLOPs / layer | windowed FLOPs / layer | ratio |
+|-----|--------------------|------------------------|-------|
+| 4096 | $3072 \times 8.39 \times 10^6 \approx 25.8$ GFLOP | $3072 \times 5.16 \times 10^5 \approx 1.6$ GFLOP | 16.3× |
+| 131072 | $3072 \times 8.59 \times 10^9 \approx 26.4$ TFLOP | $3072 \times 1.68 \times 10^7 \approx 51.5$ GFLOP | 512.3× |
+
+Decode flips the bottleneck from FLOPs to bytes: each step reads the layer's cached $K, V$ — $b_{\text{head}} \cdot H_{\text{kv}} = 1536$ bytes per token (2). A full layer reads $1536 \cdot T$ bytes; a windowed layer reads only its ring buffer, $1536 \cdot W$:
+
+$$
+\frac{R_{\text{full}}}{R_{\text{sw}}} = \frac{T}{W} = \begin{cases} 32 & T = 4096 \\ 1024 & T = 131072 \end{cases}
+\tag{8}
+$$
+
+At 128K one windowed decode step touches 192 KiB of KV instead of 192 MiB. The pair-count and FLOP arithmetic is derived in full in [attention math](theory/attention_math.md) §4.5; the cache-side accounting (ring buffers, exponential growth, the measured 2.00× mixed ratio) is in [kv cache engineering](theory/kv_cache_engineering.md) §4.5–4.7.
+
+### The window mask binds at prefill
+
+Both mask paths are additive $0.0$ / $-\infty$ masks, never boolean casts. At prefill ($T_q = T_k$), `models/attention.py:_window_mask` returns the square mask $i - j < W$ ANDed with causality, and `models/attention.py:causal_attention` converts it with `torch.where(mask, 0.0, float("-inf"))` — blocked positions contribute exactly $-\infty$, so no softmax mass can cross the window boundary. The sink path uses the same construction on its causal slice. A 1.0/0.0 boolean cast would add nothing to the logits and leak future tokens; the fixed behavior is pinned by regression tests.
+
 ### Ring-buffer cache for windowed layers
 
 Windowed layers need not grow the cache with $T$. `MixedKVCache` in `inference/generate.py` stores a **ring buffer** of size $W$ per windowed layer. Decode becomes $O(1)$ per step in cache size instead of $O(T)$.
@@ -269,7 +353,7 @@ Because $V_{\text{sink}} = 0$, the sink column does not contribute to the output
 
 1. `sink_bias` is `nn.Parameter` shape $(H)$, **initialized to zero**.
 2. At forward, bias is **clamped** to $[-10, 15]$ (`SINK_CLAMP_MIN`, `SINK_CLAMP_MAX`).
-3. Keys and values are extended with zero columns; the clamped bias populates the mask column for the sink.
+3. Keys and values are extended with zero columns; the clamped bias populates the mask column for the sink. Blocked positions get a true additive $-\infty$ — `mask[:, :, :T_k] = torch.where(causal, 0.0, float("-inf"))` in `models/attention.py:causal_attention` — never a 1.0/0.0 boolean cast, which would add nothing to the logits and leave future tokens unmasked.
 
 **Why clamp?** BF16 SDPA mask-add can overflow if trained bias grows very large. Clamping at forward preserves gradient flow through the uncapped parameter while keeping mask values representable.
 
@@ -326,16 +410,21 @@ Dot products $q_m^\top k_n$ depend on **relative** offset $m - n$ after rotation
 
 ### Pruned RoPE on global layers
 
-On **full-attention (odd) layers**, GPT-OSS **prunes** the first $D/4 = 24$ frequency dimensions (of 48 half-dims) by setting their rotation to identity ($\cos=1, \sin=0$). Only the **global** layers prune; windowed layers use full RoPE.
+On **full-attention (odd) layers**, GPT-OSS **prunes** the $D/4 = 24$ **fastest-rotating** pairs — the highest-frequency half-dims, $i = 0, \ldots, 23$ — by setting their rotation to identity ($\cos=1, \sin=0$). Only the **global** layers prune; windowed layers use full RoPE.
 
-Rationale: at 128K positions, the lowest-frequency components rotate through many
-cycles, causing **over-rotation** that hurts extrapolation. Neutralizing the
-slowest modes on layers that actually see the full sequence reduces that pathology.
-Only odd-indexed global layers prune (`head_dim=96` → 24 of 48 half-dims); even
-windowed layers keep full RoPE because they never attend beyond `W=128` tokens.
+Rationale: at 128K positions, the **fastest**-rotating components (the first
+$D/4 = 24$ pairs, `inv_freq[0] = 1.0` rad/token → ~20,861 full turns at position
+131072) wrap many times, and a rotation of $\phi$ is indistinguishable from
+$\phi + 2\pi k$ — **over-rotation** that aliases and hurts extrapolation.
+Neutralizing the fastest modes on layers that actually see the full sequence
+reduces that pathology. Only odd-indexed global layers prune (`head_dim=96` → 24
+of 48 half-dims); even windowed layers keep full RoPE because they never attend
+beyond `W=128` tokens.
 
 In code: `_n_pruned_dims() = head_dim // 4` when `not is_windowed` and
 `yarn_prune_rope_global=True`.
+
+The rotation geometry, the over-rotation argument, and the full YaRN ramp are derived in [positional encodings](theory/positional_encodings.md) §4.5–4.8.
 
 ---
 
@@ -505,6 +594,8 @@ $$
 
 Sparsity: $1 - 247/502 \approx 50.8\%$ of total parameters are inactive per forward pass.
 
+Routing as categorical selection, the Switch/GShard aux loss, the $\alpha = 0.01$ scale, and expert collapse are derived from scratch in [moe theory](theory/moe_theory.md) §5–7.
+
 ---
 
 ## 9. Chinchilla scaling for the 502M / 247M budget
@@ -550,6 +641,8 @@ Training enables `torch.compile(max-autotune)`, TF32, FA2 via SDPA, fused AdamW,
 - Gradient clip 1.0
 - NaN guard with checkpoint rollback (never disable without explicit consent)
 
+AdamW's update rule, bias correction, warmup, and global-norm clipping are derived in [optimizers](theory/optimizers.md); the checkpoint-every-3rd-layer memory/compute tradeoff is analyzed in [autograd checkpointing](theory/autograd_checkpointing.md).
+
 ---
 
 ## 10. BF16 versus FP16 on modern GPUs
@@ -578,6 +671,8 @@ BF16 trades mantissa precision for FP32-like range. On Ampere (A100) and Blackwe
 - RMSNorm: activations stay native dtype (no silent FP32 copy in forward).
 - `apply_rope`: explicit cast of `cos`/`sin` to `x.dtype` before SDPA.
 - Manual attention reference: FP32 accumulation for scores only in test path.
+
+The IEEE-754 bit budget, TF32, and the FP32 accumulation islands inside the model are derived in [numerics](theory/numerics.md).
 
 ---
 
@@ -627,4 +722,4 @@ even/odd `W=128` alternation.
 
 ---
 
-<!-- docs:verified 2026-07-31 · 263838e -->
+<!-- docs:verified 2026-08-04 · 5da1a80 -->

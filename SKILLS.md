@@ -13,11 +13,11 @@ After pulling new code.
 
 **Steps:**
 
-1. **Run the full CPU-friendly test suite (187 tests, ~40s).**
+1. **Run the full CPU-friendly test suite (190 passed / 2 skipped, ~40s).**
    ```bash
    python3 -m pytest tests/ -v
    ```
-   Expected: 187 passed.
+   Expected: 190 passed, 2 skipped.
 
 2. **Verify the headline metric is still measured correctly.**
    ```bash
@@ -306,3 +306,45 @@ adding more complex optimisations (e.g. CUDA graphs, custom Triton kernels).
   Save ~2-3% of the training step.
 - **Speculative decoding for inference**: not yet implemented; would
   give 2-3× decode speedup on greedy sampling.
+
+---
+
+## Skill 9: Expand or verify documentation
+
+**When to use:** Before claiming docs are accurate, after any doc edit, or
+when expanding documentation (the 2026-08-04 massive expansion is complete;
+the writing contract lives in
+[`documentation/README.md`](documentation/README.md#maintaining-documentation)).
+
+**Steps:**
+
+1. **Run the alignment checker.** Every doc citation must be a
+   `file.py:Symbol` anchor that resolves, and every public symbol in
+   `models/`, `training/pretrain.py`, `inference/`, `utils/` must be
+   anchored somewhere in `documentation/` or the root README:
+   ```bash
+   python3 tests/test_doc_refs.py --strict-coverage
+   # Coverage: N public symbol(s) without an anchor → 0 for green
+   ```
+2. **Lint links + stale patterns:**
+   ```bash
+   python3 scripts/check_docs.py
+   # OK (N files); run with --update-sizes / --stamp-footers after edits
+   ```
+3. **Generate the coverage map** (module → anchored symbols):
+   ```bash
+   python3 scripts/generate_code_map.py
+   ```
+4. **When writing new docs**, follow the contract in the expansion plan §4:
+   60-second summary → why → intuition → derived math (numbered equations,
+   `$$...$$`) → code walkthrough with anchors → pitfalls + exact verifying
+   command. Tag every unmeasured perf figure `[INFERENCE]` (`.benchmarks/`
+   is empty).
+
+**Failure modes:**
+- Anchor fails to resolve → symbol renamed/moved; fix the anchor, not the code.
+- Coverage gap → the symbol has no doc mention; anchor it in the right chapter.
+- Writers must not cite JIT kernels under `if HAS_TRITON:` — cite host
+  wrappers (`models/moe_triton.py:triton_moe_w1w3_silu`).
+- Doc audits surface latent code bugs (vacuous tests, wrong numbers) — fix
+  code + docs + a regression test together.

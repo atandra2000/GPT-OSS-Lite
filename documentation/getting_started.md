@@ -41,8 +41,9 @@ documented in [architecture.md](architecture.md) and
 
 ## 2. Headline metrics
 
-Both targets are **measured**, not assumed. Production YAML and derived
-arithmetic (~502M total, ~247M active, 8.0B tokens, 61k steps) are in
+KV reduction is **measured** (analytical benchmark, no GPU); the ≥85% passkey
+band is a **target** — no pretraining run has happened yet. Production YAML and
+derived arithmetic (~502M total, ~247M active, 8.0B tokens, 61k steps) are in
 [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml) and
 [training.md](training.md#part-b--configuration-reference).
 
@@ -97,7 +98,11 @@ No `setup.py` step — scripts add the project root to `sys.path` automatically.
 `configs/` (YAML), `models/` (`transformer.py`, `attention.py`, `moe.py`,
 `yarn.py`), `training/pretrain.py`, `inference/generate.py` +
 `long_context.py`, `data/prepare_data.py`, `scripts/kv_cache_benchmark.py`,
-`passkey_eval.py`, `utils/`. Full map: [architecture.md](architecture.md).
+`passkey_eval.py`, `utils/`. Reference chapters live in `documentation/`; the
+from-scratch theory set in `documentation/theory/` — attention math, positional
+encodings, MoE theory, numerics, optimizers, autograd checkpointing, sampling,
+KV-cache engineering, tokenization/BPE, Triton programming. Full map:
+[architecture.md](architecture.md).
 
 ---
 
@@ -109,7 +114,8 @@ No pre-tokenized shards ship with the repo. Run before `pretrain.py`.
 `LLM/shared_data/`. Defaults: LLaMA-3 BPE (`vocab_size=128000`), `gptoss-default`
 mix, 50M tokens per `shard_*.bin`, 8.0B total → `data/pretrain_chinchilla/`
 (matching the A100 config). `manifest.json` records `eos_token_id`, `vocab_size`,
-`total_tokens`, `shard_count`.
+`total_tokens`, `shard_count`. The BPE merge algorithm and the 128K-vocab
+rationale: [tokenization_bpe.md](theory/tokenization_bpe.md).
 
 ```bash
 python3 data/prepare_data.py
@@ -156,7 +162,10 @@ python3 training/pretrain.py \
 
 `pretrain_gpu_smoke.yaml` mirrors structural choices (SWA/full alt, sink bias,
 YaRN, MoE top-2) at 1/100th scale (`d_model=128`, `n_layers=4`,
-`max_seq_len=64`, `total_steps=5`, `compile=false`).
+`max_seq_len=64`, `total_steps=5`, `compile=false`). MoE runs the `"stacked"`
+dispatch by default; the optional fused Triton path (`moe_dispatch:
+"triton_grouped"`) and its tile-level programming model:
+[triton_programming.md](theory/triton_programming.md).
 
 Broader GPU integration (forward, backward, checkpoint round-trip, generation,
 YaRN extrapolation):
@@ -170,7 +179,8 @@ python3 scripts/e2e_gpu_smoke.py
 ## 9. Reproduce the headline metrics
 
 **KV reduction** — Step 1 above. At `T=131072`, `W=128`, ratio ≈ **2.0×**; at
-`T=4096` windowed layers see the full sequence, so ratio ≈ **1.0×** (expected).
+`T=4096` the windowed layers cache 128 tokens regardless of sequence length, so
+the ratio is ≈ **1.94×** — not 1.0× (measured by `scripts/kv_cache_benchmark.py`).
 
 **Passkey at 128K** — after training:
 
@@ -196,7 +206,7 @@ python3 training/pretrain.py \
 
 Loop internals (compile, AdamW FP32 master, warmup 3000 steps, aux α=0.01, NaN
 guard, checkpoints every 2000 steps): [training.md](training.md). Expected wall
-time **16–20 hours** on A100 80GB.
+time **16–20 hours** on A100 80GB `[INFERENCE]` (`.benchmarks/` empty).
 
 Debug override:
 
@@ -278,6 +288,22 @@ VRAM estimates at startup: [operations.md](operations.md).
 | Scripts, checkpoints, OPT catalog | [operations.md](operations.md) |
 | Tokenization and shards | [data_pipeline.md](data_pipeline.md) |
 
+### 13.1 Theory read order
+
+The from-scratch theory chapters build on each other; read them in this order:
+
+1. [foundations.md](foundations.md) — why decoder-only, GQA, SWA, sinks, YaRN, MoE.
+2. [theory/attention_math.md](theory/attention_math.md) — softmax, scaled dot product, mask semantics, SDPA backends.
+3. [theory/positional_encodings.md](theory/positional_encodings.md) — sinusoids → relative → RoPE, interpolation, YaRN ramp.
+4. [theory/moe_theory.md](theory/moe_theory.md) — top-k gating math, Switch/GShard aux loss, expert collapse.
+5. [theory/numerics.md](theory/numerics.md) — FP32/FP16/BF16/TF32 formats, epsilon, sink-clamp derivation.
+6. [theory/optimizers.md](theory/optimizers.md) — momentum → Adam → AdamW, bias correction, FP32 master weights.
+7. [theory/autograd_checkpointing.md](theory/autograd_checkpointing.md) — backward-graph memory, recompute tradeoff.
+8. [theory/sampling.md](theory/sampling.md) — temperature, top-k/top-p, entropy, why passkey runs greedy.
+9. [theory/kv_cache_engineering.md](theory/kv_cache_engineering.md) — arithmetic intensity, ring vs growth, GQA bandwidth, mixed-cache 2.00×.
+10. [theory/tokenization_bpe.md](theory/tokenization_bpe.md) — BPE merges, 128K vocab economics, EOS packing.
+11. [theory/triton_programming.md](theory/triton_programming.md) — GPU execution model, tiles, `tl` primitives, fused W1/W3+silu.
+
 ---
 
-<!-- docs:verified 2026-07-31 · 263838e -->
+<!-- docs:verified 2026-08-04 · 5da1a80 -->

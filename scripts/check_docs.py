@@ -38,9 +38,8 @@ ALLOW_MISSING_PATHS = {
 
 STALE_PATTERNS: list[tuple[str, str]] = [
     (r"\{,\}", "LaTeX thousand separator `{,}`"),
-    (r"\b190 tests?\b", "stale test count (use 187)"),
-    (r"\b185 tests?\b", "stale test count (use 187)"),
-    (r"\b130 tests?\b", "stale test count (use 187)"),
+    (r"\b185 tests?\b", "stale test count (run pytest tests/ -q)"),
+    (r"\b130 tests?\b", "stale test count (run pytest tests/ -q)"),
     (r"\b600-line\b", "stale ATTENTION_SINKS line count"),
     (r"moe_triton\.md", "use moe.md (Triton section)"),
     (r"triton_kernels\.md", "merged into moe.md"),
@@ -86,7 +85,10 @@ def git_short_head() -> str:
 
 
 def iter_doc_files() -> list[Path]:
-    return sorted(DOC_DIR.glob("*.md"))
+    """All markdown under documentation/ (chapters + theory/), plus the index."""
+    files = sorted(DOC_DIR.glob("*.md"))
+    files += sorted(DOC_DIR.glob("theory/*.md"))
+    return files
 
 
 def check_control_chars(path: Path, text: str) -> list[Issue]:
@@ -178,7 +180,8 @@ def line_counts() -> list[tuple[str, int]]:
     for path in iter_doc_files():
         if path.name == "README.md":
             continue
-        rows.append((path.name, sum(1 for _ in path.open(encoding="utf-8"))))
+        label = f"theory/{path.name}" if path.parent.name == "theory" else path.name
+        rows.append((label, sum(1 for _ in path.open(encoding="utf-8"))))
     rows.sort(key=lambda item: item[1], reverse=True)
     return rows
 
@@ -234,6 +237,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate GPT-OSS-Lite documentation.")
     parser.add_argument("--update-sizes", action="store_true")
     parser.add_argument("--stamp-footers", action="store_true")
+    parser.add_argument(
+        "--check-symbols", action="store_true",
+        help="also run the doc-ref alignment checker (tests/test_doc_refs.py --strict-coverage)",
+    )
     args = parser.parse_args()
 
     if args.update_sizes:
@@ -252,6 +259,19 @@ def main() -> int:
         for issue in issues:
             print(issue.format(), file=sys.stderr)
         return 1
+
+    if args.check_symbols:
+        import subprocess
+        checker = Path(__file__).resolve().parents[1] / "tests" / "test_doc_refs.py"
+        result = subprocess.run(
+            [sys.executable, str(checker), "--strict-coverage"],
+            capture_output=True, text=True,
+        )
+        print(result.stdout, end="")
+        if result.returncode != 0:
+            print("check_docs: symbol-alignment FAILED", file=sys.stderr)
+            return 1
+        print("check_docs: symbol alignment OK")
 
     if not args.update_sizes and not args.stamp_footers:
         print(f"check_docs: OK ({len(iter_doc_files())} files)")

@@ -359,7 +359,7 @@ B_{\text{full}} = N_{\text{layers}} \cdot T \cdot 1536 = 12 \cdot T \cdot 1536
 At \(T = 131072\):
 
 \[
-B_{\text{full}} = 12 \times 131072 \times 1536 \approx 2.42 \text{ GB (batch=1)}
+B_{\text{full}} = 12 \times 131072 \times 1536 = 2415919104 \text{ bytes} \approx 2.25 \text{ GB (batch=1, GiB)}
 \]
 
 ### 8.3 Mixed SWA/full cache
@@ -373,7 +373,7 @@ B_{\text{mixed}} = \bigl( N_{\text{swa}} \cdot \min(W, T) + N_{\text{global}} \c
 At \(T = 131072\), \(W = 128\):
 
 \[
-B_{\text{mixed}} = (6 \times 128 + 6 \times 131072) \times 1536 = 787200 \times 1536 \approx 1.21 \text{ GB}
+B_{\text{mixed}} = (6 \times 128 + 6 \times 131072) \times 1536 = 787200 \times 1536 = 1209139200 \text{ bytes} \approx 1.13 \text{ GB}
 \]
 
 ### 8.4 Reduction ratio
@@ -384,11 +384,11 @@ B_{\text{mixed}} = (6 \times 128 + 6 \times 131072) \times 1536 = 787200 \times 
 
 | Context \(T\) | Reduction |
 |---------------|-----------|
-| 4,096 | 1.06× |
-| 8,192 | 1.12× |
-| 32,768 | 1.43× |
-| 65,536 | 1.67× |
-| **131,072** | **≈ 1.97×** |
+| 4,096 | 1.94× |
+| 8,192 | 1.97× |
+| 32,768 | 1.99× |
+| 65,536 | 2.00× |
+| **131,072** | **≈ 2.00×** |
 
 The headline metric (≥ 1.8× at 128K) is met with margin. See
 `scripts/kv_cache_benchmark.py` for the analytical checker.
@@ -857,20 +857,22 @@ else:
     causal = _window_mask(T_q, T_k, window, device, dtype)
 
 mask = torch.zeros(H, T_q, T_k + 1, device=device, dtype=dtype)
-mask[:, :, :T_k] = causal.to(dtype)
+mask[:, :, :T_k] = torch.where(causal, 0.0, float("-inf")).to(dtype)
 mask[:, :, T_k] = sink_bias.to(dtype).unsqueeze(1).expand(H, T_q)
 return F.scaled_dot_product_attention(query_states, k_ext, v_ext, attn_mask=mask.unsqueeze(0))
 ```
 
 | Column range | Value | Meaning |
 |--------------|-------|---------|
-| `0 .. T_k-1` | `1.0` if allowed, `0.0` if forbidden | Boolean `causal` cast to float |
+| `0 .. T_k-1` | `0.0` if allowed, `-inf` if forbidden | Causal/window mask via `torch.where` |
 | `T_k` (sink) | `sink_bias[h]` | Per-head learned logit |
 
-**Important:** The non-sink window path uses `torch.where(mask, 0.0, -inf)` to block
-forbidden positions. The sink path uses `causal.to(dtype)` (`1.0`/`0.0`) instead.
-When validating sink behaviour, compare against `manual_causal_attention` (the test
-oracle), not against the no-sink SDPA path.
+**Important:** SDPA float masks are **additive**. A boolean→float cast
+(`causal.to(dtype)` → `1.0`/`0.0`) would leave "forbidden" positions unmasked
+and leak future tokens into every softmax — this was a real bug, fixed
+2026-08-04 with a regression test (`tests/test_attention.py::test_sink_path_matches_manual_at_prefill`).
+Blocked positions must be `-inf` explicitly. The sink column is always allowed
+(never `-inf`) — the sink key attends to every query by construction.
 
 **SDPA backend notes:** `is_causal=True` path (no sink, no window, square) triggers
 FA2 via PyTorch SDPA when available. Window and sink paths pass `attn_mask` — may
@@ -1103,10 +1105,12 @@ python scripts/kv_cache_benchmark.py
   - `_causal_mask`: `True` = allowed
   - `manual_causal_attention`: `True` in `triu` = **forbidden**
   - Non-sink SDPA: `0.0` = allowed, `-inf` = forbidden
-  - Sink SDPA: `causal.to(dtype)` → `1.0`/`0.0` for real keys, `sink_bias` for sink column
+  - Sink SDPA: `0.0` = allowed, `-inf` = forbidden for real keys (via `torch.where`),
+    `sink_bias` added for the sink column — same convention as the non-sink path
 
-When in doubt, trust `manual_causal_attention` for golden values.
+When in doubt, trust `manual_causal_attention` for golden values — the sink SDPA
+path is now equivalent to it (regression: `test_sink_path_matches_manual_at_prefill`).
 
 ---
 
-<!-- docs:verified 2026-07-31 · 263838e -->
+<!-- docs:verified 2026-08-04 · 5da1a80 -->

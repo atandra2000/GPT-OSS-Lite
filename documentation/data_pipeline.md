@@ -115,7 +115,8 @@ GPT-OSS-Lite does **not** duplicate the pipeline. The shim:
 1. Prepends `GPT-OSS-Lite/` (`_PROJECT_ROOT`) and `LLM/` (`_LLM_ROOT`) to
    `sys.path`.
 2. Prints an info banner (corpus size, tokenizer, shard size).
-3. Calls `shared_data.prepare_data.main()`.
+3. Calls `data/prepare_data.py:main`, which delegates to
+   `shared_data.prepare_data.main()`.
 
 ```python
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]   # GPT-OSS-Lite/
@@ -402,6 +403,48 @@ Code (0.15) + math (0.10) = **25%** reasoning-heavy tokens — below the 30%
 
 ## Tokenizer — LLaMA-3 BPE
 
+### BPE merge algorithm
+
+The LLaMA-3 tokenizer is a **byte-level byte-pair encoding** (BPE): a greedy
+algorithm that grows a fixed vocabulary of $V = 128000$ entries by fusing
+the most frequent adjacent pair in the corpus, one merge at a time. Training
+starts from the 256 raw byte values (one entry per byte value, which guarantees
+every possible string is spellable — nothing is out-of-vocabulary) and
+iterates:
+
+1. **Count** — for every adjacent pair $(u, v)$ in the current token stream
+   $x_1, x_2, \ldots, x_L$, tally how often $u$ is immediately followed by $v$.
+2. **Fuse** — pick the most frequent pair, add the fused token $ab$ to the
+   vocabulary, and replace every occurrence of the adjacent pair $a\,b$ with
+   the single token $ab$.
+3. **Repeat** until $|\mathcal{V}| = 128000$.
+
+With $\mathcal{V}_t$ the vocabulary after $t$ merges and $f_t(u,v)$ the corpus
+pair count under the current segmentation, one merge step is
+
+$$\mathcal{V}_{t+1} = \mathcal{V}_t \cup \{ab\}, \qquad (a,b) = \arg\max_{(u,v)} f_t(u,v), \qquad f_t(u,v) = \sum_{k=1}^{L-1} \mathbb{1}[x_k = u \;\wedge\; x_{k+1} = v]
+\tag{1}$$
+
+Each applied merge shortens the stream by exactly one token per occurrence, so
+argmax-frequency is the greedy maximiser of immediate compression per merge —
+the same criterion tiktoken-style BPE uses. Encoding a new string replays the
+learned merges greedily left to right; decoding expands each token back to the
+byte string it was built from. Merges are order-dependent and
+overlap-ambiguous (in a run $a\,a\,a$ the pair $(a,a)$ occurs twice but a
+left-to-right sweep fuses only once), so a pretrained tokenizer is a fixed
+codec: re-training the BPE changes the ids, which is why GPT-OSS-Lite and
+LLaMA-3-Lite pin the same `name: llama3` tokenizer and can share bit-identical
+shards. The full treatment — merge economics, the 128K coverage-versus-parameter
+trade-off, and the ambiguity bounds — lives in
+[tokenization_bpe.md](theory/tokenization_bpe.md); this section only states
+what the pipeline relies on.
+
+The vocabulary is also a parameter budget: at $V = 128000$ and $d = 768$,
+the tied embedding/output head costs $V \cdot d = 98304000$ parameters —
+about 19.6% of the 501.8M total — before any transformer block, so the
+tokenizer choice is load-bearing for the model's size, not just its data
+([tokenization_bpe.md §3.6](theory/tokenization_bpe.md)).
+
 | Field | Value |
 |---|---|
 | Family | Meta LLaMA-3 BPE |
@@ -432,6 +475,58 @@ Each `shard_NNNNN.bin`:
 - Continuous token stream across documents.
 - Documents separated by **EOS token** (128009) in the stream.
 - No per-document length table in the shard — boundaries are EOS markers.
+
+### Byte math
+
+The format decision is a byte budget. Each token id is a little-endian uint32,
+so every token costs exactly four bytes on disk:
+
+$$B_{\text{token}} = 4 \text{ B/token}
+\tag{2}$$
+
+At $S = 50000000$ tokens per shard (`shard_size_tokens` in the shared
+`data_config.yaml`), one shard file is
+
+$$B_{\text{shard}} = S \cdot B_{\text{token}} = 5 \times 10^7 \times 4 = 2.0 \times 10^8 \text{ B} = 200 \text{ MB} \;(\approx 190.7 \text{ MiB})
+\tag{3}$$
+
+— the "~190 MB" figure quoted in the config, depending on whether the unit is
+decimal (MB) or binary (MiB). The 8.0 B-token corpus packs into
+
+$$K = \left\lceil \frac{N_{\text{tok}}}{S} \right\rceil = \left\lceil \frac{8 \times 10^9}{5 \times 10^7} \right\rceil = 160 \text{ shards}
+\tag{4}$$
+
+and occupies
+
+$$B_{\text{total}} = K \cdot B_{\text{shard}} = N_{\text{tok}} \cdot B_{\text{token}} = 8 \times 10^9 \times 4 = 3.2 \times 10^{10} \text{ B} = 32 \text{ GB}
+\tag{5}$$
+
+on disk. The ceiling in (4) is real: packing targets 50M tokens but stops at a
+document boundary (`cross_document_boundary_ok: false`), so the final shard may
+hold fewer tokens, and `shard_count` in the manifest records what was actually
+written.
+
+**Why uint32 and not uint16 or uint8.** The dtype must represent every token
+id the stream can contain: ordinary tokens run to $V - 1 = 127999$, and the
+EOS special is $\text{eos\_token\_id} = 128009$. The candidate widths
+satisfy
+
+$$2^{8} = 256 < 2^{16} = 65536 < 128009 \leq 2^{32}
+\tag{6}$$
+
+so neither uint8 nor uint16 can encode the vocabulary at all — the minimum
+width is $\lceil \log_2 128009 \rceil = 17$ bits, and the next native type
+is uint32. Its ceiling is far above any realistic id:
+
+$$2^{32} - 1 = 4294967295 \gg 128009
+\tag{7}$$
+
+the headroom behind the config comment that uint32 is safe "up to 4.29 B
+tokens". The width is a storage cost, not a compute cost: at read time
+`training/pretrain.py:PretrainDataset._init_sharded` maps the manifest dtype to
+a torch int type (`uint32` → `torch.int32`) and mmaps the file, so the
+4 B/token layout never inflates the active working set — only the disk
+footprint.
 
 ### Alternative: torch_save format
 
@@ -472,6 +567,35 @@ Per-shard: `index`, `path`, `n_tokens`, `sha256`, `n_eos`.
 
 [`PretrainDataset._load_manifest`](../training/pretrain.py) reads optional
 fields: `eos_token_id`, `vocab_size`, `total_tokens`, `shard_count`, `dtype`.
+
+### How `PretrainDataset` consumes each field
+
+`training/pretrain.py:PretrainDataset._load_manifest` reads exactly five
+optional fields and caches them on the dataset; it never validates them against
+the filesystem. Consumption per field:
+
+| Field | Loader behaviour | Role |
+|---|---|---|
+| `eos_token_id` | Stored as `self.eos_token_id` (`None` when absent) | Records the boundary id the packer used (128009). The loader never scans for it — the packing invariant `cross_document_boundary_ok: false` guarantees no document spans shards — so this is the contract value the validation checklist re-checks. |
+| `vocab_size` | Stored as `self.vocab_size` (`None` when absent) | Declares the token space; must equal `ModelConfig.vocab_size` (128000) or embedding lookups shift. |
+| `total_tokens` | Stored as `self.total_tokens` (default `0`) | Declared corpus size; informational — `_init_sharded` re-derives the authoritative total from on-disk file sizes. |
+| `shard_count` | Stored as `self.shard_count` (default `0`) | Declared shard count; the actual list comes from globbing `shard_*.bin`, so a mismatch surfaces only via the checklist. |
+| `dtype` | Stored as `self.dtype` (default `"uint32"` when the key is missing; `None` if no manifest), then mapped in `training/pretrain.py:PretrainDataset._init_sharded` via `{"uint32": torch.int32, "uint16": torch.int16, "uint8": torch.int8}` | **Load-bearing**: sets the mmap element type in `training/pretrain.py:PretrainDataset._load_shard` (`torch.from_file`) and the byte-per-token divisor in `training/pretrain.py:PretrainDataset._size_in_tokens`. A wrong `dtype` silently halves or quadruples every token count. |
+
+The last row is the only field that changes loader *arithmetic*.
+`training/pretrain.py:PretrainDataset._init_sharded` computes each shard's
+token count from its file size and the dtype width,
+
+$$n_i = \frac{\text{bytes}(i)}{b}, \qquad b = \text{itemsize}(\texttt{dtype})
+\tag{8}$$
+
+with $b = 4$ for uint32, then builds cumulative `shard_offsets` from those
+$n_i$. `total_tokens` and `shard_count` are therefore advisory — the bytes on
+disk and `dtype` are authoritative — which is why a missing manifest degrades
+silently (all fields fall back to `None`/`0`/`"uint32"` inside
+`training/pretrain.py:PretrainDataset._load_manifest`) and the
+[validation checklist](#validation-checklist) re-verifies the manifest before a
+61k-step run.
 
 ---
 
@@ -788,4 +912,4 @@ importable (CoreProjects layout).
 - [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)
 - [training.md](training.md) — DataLoader and batch arithmetic
 
-<!-- docs:verified 2026-07-31 · 263838e -->
+<!-- docs:verified 2026-08-04 · 5da1a80 -->

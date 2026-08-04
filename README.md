@@ -9,7 +9,7 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch 2.1+](https://img.shields.io/badge/PyTorch-2.1%2B-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-3DDC84?logo=apache&logoColor=white)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-187%20passing-brightgreen?logo=pytest&logoColor=white)](#-verification)
+[![Tests](https://img.shields.io/badge/Tests-190%20passing-brightgreen?logo=pytest&logoColor=white)](#-verification)
 [![GPU: A100 80GB](https://img.shields.io/badge/GPU-A100%2080GB-76B900?logo=nvidia&logoColor=white)](#-hardware)
 [![Code style: black](https://img.shields.io/badge/Code%20Style-black-000000?logo=python&logoColor=white)](https://github.com/psf/black)
 
@@ -151,7 +151,7 @@ pip install -r requirements.txt
 
 ```bash
 python3 -m pytest tests/ -v
-# ✅ 187 tests across 11 files
+# ✅ 190 passed / 2 skipped across 12 files
 # Includes: sliding-window correctness, sink bias, YaRN extrapolation,
 # MoE routing, aux loss, gradient flow, checkpoint round-trip, NaN guard
 ```
@@ -191,7 +191,11 @@ python3 training/pretrain.py \
 
 ## 📚 Documentation
 
-Full technical references live in [`documentation/`](documentation/README.md) (10 chapters + index). Start here:
+Full technical references live in [`documentation/`](documentation/README.md) — 11 concept/reference
+chapters + index, plus a `theory/` layer of 10 from-scratch math chapters (every equation derived,
+every code symbol anchored `file.py:Symbol`).
+
+### Concept chapters
 
 | Doc | Purpose |
 |---|---|
@@ -206,7 +210,23 @@ Full technical references live in [`documentation/`](documentation/README.md) (1
 | [inference.md](documentation/inference.md) | `MixedKVCache`, `generate()`, passkey eval |
 | [operations.md](documentation/operations.md) | Scripts, utils, OPT-1…24 catalog |
 
-Validate docs: `python3 scripts/check_docs.py`
+### Theory chapters (from-scratch math)
+
+| Doc | Teaches |
+|---|---|
+| [attention_math.md](documentation/theory/attention_math.md) | Softmax, 1/√d scaling, masks, SDPA/flash backends |
+| [positional_encodings.md](documentation/theory/positional_encodings.md) | Sinusoidal → RoPE → YaRN, pruning, from zero |
+| [moe_theory.md](documentation/theory/moe_theory.md) | Top-k routing, aux-loss derivation, expert collapse |
+| [numerics.md](documentation/theory/numerics.md) | BF16/FP16/FP32/TF32 formats, autocast, sink clamp |
+| [optimizers.md](documentation/theory/optimizers.md) | Momentum → Adam → AdamW, bias correction, FP32 masters |
+| [autograd_checkpointing.md](documentation/theory/autograd_checkpointing.md) | Tape memory, recompute tradeoff |
+| [sampling.md](documentation/theory/sampling.md) | Temperature, top-k, top-p, entropy |
+| [kv_cache_engineering.md](documentation/theory/kv_cache_engineering.md) | Bandwidth, ring buffer, growth policy |
+| [tokenization_bpe.md](documentation/theory/tokenization_bpe.md) | BPE algorithm, 128K vocab economics |
+| [triton_programming.md](documentation/theory/triton_programming.md) | GPU tiling, Triton, the fused MoE kernel |
+
+Validate docs: `python3 scripts/check_docs.py` (links) + `python3 tests/test_doc_refs.py --strict-coverage`
+(symbol alignment)
 
 ---
 
@@ -216,10 +236,16 @@ Validate docs: `python3 scripts/check_docs.py`
 
 | Context | Pure GQA | SWA(128)/Full alt | Reduction |
 |---:|---:|---:|---:|
-| 4,096 | 72 MB | 72 MB | 1.00× (window = seq) |
-| 16,384 | 288 MB | 144 MB | 2.00× |
-| 65,536 | 1.13 GB | 567 MB | 2.00× |
+| 4,096 | 0.07 GB | 0.04 GB | 1.94× |
+| 8,192 | 0.14 GB | 0.07 GB | 1.97× |
+| 16,384 | 0.28 GB | 0.14 GB | 1.98× |
+| 32,768 | 0.56 GB | 0.28 GB | 1.99× |
+| 65,536 | 1.12 GB | 0.56 GB | 2.00× |
 | **131,072** | **2.25 GB** | **1.13 GB** | **2.00×** |
+
+Values are the exact output of `scripts/kv_cache_benchmark.py` (window=128,
+batch=1, BF16). The reduction is ≈1.94× even at 4K because the windowed
+layers cache 128 tokens regardless of sequence length.
 
 ### Passkey retrieval at 128K (4K-trained model)
 
@@ -273,12 +299,10 @@ GPT-OSS-Lite/
 │   └── long_context.py                 # ★ 128K passkey retrieval evaluator
 ├── utils/
 │   ├── checkpoint.py                   # atomic safetensors
-│   ├── distributed.py                  # single-GPU device helper
 │   ├── logging.py                      # WandB-capable training logger
 │   └── memory.py                       # VRAM estimator
 ├── data/
-│   ├── prepare_data.py                 # Shim over data/shared_data/ universal pipeline
-│   ├── shared_data/                    # Vendored universal 8.0B-token pipeline
+│   ├── prepare_data.py                 # shim → LLM/shared_data universal pipeline
 │   └── DATA_PIPELINE.md                # stub → documentation/data_pipeline.md
 ├── scripts/
 │   ├── kv_cache_benchmark.py           # ★ headline metric
@@ -287,7 +311,7 @@ GPT-OSS-Lite/
 │   ├── step_time_a100.py
 │   ├── e2e_gpu_smoke.py
 │   └── check_docs.py
-├── tests/                              # 187 tests, 11 files
+├── tests/                              # 190 passed / 2 skipped, 12 files
 │   ├── test_attention.py
 │   ├── test_yarn.py
 │   ├── test_moe.py
@@ -299,7 +323,7 @@ GPT-OSS-Lite/
 │   ├── test_utils.py
 │   ├── test_data_pipeline.py
 │   └── test_validation.py
-├── documentation/                      # 10 chapters + index — see documentation/README.md
+├── documentation/                      # 11 chapters + theory/ + index — see documentation/README.md
 │   ├── README.md                       # doc index + learning path + agent routing
 │   ├── getting_started.md              # onboarding
 │   ├── foundations.md                  # concepts
@@ -310,7 +334,8 @@ GPT-OSS-Lite/
 │   ├── training.md                     # pretrain loop + YAML reference
 │   ├── data_pipeline.md                # canonical data guide
 │   ├── inference.md                    # generation + long-context eval
-│   └── operations.md                   # scripts, utils, OPT catalog
+│   ├── operations.md                   # scripts, utils, OPT catalog
+│   └── theory/                         # ★ 10 from-scratch math chapters (see README.md above)
 ├── AGENTS.md
 ├── SKILLS.md
 ├── LICENSE                             # Apache 2.0
@@ -336,13 +361,22 @@ Full bit-exact training reproducibility is supported:
 ## 🧪 Verification
 
 ```bash
-# Full test suite
+# Full test suite (CPU-friendly, ~40 s)
 python3 -m pytest tests/ -v
-# ✅ 187 tests across 11 files (CPU-friendly)
+# ✅ 190 passed / 2 skipped (GPU-gated Triton) across 12 files
+
+# Doc-code alignment: every `file.py:Symbol` anchor resolves, every public
+# symbol in models/ + training/ + inference/ + utils/ is anchored
+python3 tests/test_doc_refs.py --strict-coverage
+# ✅ Coverage: 100%
+
+# Doc link/stale-pattern lint
+python3 scripts/check_docs.py
+# ✅ check_docs: OK (N files)
 
 # Headline benchmark
 python3 scripts/kv_cache_benchmark.py
-# ✅ HEADLINE METRIC PASSED: 1.94×–2.0× KV-cache reduction
+# ✅ HEADLINE METRIC PASSED: 2.00× KV-cache reduction
 ```
 
 ---
@@ -359,15 +393,16 @@ PRs welcome for:
 Please:
 
 1. Read [`documentation/ATTENTION_SINKS.md`](documentation/ATTENTION_SINKS.md) before touching `models/attention.py`.
-2. Run `pytest tests/ -v` — all 187 must pass.
-3. Run `scripts/kv_cache_benchmark.py` and confirm the 2.0× reduction still holds.
-4. Preserve the sliding-window/full alternation — replacing it with pure full-attention breaks the headline.
+2. Run `pytest tests/ -v` — all tests must pass (currently 190 passed / 2 skipped).
+3. If you touch docs or rename symbols, run `python3 tests/test_doc_refs.py --strict-coverage` and `python3 scripts/check_docs.py` — stale anchors fail.
+4. Run `scripts/kv_cache_benchmark.py` and confirm the 2.0× reduction still holds.
+5. Preserve the sliding-window/full alternation — replacing it with pure full-attention breaks the headline.
 
 ---
 
 ## ⚠️ Known caveats
 
-- **Full 8B-token pretraining run not yet started** (no GPU on dev machine). The 187-test suite validates all primitives on CPU + tiny shapes.
+- **Full 8B-token pretraining run not yet started** (no GPU on dev machine). The 192-test suite validates all primitives on CPU + tiny shapes.
 - **`passkey_eval.py` requires a trained checkpoint**; it runs as a stub on untrained models.
 - **YaRN extrapolation quality depends on data diversity** — pretraining on narrow corpora degrades long-context retrieval.
 

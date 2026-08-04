@@ -148,9 +148,9 @@ python training/pretrain.py \
 | `--max-steps` | Override `total_steps` (debug runs) |
 | `--resume-from` | Load checkpoint at step N |
 
-`main()` flow:
+`training/pretrain.py:main` flow:
 
-1. Optional `seed_everything`
+1. Optional `training/pretrain.py:seed_everything`
 2. `_set_hardware_perf_knobs()`
 3. Load YAML → `ModelConfig`, training dict, data dict
 4. Build model, optimizer, scheduler, DataLoader
@@ -277,6 +277,61 @@ not abort (allows smoke tests on small GPUs).
 Gradient checkpointing (`grad_checkpoint: true`, every 3 layers) trades ~30%
 extra compute for ~40% activation memory savings at `T=4096`.
 
+### Memory accounting derivation
+
+Let $P = 501836640$ be the total parameter count (deduplicated for
+weight tying). Serialized BF16 weights cost 2 bytes per parameter:
+
+$$
+W_{\mathrm{bf16}} = 2P = 1003673280\ \text{B} \approx 0.94\ \text{GB}, \tag{1}
+$$
+
+the size of a `model_step_N.safetensors` file (≈ 1.00 × 10⁹ B in decimal
+units). In GPU memory the parameters live as FP32 master weights — autocast
+casts to BF16 only at matmul boundaries ([optimizers theory](theory/optimizers.md) §4.6)
+— and AdamW keeps two more FP32 tensors per parameter, the moments $m$ and
+$v$. Weights + optimizer state + FP32 gradient buffers:
+
+$$
+M_{\mathrm{optim}} = (4 + 4 + 4)\,P = 12P = 6.02 \times 10^{9}\ \text{B} \approx 5.6\ \text{GiB}, \tag{2}
+$$
+
+$$
+M_{\mathrm{fixed}} = (4 + 12)\,P = 16P \approx 7.5\ \text{GiB}. \tag{3}
+$$
+
+Equation (3) is exactly the `param_bytes + optim_bytes` sum in
+`utils/memory.py:estimate_model_memory_gb`: `element_size() × P` for the FP32
+model (4P) plus 12P for the FP32 masters + moments. MoE sparsity does not
+reduce this floor: every expert occasionally receives gradients, so all
+501.8M parameters carry state.
+
+**Activations with gradient checkpointing.** The estimator scales saved
+activations by a store factor `s(g) = 1/g + (1 − 1/g)·½` for checkpointing
+every $g$-th block: at `grad_checkpoint_every=3`, one of every three blocks
+saves no forward activations and the other two save about half, so
+$s(3) = 2/3$ — a 33% saving (the ~40% rough figure above). The activation
+block is the attention activations plus the MoE intermediates (3 live experts
+per layer × 3 matrices each):
+
+$$
+M_{\mathrm{act}} = s(3)\,\big[\,12 \cdot T \cdot B \cdot d_{\mathrm{model}} + 12 \cdot 3 \cdot 3 \cdot T \cdot B \cdot f_{\mathrm{ffn}}\big] \cdot 2\ \text{B} \approx 7.1\ \text{GiB} \quad \text{at } T{=}4096,\ B{=}8. \tag{4}
+$$
+
+The KV cache during training sizes windowed layers at $\max(W, T) = 4096$
+(`win_len = window if steady_state else max(window, seq_len)`), so no sliding
+savings before steady-state inference: 6 windowed + 6 global layers × 4096
+token-slots × 8 batch × 1536 B per slot ≈ 0.56 GiB.
+
+**Total vs the microbench threshold.** The full estimate — eq. (3) + KV +
+eq. (4) + ~2 GiB runtime overhead — is ≈ 17.2 GiB, comfortably under the
+**25 GB ceiling** of `scripts/microbench_a100.py` (`--threshold-gb 25.0`,
+chosen to leave ~55 GB of the 80 GB A100 for batch scaling). The 17.2 GiB
+figure is *derived* from the estimator's formula; the measured
+`torch.cuda.max_memory_allocated` peak on an A100 is **`[INFERENCE]`** —
+`.benchmarks/` is empty. Confirm with
+`python3 scripts/microbench_a100.py --config configs/pretrain_a100_502m.yaml --batch-size 8 --seq-len 4096`.
+
 ---
 
 ## Optimizer — AdamW with Parameter Groups
@@ -295,6 +350,50 @@ no_decay_params = [p for n, p in model.named_parameters() if any(nd in n.lower()
 | bias, norm, embed | **0.0** |
 
 Embedding is excluded from decay because it is tied to the LM head weight.
+
+### Parameter-group derivation
+
+AdamW applies the decoupled update ([optimizers theory](theory/optimizers.md)
+eq. 11) to every parameter of a group with that group's decay $\lambda$:
+
+$$
+\theta \leftarrow (1 - \eta\lambda)\,\theta - \eta\,\frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon}. \tag{5}
+$$
+
+The two groups are built by a substring filter over parameter names. Let
+$K = \{\text{bias}, \text{norm}, \text{embed}\}$ and $n(p)$ the parameter
+name; the partition is
+
+$$
+\text{decay} = \{\,p : n(p) \text{ contains no keyword of } K\,\}, \qquad
+\text{no-decay} = \{\,p : n(p) \text{ contains a keyword of } K\,\}. \tag{6}
+$$
+
+Every named parameter satisfies exactly one predicate, so the groups are
+exhaustive and disjoint — no tensor is decayed twice and none is missed. Two
+details make the weight-tying exclusion sound:
+
+- `model.named_parameters()` deduplicates by tensor identity
+  (`remove_duplicate=True`, the default). Because
+  `models/transformer.py:GPTOSS.__init__` assigns
+  `self.head.weight = self.embed.weight`, the shared tensor is yielded once,
+  under its first-registered name `embed.weight`, which the keyword `embed`
+  catches — the `head.weight` alias never reaches the decay group, so the tied
+  tensor has a single group entry.
+- The split at production scale (verified): decay holds **403,513,344**
+  parameters (372 tensors), no-decay holds **98,323,296** (38 tensors), and
+  the two sum to 501,836,640 exactly. The no-decay total decomposes as
+  $128000 \times 768 = 98304000$ (tied embedding) +
+  $25 \times 768 = 19200$ (24 per-block RMSNorm gains + final norm) +
+  $12 \times 8 = 96$ (per-head sink biases) = 98,323,296.
+
+Why these three classes: the embedding is tied to the LM head, so its rows
+serve both the input projection and the logit projection — decaying it would
+directly shrink the scale the head weight applies to the final hidden state.
+RMSNorm gains are reparameterization-redundant scales (the norm is
+scale-invariant in its input), and biases are additive offsets with no
+overfitting risk; decaying either is at best meaningless, at worst harmful to
+the residual stream. This mirrors LLaMA/GPT-3 practice.
 
 ### AdamW settings
 
@@ -329,7 +428,7 @@ LLaMA-3 recipes.
 
 ## Learning Rate Schedule
 
-`make_warmup_cosine_lambda(warmup_steps=3000, total_steps=61000, min_lr_ratio=0.05)`:
+`training/pretrain.py:make_warmup_cosine_lambda(warmup_steps=3000, total_steps=61000, min_lr_ratio=0.05)`:
 
 ```
 step < warmup:     lr_mult = step / warmup_steps
@@ -349,6 +448,69 @@ Peak LR = **4e-4**; floor LR = **2e-5** (5% of peak).
 
 Warmup **3000 steps** ≈ 4.9% of total — industry MoE standard 2–5% for
 top-k routing stability.
+
+### Closed form and LR budget
+
+`training/pretrain.py:make_warmup_cosine_lambda` defines the LR multiplier
+$\lambda(s)$ as an exact piecewise function of the optimizer step $s$, with
+warmup $W = 3000$, total steps $T = 61000$, and floor ratio
+$\lambda_{\min} = 0.05$:
+
+$$
+\lambda(s) = \begin{cases}
+\dfrac{s}{W} & 0 \le s < W, \\[10pt]
+\lambda_{\min} + (1 - \lambda_{\min})\,\dfrac{1}{2}\Big(1 + \cos \pi \dfrac{s - W}{T - W}\Big) & W \le s < T, \\[10pt]
+\lambda_{\min} & s \ge T.
+\end{cases} \tag{7}
+$$
+
+The warmup branch is the linear ramp $s/W$; the cosine branch interpolates
+$\lambda$ from 1.0 down to $\lambda_{\min}$ with **zero slope at both
+endpoints** (the cosine's derivative is $\propto \sin$, which vanishes at
+$s = W$ and $s = T$), avoiding the kinks of a linear decay. The third branch
+clamps the floor: the schedule never reaches zero, so the final steps refine
+rather than add noise.
+
+**Effective LR area.** The total LR budget of the run is the integral of
+$\lambda$ over the schedule. Warmup contributes a triangle of area $W/2$; the
+cosine half-wave integrates to exactly half its rectangle (a full period of
+$\cos$ integrates to zero), so the decay contributes
+$(T - W)(1 + \lambda_{\min})/2$:
+
+$$
+A = \int_0^W \frac{s}{W}\,ds + \int_W^T \Big[\lambda_{\min}
++ (1 - \lambda_{\min})\,\tfrac{1}{2}\bigl(1 + \cos \pi \tfrac{s-W}{T-W}\bigr)\Big]\,ds
+= \frac{W}{2} + \frac{T - W}{2}\,(1 + \lambda_{\min}). \tag{8}
+$$
+
+With the production numbers:
+
+$$
+A = \frac{3000}{2} + \frac{58000}{2}\,(1.05) = 1500 + 30450 = 31950, \qquad
+\bar\lambda = \frac{A}{T} = \frac{31950}{61000} \approx 0.52. \tag{9}
+$$
+
+The run's total LR budget equals **31,950 optimizer steps at constant peak
+LR** — about 52% of the nominal 61,000 steps. Two consequences: (i)
+$\bar\lambda \approx 0.52$ is the mean multiplier, the right comparator
+against a constant-LR baseline of equal step count; (ii) warmup contributes
+only $1500 / 31950 \approx 4.7\%$ of the area despite occupying 4.9% of the
+steps — the triangle shape halves its budget.
+
+**Why 3000 warmup steps for MoE.** At initialization the router logits are
+Gaussian-scaled by `models/transformer.py:ModelConfig.init_std` = 0.02, so the
+routing softmax is nearly uniform and top-2 selection is effectively random;
+router gradients are correspondingly noisy, and the aux loss (α = 0.01,
+[moe.md](moe.md)) injects a second, weaker signal that can collapse the gate
+onto one expert before the CE signal stabilizes. Warmup also neutralizes the
+worst Adam pathology: at $t = 1$ the bias-corrected step is
+$\hat{m}_1 / \sqrt{\hat{v}_1} = \operatorname{sign}(g_1)$ — every coordinate
+moves by exactly $\pm\eta$ ([optimizers theory](theory/optimizers.md) §4.3) —
+so an immediate peak LR would apply full-magnitude sign-noise steps to every
+weight. Ramping $\eta$ from 0 damps both effects. The 3000-step ramp spans
+$3000 \times 131072 \approx 0.39$B tokens, ~4.9% of the 8B-token corpus;
+$W/T = 4.9\%$ sits inside the 2–5% band the config comment calls the MoE
+industry standard (2000 steps, 3.3%, "was on the low end").
 
 ```python
 sched = LambdaLR(optim, lr_lambda)
@@ -372,7 +534,7 @@ loader = DataLoader(
 )
 ```
 
-See [data_pipeline.md](data_pipeline.md) for `PretrainDataset` internals.
+See [data_pipeline.md](data_pipeline.md) for `training/pretrain.py:PretrainDataset` internals.
 
 Default path: `data/pretrain_chinchilla` — directory of `shard_*.bin` + optional
 `manifest.json`.
@@ -437,6 +599,9 @@ RMSNorm in the model keeps activations in native dtype (no FP32 copy in norm).
 
 ## Chunked Cross-Entropy
 
+`training/pretrain.py:chunked_cross_entropy` avoids materialising the full
+`(B·T, vocab)` softmax by summing chunk-local losses:
+
 ```python
 def chunked_cross_entropy(logits, targets, chunk_size=4096):
     flat_logits = logits.view(-1, vocab_size)
@@ -463,6 +628,56 @@ At `B=8`, `T=4096`: `n_total = 32,768` tokens → 4 CE chunks (was 8 at 4096).
 
 With `vocab=128000`, chunk 8192 ≈ 1 GB BF16 logits slice — well under 80 GB
 with model + activations.
+
+### Equivalence proof
+
+Let $N = B \cdot T = 32768$ be the number of tokens in the batch and
+$V = 128000$ the vocabulary. The per-token cross-entropy for logits
+$z_t \in \mathbb{R}^{V}$ and target token $y_t$ is
+
+$$
+\ell_t = -\log \operatorname{softmax}(z_t)_{y_t} = -z_{t,y_t} + \log \sum_{v=1}^{V} e^{z_{t,v}}, \tag{10}
+$$
+
+and the full-batch loss is the mean $\mathcal{L} = \tfrac{1}{N}\sum_{t=1}^{N}\ell_t$.
+The softmax normalizes over the **vocabulary axis only** — each token's
+probability is computed independently of the other $N-1$ tokens. That is what
+makes chunking free: cross-entropy is additive over tokens, so for any
+partition of $\{1,\dots,N\}$ into chunks $S_1,\dots,S_C$,
+
+$$
+\frac{1}{N}\sum_{c=1}^{C}\sum_{t \in S_c} \ell_t
+= \frac{1}{N}\sum_{t=1}^{N} \ell_t = \mathcal{L}. \tag{11}
+$$
+
+`training/pretrain.py:chunked_cross_entropy` computes exactly the left-hand
+side: each `F.cross_entropy(..., reduction="sum")` yields
+$\sum_{t \in S_c}\ell_t$, the chunk sums accumulate, and the final
+`total_loss / n_total` divides by $N$. The only cross-token operation in the
+entire loss is that final mean, and summing chunk-local sums before dividing
+recovers it identically. If the loss had any normalization over the *token*
+axis, chunking would change it — it does not. Chunked and full CE are equal in
+real arithmetic; in floating point they differ only by summation order and the
+dtype of the accumulator (`total_loss` lives in the logits' dtype, BF16 under
+autocast), a rounding effect that is negligible for losses $O(1)$ over 4
+chunks ([numerics](theory/numerics.md)).
+
+**Why the memory drops.** A single `F.cross_entropy` over all $N$ tokens
+materializes both the logits and the log-softmax output, each $N \times V \times
+2$ bytes; chunking bounds the live slice to $C = \min(\text{chunk\_size}, N)$
+tokens:
+
+$$
+M_{\mathrm{full}} \approx 2 \cdot N \cdot V \cdot 2\ \text{B}
+= 2 \cdot 32768 \cdot 128000 \cdot 2 \approx 16.8\ \text{GB}, \qquad
+M_{\mathrm{chunk}} \approx 2 \cdot C \cdot V \cdot 2\ \text{B}. \tag{12}
+$$
+
+At `chunk_size=8192`, $C = 8192$ gives $M_{\mathrm{chunk}} \approx 4.2$ GB — a
+$N/C = 4\times$ reduction. (Each live slice alone is
+$8192 \times 128000 \times 2 = 2.1 \times 10^9$ B ≈ 2.1 GB; the "≈ 1 GB"
+figure above underestimates the slice, though the conclusion — well under the
+80 GB budget — is unchanged.)
 
 ---
 
@@ -509,6 +724,56 @@ if micro_step % accum == 0:
 
 `set_to_none=True` frees gradient tensors instead of zeroing — lower peak
 memory.
+
+### Equivalence derivation
+
+Gradient accumulation with $k = 4$ micro-batches of $m$ sequences each is
+exact, not an approximation. Let the full-batch objective over all
+$N = k \cdot m$ samples be
+
+$$
+\mathcal{L}(\theta) = \frac{1}{km}\sum_{i=1}^{k}\sum_{j=1}^{m} \ell_{i,j}(\theta), \qquad
+\nabla\mathcal{L} = \frac{1}{km}\sum_{i,j} \nabla\ell_{i,j}, \tag{13}
+$$
+
+and let $\mathcal{L}_i$ be micro-batch $i$'s loss, a mean over its $m$
+samples. The sum of micro-batch gradients, each scaled by $1/k$, is
+
+$$
+\frac{1}{k}\sum_{i=1}^{k} \nabla\mathcal{L}_i
+= \frac{1}{k}\sum_{i=1}^{k} \frac{1}{m}\sum_{j=1}^{m} \nabla\ell_{i,j}
+= \frac{1}{km}\sum_{i,j} \nabla\ell_{i,j}
+= \nabla\mathcal{L}, \tag{14}
+$$
+
+because gradients accumulate linearly — each sample appears in exactly one
+micro-batch, and averaging commutes with the gradient. PyTorch's
+`loss.backward()` implements the left-hand side: it adds each scaled
+micro-batch gradient into `.grad`, so after $k$ micro-batches `.grad` holds
+$\nabla\mathcal{L}$ exactly.
+
+The combined objective follows the same rule term by term. With
+`loss = (ce + aux_alpha * aux_loss) / accum` in `training/pretrain.py:main`:
+
+$$
+\sum_{i=1}^{k} \nabla\Big(\frac{\text{ce}_i + \alpha\,\text{aux}_i}{k}\Big)
+= \frac{1}{k}\sum_{i=1}^{k} \nabla\text{ce}_i
++ \frac{\alpha}{k}\sum_{i=1}^{k} \nabla\text{aux}_i
+= \nabla\mathcal{L}_{\mathrm{CE}} + \alpha\,\nabla\mathcal{L}_{\mathrm{aux}}, \tag{15}
+$$
+
+so both the CE and the aux term inherit the same $1/k$ scale and the relative
+weight $\alpha = 0.01$ is preserved. The division happens *before*
+`backward()`, scaling the gradients as they are accumulated. Why not divide
+afterward? Adam's update ratio $\hat{m}/\sqrt{\hat{v}}$ is scale-invariant
+([optimizers theory](theory/optimizers.md) eq. 9), but `clip_grad_norm_` at
+1.0 is not — an un-scaled accumulated gradient would have a $k \times$ larger
+norm and would trip the clip far more often — and the decoupled weight decay
+is also un-scaled, so the decay/update balance would shift with $k$. Dividing
+keeps behavior identical for any $k$: `accum=1` and `accum=4` produce the same
+update scale, which is why the optimizer step and the LR scheduler tick only
+at the `micro_step % accum == 0` boundary, and
+`optim.zero_grad(set_to_none=True)` then releases the accumulated buffers.
 
 ---
 
@@ -584,26 +849,30 @@ if not torch.isfinite(loss):
 
 ## Logging
 
-[`TrainingLogger`](../utils/logging.py) with:
+[`utils/logging.py:TrainingLogger`](../utils/logging.py) with:
 
 ```yaml
 log_interval: 50
 ```
 
-Logs CE loss, aux metric, LR every 50 optimizer steps. Seq len passed for
-tokens/sec estimation.
+`utils/logging.py:TrainingLogger.log` emits CE loss, aux metric, LR every 50
+optimizer steps; `utils/logging.py:TrainingLogger.finish` closes the optional
+WandB run. Seq len passed for tokens/sec estimation.
 
 ---
 
 ## Checkpointing — `CheckpointManager`
 
-[`utils/checkpoint.py`](../utils/checkpoint.py)
+[`utils/checkpoint.py:CheckpointManager`](../utils/checkpoint.py)
 
 ### Save (every `save_interval=2000` + final)
 
 ```python
 ckpt.save(model, optim, step, scheduler=sched, extra_meta={...})
 ```
+
+`utils/checkpoint.py:CheckpointManager.save` writes atomically;
+`utils/checkpoint.py:CheckpointManager.load` restores weights and returns meta.
 
 | File | Format | Contents |
 |---|---|---|
@@ -624,6 +893,17 @@ avoid safetensors duplicate-key errors.
 ### Completeness check
 
 `latest_step()` returns highest step where model + optim + meta all exist.
+
+Step discovery and retention both run through the same completeness filter.
+`utils/checkpoint.py:CheckpointManager.list_checkpoints` returns every complete
+step and `utils/checkpoint.py:CheckpointManager.latest_step` returns the newest
+of them; the NaN guard resolves its rollback point through `latest_step`
+rather than trusting a running step counter, and `list_checkpoints` shows which
+steps exist before an interactive `--resume-from`. Retention is explicit:
+`utils/checkpoint.py:CheckpointManager.keep_last_n` keeps the newest `n`
+complete checkpoints and `utils/checkpoint.py:CheckpointManager.delete_checkpoint`
+removes all four files (`model`/`optim`/`sched`/`meta`) of one step, so a
+partial or obsolete step can be cleaned without disturbing its neighbours.
 
 ---
 
@@ -1125,4 +1405,4 @@ python3 -m pytest tests/test_training.py tests/test_validation.py -v
 **Next:** [data_pipeline.md](data_pipeline.md) — corpus, tokenization, and
 `PretrainDataset` internals.
 
-<!-- docs:verified 2026-07-31 · 263838e -->
+<!-- docs:verified 2026-08-04 · 5da1a80 -->

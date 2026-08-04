@@ -106,6 +106,12 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
       level of a file (≤ 3 per file) and inside kernels to delimit
       named algorithm phases.
     Violations are reviewable on `wc -l <file>` and `grep -c '^[[:space:]]*#' <file>`.
+11. **Docs ship with code; stale symbols fail CI.** Every doc citation is a
+    `file.py:Symbol` anchor. After any doc edit or symbol rename run
+    `python3 tests/test_doc_refs.py --strict-coverage` (all public symbols
+    in `models/`, `training/pretrain.py`, `inference/`, `utils/` must stay
+    anchored) and `python3 scripts/check_docs.py` (links + stale patterns).
+    Both must be green before the change lands.
 
 ## 3. Numerical-stability rules
 

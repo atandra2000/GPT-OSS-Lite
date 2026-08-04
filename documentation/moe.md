@@ -118,7 +118,7 @@ ReLU-gated variants at similar cost.
 
 ### Parameter layout in code
 
-[`SwiGLUExpert`](../models/moe.py) stores three `nn.Linear` layers, all
+[`models/moe.py:SwiGLUExpert`](../models/moe.py) stores three `nn.Linear` layers, all
 **bias=False** (RMSNorm handles scaling; bias is omitted for parameter
 efficiency):
 
@@ -204,6 +204,44 @@ Implementation gathers tokens per expert (see [Dispatch Paths](#dispatch-paths--
 runs the expert forward on contiguous chunks, scales by routing weights, and
 accumulates back into the token output buffer with `index_add_`.
 
+### Derivation — softmax, top-2 selection, renormalisation
+
+The router is a single bias-free linear map followed by a softmax
+([`models/moe.py:MoERouter.forward`](../models/moe.py)). Write the gate weight
+as $W_g \in \mathbb{R}^{E \times d}$, where $E = n\_routed\_experts = 8$ is
+the routed pool size and $d = d\_model = 768$. For token $t$ with hidden state
+$x_t \in \mathbb{R}^d$ the logits are $z_t = x_t W_g^{\top} \in \mathbb{R}^E$,
+and the softmax turns them into a probability distribution over experts:
+
+$$
+p_{t,i} = \frac{e^{z_{t,i}}}{\sum_{j=1}^{E} e^{z_{t,j}}}, \qquad
+\sum_{i=1}^{E} p_{t,i} = 1, \tag{1}
+$$
+
+computed in FP32 in `MoERouter.forward` (`F.softmax(logits.float(), dim=-1)`)
+so that BF16 logits cannot underflow the small probabilities (see
+[theory/numerics.md §8.3](theory/numerics.md)). Top-k selection takes the
+$k = 2$ largest probabilities, defining the selected set
+$\mathcal{I}_t = \{ i : p_{t,i} \text{ in top-}k(p_t) \}$. The renormalised
+weight of selected expert $i$ is its softmax mass divided by the mass of the
+selected set:
+
+$$
+w_{t,i} = \frac{p_{t,i}}{S_t}, \qquad S_t = \sum_{j \in \mathcal{I}_t} p_{t,j}, \tag{2}
+$$
+
+so $w_{t,\cdot}$ is the softmax distribution $p_{t,\cdot}$ *conditioned on*
+$\mathcal{I}_t$: it sums to 1 over the selected experts by construction,
+$\sum_{i \in \mathcal{I}_t} w_{t,i} = S_t / S_t = 1$ (guarded by
+`tests/test_moe.py:test_router_weights_sum_to_one`). The normalisation is not
+cosmetic: $S_t < 1$ in general, so without it the routed output
+$y_t^{\text{routed}} = \sum_{i \in \mathcal{I}_t} w_{t,i} E_i(x_t)$ would
+shrink or grow with how peaked $p_t$ happens to be. The `clamp(min=1e-6)` in
+`MoERouter.forward` guards the degenerate $S_t \to 0$ case — impossible for an
+exact softmax (every $p_{t,i} > 0$) but cheap insurance against FP edge cases.
+The full derivation of this gating scheme, including why $k = 2$ rather than
+$k = 1$, is in [theory/moe_theory.md §5](theory/moe_theory.md).
+
 ---
 
 ## Auxiliary Load-Balancing Loss
@@ -232,7 +270,7 @@ where `N = n_routed_experts` (8 in the default config).
 
 ### Implementation walkthrough
 
-From [`aux_load_balancing_loss`](../models/moe.py):
+From [`models/moe.py:aux_load_balancing_loss`](../models/moe.py):
 
 ```python
 probs_f32 = F.softmax(all_logits.float(), dim=-1)
@@ -277,6 +315,76 @@ Like the router forward, `aux_load_balancing_loss` computes `softmax` and
 `bincount` statistics in FP32, then casts the scalar result back to the
 activation dtype. This prevents BF16 underflow when the router saturates on
 one expert during early training.
+
+### Derivation — f_i, P_i, and why the loss is ≥ 1
+
+Over a micro-batch of $N$ flattened tokens ($N = B \times T$) the two
+statistics of the Switch/GShard loss are the hard routing frequency and the
+soft mean probability. Let $\mathcal{I}_t$ be token $t$'s top-2 set; the
+$N k$ routing slots ($k = n\_activated\_experts = 2$) are each owned by one
+expert, and $P_i$ is the batch mean of the gate's soft preferences
+([`models/moe.py:aux_load_balancing_loss`](../models/moe.py)):
+
+$$
+f_i = \frac{1}{N k} \sum_{t=1}^{N} \mathbb{1}[i \in \mathcal{I}_t], \qquad
+P_i = \frac{1}{N} \sum_{t=1}^{N} p_{t,i}, \qquad
+\sum_i f_i = \sum_i P_i = 1. \tag{3}
+$$
+
+The code computes these exactly: `torch.bincount(topk_idx, minlength=n_experts) / float(N * n_activated)` is $f_i$ (slot counts over the $Nk$ slots), and `probs_f32.mean(dim=0)` is $P_i$. The auxiliary loss is the $E$-scaled inner product,
+
+$$
+\mathcal{L}_{\text{aux}} = E \sum_{i=1}^{E} f_i P_i, \qquad E = n\_routed\_experts, \tag{4}
+$$
+
+large exactly when an expert is both frequently selected ($f_i$ high) and
+strongly preferred ($P_i$ high) — the collapse signature. The gradient of (4)
+flows only through $P$ (the top-k indices are discrete), and with
+$\partial P_j / \partial z_{t,i} = \tfrac{1}{N} p_{t,i}(\delta_{ij} - p_{t,j})$
+the chain rule gives
+
+$$
+\frac{\partial \mathcal{L}_{\text{aux}}}{\partial z_{t,i}} = \frac{E}{N}\, p_{t,i}\Big(f_i - \sum_{j} f_j p_{t,j}\Big), \tag{5}
+$$
+
+an automatic negative-feedback loop: an over-loaded expert ($f_i$ above the
+probability-weighted average $\langle f \rangle_p$) is pushed *down*, an
+under-loaded one up — every token, every step.
+
+**The floor.** The loss trains the router toward $f \approx P$ (hard assignment
+tracking soft preference, by (5)), so evaluate (4) on that coupled slice:
+$\sum_i f_i P_i = \sum_i f_i^2 = \lVert f \rVert_2^2$, and Cauchy–Schwarz
+against the all-ones vector gives
+
+$$
+1 = \Big(\sum_i f_i\Big)^2 \le E \sum_i f_i^2 = \mathcal{L}_{\text{aux}}, \tag{6}
+$$
+
+with equality iff $f_i = 1/E$ for every $i$. The loss is therefore **≥ 1, and
+exactly 1 at uniform routing** — the $E$ scaling normalises the floor. The
+tests bracket the span: uniform logits give $f = (\tfrac12, \tfrac12, 0, \dots)$
+and $P = (\tfrac18, \dots, \tfrac18)$, so $\mathcal{L}_{\text{aux}} = 8 \cdot
+\tfrac18 = 1.0$, while saturated logits ($P_1 \to 1$, top-2 tie-breaking
+forces $f_1 = f_2 = \tfrac12$) give $\mathcal{L}_{\text{aux}} \to 8 \cdot
+\tfrac12 = 4$ (`tests/test_moe.py:test_aux_loss_low_for_uniform` pins 1.0 vs
+~4.0). The full derivation, including the collapse regime and its absorbing
+state, is in [theory/moe_theory.md §6](theory/moe_theory.md).
+
+**Why α = 0.01.** With $\mathcal{L}_{\text{aux}} \in [1, 4]$ over the collapse
+spectrum, the weighted term is $\alpha \mathcal{L}_{\text{aux}} \in [0.01,
+0.04]$ against an initial cross-entropy of $\ln 128000 \approx 11.76$ per
+token (a uniform model over the 128K vocabulary): the aux term is **0.085% of
+the CE at balance and 0.34% at full collapse**. The gradient scale matches:
+from (5), each token's aux gradient on a router logit is bounded by
+$\alpha \tfrac{E}{N}\,|p_{t,i}(f_i - \langle f\rangle_p)| \le \alpha E/N =
+0.08/N$; at the aggregate level this is the $\mathcal{O}(\alpha E\, p\,
+\Delta f) \approx 0.08\, p\, \Delta f$ force per token-event that
+[theory/moe_theory.md §6.3](theory/moe_theory.md) compares with the
+$\mathcal{O}(1)$ per-token CE gradient. So α = 0.01 keeps the balancing
+pressure at roughly one percent of the task signal — large enough to arrest
+drift over 61,000 steps, small enough not to fight legitimate specialisation
+(an expert that is genuinely best for a region should keep receiving its
+tokens; the aux gradient opposes imbalance, not specialisation).
 
 ---
 
@@ -662,8 +770,8 @@ MoE-heavy steps); profile before assuming gains.
 
 ```bash
 python3 -m pytest tests/test_moe.py tests/test_moe_triton.py -v
-# GPU-only cases:
-pytest -m gpu tests/test_moe_triton.py -v
+# GPU tests auto-skip on CPU (skipif gpu_required); run the same command on
+# an sm_75+ GPU to exercise the Triton kernel-parity tests
 ```
 
 | Test | CPU? | Purpose |
@@ -677,7 +785,7 @@ pytest -m gpu tests/test_moe_triton.py -v
 
 ## Shared Experts
 
-When `n_shared_experts > 0`, [`MoELayer.forward`](../models/moe.py) adds:
+When `n_shared_experts > 0`, [`models/moe.py:MoELayer.forward`](../models/moe.py) adds:
 
 ```python
 shared_out = sum(e(flat) for e in self.shared_experts)
@@ -762,15 +870,90 @@ Default: ~247 M active of ~502 M total.
 
 At `d=768`, `d_ff=1536`: ~14.2 MFLOPs/token/layer for MoE FFN.
 
+### Derivation — stored vs active parameters
+
+Each expert is a bias-free SwiGLU with three matrices of $d \times d_{\text{ff}}$
+elements ([`models/moe.py:SwiGLUExpert`](../models/moe.py): `w1`, `w3` of shape
+$(d_{\text{ff}}, d)$, `w2` of shape $(d, d_{\text{ff}})$), so
+
+$$
+P_{\text{expert}} = 3\, d\, d_{\text{ff}} = 3 \times 768 \times 1536 = 3538944. \tag{7}
+$$
+
+A layer stores $E = 8$ routed experts, $s = 1$ shared expert, and the router's
+$d \times E$ gate matrix ([`models/moe.py:MoERouter`](../models/moe.py)); a
+forward pass executes only the $k = 2$ selected routed experts, the $s$ shared
+ones, and that same gate:
+
+$$
+P_{\text{stored}} = (E + s)\, 3\, d\, d_{\text{ff}} + dE = 9 \times 3538944 + 6144 = 31856640, \tag{8}
+$$
+
+$$
+P_{\text{active}} = (k + s)\, 3\, d\, d_{\text{ff}} + dE = 3 \times 3538944 + 6144 = 10622976. \tag{9}
+$$
+
+The gate is counted in both because it runs on every token and scores every
+expert — its $dE = 6144$ parameters are never idle. Twelve layers give
+$382279680$ stored / $127475712$ active MoE parameters; the
+always-active attention, embedding, and norm machinery adds $119556960$
+to each side, reproducing the verified totals of 501,836,640 stored and
+247,032,672 active parameters — sparsity
+
+$$
+1 - \frac{247032672}{501836640} = 0.5077 \approx 50.8\%. \tag{10}
+$$
+
+These are exactly the terms
+[`models/transformer.py:GPTOSS.num_active_parameters`](../models/transformer.py)
+counts: per layer $(n\_activated + n\_shared) \times 3 d d_{\text{ff}}$ expert
+weights plus $d \times n\_routed$ router weights, on top of all non-expert
+parameters.
+
+### Derivation — the dense/sparse FLOP ratio
+
+Counting each multiply-accumulate as 2 FLOPs, one expert forward is three
+matmuls of cost $2\, d\, d_{\text{ff}}$ each, i.e. $6\, d\, d_{\text{ff}} =
+7077888 \approx 7.1$M FLOPs/token — the same factor-6 convention that
+counts parameters. The MoE layer then costs
+$(k + s) \cdot 6\, d\, d_{\text{ff}} + 2\, d\, E$ (the router adds $2 d E$ for
+one $d \to E$ matmul) versus $(E + s) \cdot 6\, d\, d_{\text{ff}}$ for a dense
+FFN of equal stored capacity:
+
+$$
+\frac{C_{\text{moe}}}{C_{\text{dense}}^{\text{eq}}} = \frac{(k+s)\, 6\, d\, d_{\text{ff}} + 2\, d\, E}{(E+s)\, 6\, d\, d_{\text{ff}}}
+= \frac{k+s}{E+s} + O\Big(\frac{1}{d_{\text{ff}}}\Big)
+= \frac{3}{9} \approx \frac{1}{3}, \tag{11}
+$$
+
+numerically $21245952 / 63700992 = 0.3335$ — the router's
+$12288$ FLOPs are 0.06% of the layer cost. At the model level, forward
+FLOPs per token scale as roughly $2N$ for $N$ parameters, so the ratio is
+exactly the active-parameter fraction (the always-on attention/embedding
+machinery is identical in both counts and cancels):
+
+$$
+\frac{2 \times 247032672}{2 \times 501836640} = \frac{247032672}{501836640} = 0.4923, \tag{12}
+$$
+
+≈ 494M vs ≈ 1,004M FLOPs/token forward — 49.2% of the dense-equivalent
+compute, the same ratio as the parameter split. (Reconciliation with the
+tables above: the per-expert FLOP table sums the two up-projections at
+$2\, d\, d_{\text{ff}}$ — one FLOP per MAC on W1+W3 — giving $4\, d\, d_{\text{ff}}$
+per expert and the ~14.2M layer total; under the uniform 2-FLOP-per-MAC
+convention used here and in [theory/moe_theory.md §4](theory/moe_theory.md),
+each expert is $6\, d\, d_{\text{ff}}$ and the layer total is ~21.2M. Every
+ratio in this section is identical under either convention.)
+
 ---
 
 ## Numerical Stability
 
 | Mechanism | Where | Why |
 |---|---|---|
-| FP32 softmax in router | `MoERouter.forward` | BF16 underflow on saturated gates |
-| FP32 aux loss internals | `aux_load_balancing_loss` | Stable `f` and `P` statistics |
-| Top-k weight renorm + clamp | `MoERouter.forward` | Unit sum; no div-by-zero |
+| FP32 softmax in router | `models/moe.py:MoERouter.forward` | BF16 underflow on saturated gates |
+| FP32 aux loss internals | `models/moe.py:aux_load_balancing_loss` | Stable `f` and `P` statistics |
+| Top-k weight renorm + clamp | `models/moe.py:MoERouter.forward` | Unit sum; no div-by-zero |
 | `eps=1e-6` in AdamW | `pretrain.py` | BF16-safe optimizer (see [training.md](training.md)) |
 
 MoE-specific: watch **expert histograms** during warmup (first 3000 steps).
@@ -873,6 +1056,37 @@ for tokens routed to that expert only.
 forward on backward — router + dispatch run twice per step for checkpointed
 layers.
 
+### Derivation — gradients through top-k routing
+
+Let $g_t := \partial \mathcal{L} / \partial y_t$ be the task-loss gradient
+with respect to the MoE layer's output. (The shared expert's term is
+$z$-independent, so it enters only through $g_t$.) The routed output
+$y_t = \sum_{j \in \mathcal{I}_t} w_{t,j} E_j(x_t)$ depends on the logits only
+through the renormalised weights of (2). The Jacobian of that renormalisation
+([`models/moe.py:MoERouter.forward`](../models/moe.py)) is the softmax
+Jacobian restricted to the selected set:
+
+$$
+\frac{\partial w_{t,j}}{\partial z_{t,i}} = w_{t,j}\,(\delta_{ij} - w_{t,i}) \quad (i, j \in \mathcal{I}_t), \qquad
+\frac{\partial w_{t,j}}{\partial z_{t,i}} = 0 \quad (i \notin \mathcal{I}_t), \tag{13}
+$$
+
+the first identity from $\partial p_{t,j}/\partial z_{t,i} = p_{t,j}(\delta_{ij} - p_{t,i})$ and $w = p/S_t$; the second because neither the numerator $p_{t,j}$ nor the denominator $S_t$ depends on $z_{t,i}$ when $i$ is unselected. Hence the router's task gradient for a *selected* expert is the weight times the advantage over the weight-averaged expert credit,
+
+$$
+\frac{\partial \mathcal{L}}{\partial z_{t,i}} = w_{t,i}\Big( g_t^{\top} E_i(x_t) - \sum_{j \in \mathcal{I}_t} w_{t,j}\, g_t^{\top} E_j(x_t) \Big), \qquad i \in \mathcal{I}_t, \tag{14}
+$$
+
+and **exactly zero for unselected experts** — the top-k op is discrete, so a token never routes task gradient into an expert it did not select. That is precisely where the aux loss matters for idle experts: (5) gives $\partial \mathcal{L}_{\text{aux}} / \partial z_{t,i} = \tfrac{E}{N} p_{t,i}(f_i - \langle f\rangle_p) \neq 0$ for *every* expert, because softmax probabilities are strictly positive — unselected experts still receive router gradient through the gate weights, even though their own matrices get none:
+
+$$
+\frac{\partial \mathcal{L}}{\partial W^{(i)}} = \sum_{t:\, i \in \mathcal{I}_t} w_{t,i}\, \Big(\frac{\partial E_i(x_t)}{\partial W^{(i)}}\Big)^{\!\top} g_t, \tag{15}
+$$
+
+a sum over exactly the tokens routed to expert $i$ — autograd scatters the gradient through the `index_add_` in
+[`models/moe.py:MoELayer._dispatch_vectorized`](../models/moe.py) (and its Triton twin
+[`models/moe.py:MoELayer._dispatch_triton`](../models/moe.py)) to only those rows. Two consequences. (i) With $k = 1$ the renormalised weight is the constant $1$ and (13) vanishes: the router would learn nothing from the task loss, a core reason for $k = 2$ (derived in [theory/moe_theory.md §5.3](theory/moe_theory.md), guarded by `tests/test_moe.py:test_router_grad_flow`). (ii) A dead expert ($f_i = 0$, $P_i \to 0$) receives neither term — the absorbing state of [theory/moe_theory.md §7](theory/moe_theory.md). The FP32 softmax keeps (13)–(15) alive when router logits saturate (`tests/test_moe.py:test_aux_loss_robust_to_bf16_saturation`).
+
 ---
 
 ## Appendix D — Glossary
@@ -917,4 +1131,4 @@ layers.
 - [`tests/test_moe_triton.py`](../tests/test_moe_triton.py) — Triton contract tests.
 - [training.md](training.md) — α=0.01 in the training loop.
 
-<!-- docs:verified 2026-07-31 · 263838e -->
+<!-- docs:verified 2026-08-04 · 5da1a80 -->

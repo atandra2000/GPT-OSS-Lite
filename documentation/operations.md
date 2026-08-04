@@ -189,16 +189,19 @@ GQA: 4 KV heads, head_dim=96
 
    Context      Pure GQA      SWA/Full   Reduction
 --------------------------------------------------
-     4,096        0.09 GB        0.06 GB       1.50×
-    ...
-   131,072        2.88 GB        1.50 GB       1.92×
+     4,096       0.07 GB       0.04 GB       1.94×
+     8,192       0.14 GB       0.07 GB       1.97×
+    16,384       0.28 GB       0.14 GB       1.98×
+    32,768       0.56 GB       0.28 GB       1.99×
+    65,536       1.12 GB       0.56 GB       2.00×
+   131,072       2.25 GB       1.13 GB       2.00×
 
-✅ HEADLINE METRIC PASSED: 1.92× KV-cache reduction at 128K (≥ 1.8×)
+✅ HEADLINE METRIC PASSED: 2.00× KV-cache reduction at 128K (≥ 1.8×)
 ```
 
 Exit code **0** if reduction at 128K ≥ **1.8×**; otherwise exit **1**.
 
-At long context the ratio approaches $12 / (6 + 6 \times 128/131072) \approx 1.92\times$.
+At long context the ratio approaches $12 / (6 + 6 \times 128/131072) \approx 2.00\times$.
 See [foundations.md](foundations.md) §A.4 for the intuition.
 
 ---
@@ -234,6 +237,8 @@ data pipeline tokenizer is wired (see [data_pipeline.md](data_pipeline.md)).
 
 #### Expected output (trained model)
 
+> [INFERENCE] target, not a result — no pretraining run yet; the 87.5% figure is an illustrative sample.
+
 ```
 Passkey eval: checkpoint=model_step_60000.safetensors, device=cuda
 
@@ -251,6 +256,8 @@ Passkey eval: checkpoint=model_step_60000.safetensors, device=cuda
 On a random-init checkpoint, accuracy is near chance. The script still exits **0**
 but prints a warning — full pretraining is required for the headline pass.
 See [getting_started.md](getting_started.md) when available.
+
+**Related:** [sampling](theory/sampling.md) — greedy (`temperature=0.0`) semantics the eval loop relies on.
 
 ---
 
@@ -334,6 +341,8 @@ Uses CUDA when available; otherwise CPU (slower, still valid for relative orderi
 
 ##### Expected output (example)
 
+> [INFERENCE] estimate — .benchmarks/ empty; sample output, not a measured run.
+
 ```
 Total params: 0.42M
 [model.forward]      12.34 ms/step
@@ -360,6 +369,8 @@ python3 scripts/profile_moe.py
 
 ##### Expected output
 
+> [INFERENCE] estimate — .benchmarks/ empty; sample output, not a measured run.
+
 ```
 moe.forward          3.45 ms
 _dispatch_vectorized 2.10 ms
@@ -384,6 +395,8 @@ python3 scripts/profile_inference.py
 
 ##### Expected output
 
+> [INFERENCE] estimate — .benchmarks/ empty; sample output, not a measured run.
+
 ```
 prompt=8, new=64: 45.2 ms (1416 tok/s)
 prompt=32, new=64: 52.1 ms (1228 tok/s)
@@ -394,6 +407,8 @@ Decode cost is dominated by per-step `MixedKVCache` updates and MoE forward.
 Longer prompts increase prefill time but decode tok/s should stabilize once the
 cache is warm. See OPT-11/12/13/14/22 in [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24).
 
+**Related:** [kv cache engineering](theory/kv_cache_engineering.md) — decode-bandwidth model behind the tok/s ceiling.
+
 ---
 
 ### A.8 `microbench_a100.py` / `step_time_a100.py`
@@ -402,7 +417,7 @@ cache is warm. See OPT-11/12/13/14/22 in [Part C](operations.md#part-c--optimiza
 
 **Purpose:** Verify production model fits under a VRAM ceiling at
 `batch_size=8`, `seq_len=4096`. Uses **actual** `torch.cuda.max_memory_allocated`
-on GPU; falls back to `utils.memory.estimate_model_memory_gb` on CPU.
+on GPU; falls back to `utils/memory.py:estimate_model_memory_gb` on CPU.
 
 ##### Invocation
 
@@ -423,6 +438,8 @@ python3 scripts/microbench_a100.py \
 
 ##### Expected output (A100 80GB)
 
+> [INFERENCE] estimate — .benchmarks/ empty; sample output, not a measured run.
+
 ```
 [microbench] Config: d_model=768, n_layers=12, vocab=128000, experts=8
 [microbench] batch_size=8, seq_len=4096
@@ -431,6 +448,8 @@ python3 scripts/microbench_a100.py \
 ```
 
 Estimator math is documented in [§B.3](operations.md#b3-estimate_model_memory_gb-mixed-kv-term-assert_fits_in_available_gpu).
+
+**Related:** [numerics](theory/numerics.md) (FP32/BF16 memory footprint) · [optimizers](theory/optimizers.md) (AdamW 12 B/param state).
 
 ---
 
@@ -462,6 +481,8 @@ Enables TF32 + cuDNN benchmark (see [OPT-20](operations.md#opt-20--cudnnbenchmar
 
 ##### Expected output (A100, with `--compile`)
 
+> [INFERENCE] estimate — .benchmarks/ empty; sample output, not a measured run.
+
 ```
 [step_time] torch.compile enabled (mode=max-autotune)
 [step_time] Config: 12L, batch=8, seq=4096
@@ -477,6 +498,8 @@ Exit **0** if MFU ≥ 35% on CUDA; CPU-only runs report tokens/sec without MFU.
 it measures raw step time, not the production CE path. For production parity see
 [training.md](training.md).
 
+**Related:** [optimizers](theory/optimizers.md) (AdamW fused/foreach path) · [numerics](theory/numerics.md) (TF32/BF16 matmul assumptions).
+
 ---
 
 ---
@@ -489,8 +512,9 @@ it measures raw step time, not the production CE path. For production parity see
 
 **File:** `utils/checkpoint.py`
 
-`CheckpointManager` is the single sanctioned API for saving and loading training
-state. The training loop in `training/pretrain.py` constructs one instance per run:
+`utils/checkpoint.py:CheckpointManager` is the single sanctioned API for saving
+and loading training state. The training loop in `training/pretrain.py` constructs
+one instance per run:
 
 ```python
 ckpt = CheckpointManager(train_cfg["save_dir"])
@@ -714,7 +738,9 @@ If `wandb` is not installed, prints:
 
 ### B.3 `estimate_model_memory_gb` / Mixed KV term / `assert_fits_in_available_gpu`
 
-**File:** `utils/memory.py`
+**File:** `utils/memory.py` — `utils/memory.py:estimate_model_memory_gb` estimates
+steady-state VRAM; `utils/memory.py:assert_fits_in_available_gpu` enforces the
+budget at startup.
 
 ```python
 def estimate_model_memory_gb(
@@ -739,6 +765,8 @@ assert_fits_in_available_gpu(est)
 ```
 
 Also used by `scripts/microbench_a100.py` on CPU-only hosts.
+
+**Related:** [numerics](theory/numerics.md) — FP32 master / BF16 activation footprint; [autograd checkpointing](theory/autograd_checkpointing.md) — the `store_factor` activation tradeoff below.
 
 #### Total formula
 
@@ -1083,7 +1111,7 @@ inference throughput.
 
 **Files:** `models/attention.py` (`_window_mask`), `inference/generate.py`
 
-**Related:** [inference.md](inference.md)
+**Related:** [inference.md](inference.md), [kv cache engineering](theory/kv_cache_engineering.md) (ring-buffer interplay)
 
 ---
 
@@ -1177,7 +1205,7 @@ $(B_T=16) \times (B_M=32) \times (B_N=32)$. W2 stays PyTorch. Backward uses
 pure-PyTorch reference path.
 
 **Impact:** Verified end-to-end on 4 GB GPU (sm_75) via `e2e_gpu_smoke.py`.
-Expected 5–15% MoE forward speedup on sm_80+ depending on batch/token count.
+Expected 5–15% MoE forward speedup on sm_80+ depending on batch/token count [INFERENCE] — .benchmarks/ empty.
 
 **Contract:**
 
@@ -1187,7 +1215,7 @@ Expected 5–15% MoE forward speedup on sm_80+ depending on batch/token count.
 
 **Files:** `models/moe_triton.py`, `models/moe.py` (`_dispatch_triton`)
 
-**Related:** [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) (Triton kernel contract)
+**Related:** [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped) (Triton kernel contract), [triton programming](theory/triton_programming.md) (kernel design and numerics)
 
 ---
 
@@ -1227,7 +1255,7 @@ optim = AdamW(
 ```
 
 **Impact:** 1.5–2× faster optimizer step vs default loop on A100/H100 (workspace
-rule of thumb). Pairs with FP32 master weights under BF16 autocast.
+rule of thumb) [INFERENCE] — .benchmarks/ empty. Pairs with FP32 master weights under BF16 autocast.
 
 **Files:** `training/pretrain.py`
 
@@ -1330,7 +1358,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 ```
 
-**Impact:** ~3–5% end-to-end on A100 after first-step warmup. Bit-exact numerics
+**Impact:** ~3–5% end-to-end on A100 after first-step warmup [INFERENCE] — .benchmarks/ empty. Bit-exact numerics
 (same dtype, different kernel selection).
 
 **Files:** `training/pretrain.py` (`_set_hardware_perf_knobs`)
@@ -1377,6 +1405,8 @@ $W = 128$:
 tokens vs 6 × 131072 at 128K. Headline **≥1.8×** total KV reduction with global
 layers (OPT-12). Verified analytically by `scripts/kv_cache_benchmark.py`.
 
+**Related:** [kv cache engineering](theory/kv_cache_engineering.md) — ring-buffer design and the bandwidth model behind the reduction.
+
 **Files:** `inference/generate.py` (`MixedKVCache.append`, `get`)
 
 ---
@@ -1397,6 +1427,8 @@ Append in-place when capacity suffices.
 
 **Impact:** Amortized $O(1)$ append per token after occasional growth events.
 Decode is $O(1)$ per step per layer (not $O(T)$ recompute).
+
+**Related:** [kv cache engineering](theory/kv_cache_engineering.md) — exponential-growth sizing for global layers.
 
 **Files:** `inference/generate.py` (`MixedKVCache.append` global branch)
 
@@ -1515,7 +1547,7 @@ if use_grad_ckpt and (layer_idx % grad_ckpt_every == 0):
 
 **Files:** `models/transformer.py`, `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`
 
-**Related:** [§B.3](operations.md#b3-estimate_model_memory_gb-mixed-kv-term-assert_fits_in_available_gpu) (activations)
+**Related:** [§B.3](operations.md#b3-estimate_model_memory_gb-mixed-kv-term-assert_fits_in_available_gpu) (activations), [autograd checkpointing](theory/autograd_checkpointing.md) (memory/compute tradeoff)
 
 ---
 
@@ -1538,7 +1570,7 @@ Applied in `pretrain.py` after model construction on CUDA. `step_time_a100.py`
 mirrors with `--compile` flag for MFU measurement.
 
 **Impact:** First-step compile latency (minutes); steady-state **10–25%** tokens/sec
-improvement on A100 depending on CUDA/PyTorch version. Target MFU ≥35%.
+improvement on A100 depending on CUDA/PyTorch version [INFERENCE] — .benchmarks/ empty. Target MFU ≥35%.
 
 **Files:** `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`, `scripts/step_time_a100.py`
 
@@ -1608,4 +1640,4 @@ After changing `models/attention.py`, always run `test_sliding_window_matches_fu
 | Book index | [README.md](README.md) |
 
 
-<!-- docs:verified 2026-07-31 · 263838e -->
+<!-- docs:verified 2026-08-04 · 5da1a80 -->

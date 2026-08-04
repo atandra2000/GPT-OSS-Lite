@@ -6,7 +6,7 @@ This chapter is the single system map for GPT-OSS-Lite: the 502M-total /
 247M-active decoder, its module boundaries, config wiring, and the transformer
 stack in `models/transformer.py`. Read [foundations.md](foundations.md) first
 for the math behind each primitive; Part B below is the implementation guide
-for `ModelConfig`, `RMSNorm`, `GPTOSSBlock`, and `GPTOSS`.
+for `models/transformer.py:ModelConfig`, `models/transformer.py:RMSNorm`, `models/transformer.py:GPTOSSBlock`, and `models/transformer.py:GPTOSS`.
 
 ## Mental model
 
@@ -112,7 +112,7 @@ GPT-OSS-Lite is a **12-layer decoder-only transformer** with:
 | Metric | Value |
 |--------|-------|
 | Total parameters | ~502M (`501836640` counted) |
-| Active parameters / token | ~247M (`247106400` counted) |
+| Active parameters / token | ~247M (`247032672` counted) |
 | Sparsity | ~50.8% inactive per forward |
 | Training tokens | 8.0B Chinchilla-scale |
 | Training wall time (target) | 16–20 h on 1× A100 80GB |
@@ -319,14 +319,39 @@ $$
 98.3\text{M (embed)} + 12 \times 33.6\text{M} + 768 \approx 502\text{M}
 $$
 
+#### Tied-embedding accounting
+
+The embedding table and the LM head are one tensor when `weight_tying=True`:
+`models/transformer.py:GPTOSS.__init__` assigns `self.head.weight = self.embed.weight`, so
+the head is a *view* of the embedding — one allocation, one gradient, one optimizer
+state. A naive count would charge the vocabulary matrix twice. Its size is
+
+$$
+V \cdot d_{\text{model}} = 128000 \times 768 = 98304000. \tag{1}
+$$
+
+Because the tied head contributes zero *new* parameters, the untied counterfactual adds
+one full matrix on top of the tied total:
+
+$$
+N_{\text{untied}} = 501836640 + 98304000 = 600140640, \tag{2}
+$$
+
+so tying saves 98.3M parameters — 16.4% of the untied total. The active count inherits
+the same exclusion: `models/transformer.py:GPTOSS.num_active_parameters` walks
+`named_parameters()` and deduplicates by `id()`, so the head never appears in the 247M
+active figure. A plain sum over `nn.Module.parameters()` would not deduplicate — the
+shared tensor is registered under both `embed.weight` and `head.weight` — which is why
+`models/transformer.py:GPTOSS.num_parameters` tracks seen `id()`s (B.10).
+
 ### Active parameters (`num_active_parameters`)
 
-**247,106,400** (~247M). MoE experts not routed on a given token are **inactive**.
+**247,032,672** (~247M). MoE experts not routed on a given token are **inactive**.
 
 Formula from `GPTOSS.num_active_parameters()`:
 
 ```python
-non_moe = all parameters except names containing "experts"
+non_moe = all parameters except names containing "experts" or "router"
 expert_params = 3 * d_model * ffn_dim
 moe_active_per_layer = (n_activated + n_shared) * expert_params + d_model * n_routed_experts
 return non_moe + (moe_active_per_layer) * n_layers
@@ -338,7 +363,28 @@ $$
 (2 + 1) \times 3 \times 768 \times 1536 + 768 \times 8 = 10622976
 $$
 
-Inactive routed experts per layer: $5 \times 3 \times 768 \times 1536 = 17694720$ not executed.
+Inactive routed experts per layer: $6 \times 3 \times 768 \times 1536 = 21233664$ not executed.
+
+Expanding the formula with the production config ($d = 768$, $f = 1536$,
+$k_{\text{act}} = 2$, $k_{\text{shared}} = 1$, $n_{\text{exp}} = 8$, $L = 12$):
+
+$$
+N_{\text{active}} = N_{\text{non-moe}} + L \left[ (k_{\text{act}} + k_{\text{shared}}) \cdot 3 d f + d \cdot n_{\text{exp}} \right], \tag{3}
+$$
+
+with $N_{\text{non-moe}} = 119556960$ (embed, attention, norms; router gates kept
+out of the sweep) and the per-layer MoE term $10622976$ from above:
+
+$$
+N_{\text{active}} = 119556960 + 12 \times 10622976 = 247032672. \tag{4}
+$$
+
+**247,032,672** is the active figure: 49.2% of the 501,836,640 total is exercised per
+token, i.e. 50.8% idle ($1 - 247032672 / 501836640 \approx 0.508$). The
+router gate is deliberately excluded from `non_moe` — the sweep skips names containing
+`"router"` as well as `"experts"` — and re-added exactly once via the
+$d \cdot n_{\text{exp}}$ term in (3), so `models/transformer.py:GPTOSS.num_active_parameters`
+and the derivation agree.
 
 ### KV-cache memory formula (BF16, batch=1)
 
@@ -821,7 +867,7 @@ def forward(self, x, positions) -> tuple[torch.Tensor, torch.Tensor]:
 ```
 
 Returns updated hidden states `(B, T, d_model)` and a per-layer `aux_loss`
-scalar. `GPTOSS.forward` takes the mean across layers.
+scalar. `models/transformer.py:GPTOSS.forward` takes the mean across layers.
 
 ### B.6 `GPTOSS` construction and submodule roles
 
@@ -848,8 +894,11 @@ class GPTOSS(nn.Module):
 | `norm` | `d_model` | Final RMSNorm before logits |
 | `head` | `(d_model, vocab_size)` | LM projection (tied to embed) |
 
-`extra_repr()` prints a one-line summary including `num_parameters()` for
-debugging in notebooks.
+`models/transformer.py:GPTOSS.extra_repr` prints a one-line summary of the active
+configuration — `d_model`, `n_layers`, `vocab`, expert pattern, `window`, and the
+tied-aware total from `models/transformer.py:GPTOSS.num_parameters` — for debugging
+in notebooks. `models/transformer.py:GPTOSS.num_active_parameters` computes the
+per-token active count with the tied head excluded ([§5](#5-parameter-accounting)).
 
 ### B.7 Weight initialization policy
 
@@ -882,6 +931,112 @@ sink mass emerges during optimization. Theory:
 [ATTENTION_SINKS.md](ATTENTION_SINKS.md).
 
 Attention and MoE linear layers use `bias=False` — no separate bias init rules.
+
+**Why `init_std = 0.02`.** `models/transformer.py:GPTOSS._init_weights` draws every
+`Linear` and `Embedding` weight from $\mathcal{N}(0, \sigma^2)$ with
+$\sigma = \text{init\_std} = 0.02$. The value is a variance-budget argument. For a
+layer $y = Wx$ with i.i.d. zero-mean weights of variance $\sigma^2$ and input
+components of variance $\text{Var}(x)$, the output components have
+
+$$
+\text{Var}(y_j) = \sum_{i=1}^{F} \text{Var}(W_{ji} x_i) = F \sigma^2 \text{Var}(x),
+\qquad \text{std}(y_j) = \sigma \sqrt{F}, \tag{5}
+$$
+
+where $F$ is the fan-in — the number of inputs summed into one output unit. Per output
+unit, the projection layers give
+
+$$
+\sigma\sqrt{F} = 0.02 \sqrt{768} \approx 0.55
+\quad (\text{q\_proj, kv\_proj, o\_proj, expert W1/W3}),
+\qquad
+0.02 \sqrt{1536} \approx 0.78 \quad (\text{expert W2}). \tag{6}
+$$
+
+Std 0.5–0.8 per unit is the sweet spot: large enough to keep signals alive across
+BF16's $2^{-8}$ relative grid ([numerics](theory/numerics.md)), small enough that no
+sublayer output saturates a softmax or approaches FP32's exponential overflow at
+$z \approx 88.7$ (numerics.md §8.3). At $\sigma = 0.1$ the same layers would sit at
+std 2.8–3.9 and, via (7)–(8), head-vector norms near 27 and score std ≈ 7.7 —
+softmaxes pinned to a saturated corner and a residual stream swamping BF16's grid; at
+$\sigma = 0.01$ (std 0.28–0.39) the score std drops to ≈ 0.08, the softmax is nearly
+uniform, and the gradient signal through the score path is four times weaker
+([optimizers](theory/optimizers.md)). `init_std = 0.02` is the middle of that range.
+
+The scale that actually enters attention is larger than the per-unit std. A query head
+vector $q^h \in \mathbb{R}^{96}$ is a slice of the q-projection output: 96 components,
+each of std $\sigma\sqrt{768}$ (fan-in of `q_proj`), so its typical L2 norm is
+
+$$
+\|q^h\| \approx \sigma \sqrt{d_{\text{model}} \cdot D}
+= 0.02 \sqrt{768 \times 96} = 0.02 \sqrt{73728} \approx 5.4. \tag{7}
+$$
+
+This is the "large but controlled" scale: controlled by pre-norm (every sublayer input
+is normalized to unit RMS, so $\text{Var}(x) = 1$ in (5)) and by the
+$\frac{1}{\sqrt{D}}$ attention scaling, which brings the pre-softmax score
+$s = q^h \cdot k^h / \sqrt{D}$ to
+
+$$
+\text{Var}(s) = \frac{1}{D} \sum_{i=1}^{D} \text{Var}(q_i k_i)
+= (768 \cdot 0.02^2)^2 \approx 0.094,
+\qquad \text{std}(s) \approx 0.31. \tag{8}
+$$
+
+Scores of std ≈ 0.3 sit far from both the flat tail and the saturated corner of the
+softmax — the regime where the learned sink bias, clamped to $[-10, 15]$ (roughly
+$-32\sigma$ to $+48\sigma$), can actually reshape the distribution
+([ATTENTION_SINKS.md](ATTENTION_SINKS.md)). Without the $1/\sqrt{D}$ factor the score
+std would be $\sqrt{96} \cdot 0.31 \approx 3.0$, and scores wandering over ±12 would
+force softmaxes toward saturation before the sink can act.
+
+**Residual-stream variance across 12 layers.** Write the pre-norm block as
+$x_{l+1} = x_l + f^{\text{attn}}_l(\text{RMSNorm}(x_l)) + f^{\text{moe}}_l(\text{RMSNorm}(x_l))$.
+At initialization the sublayer outputs are zero-mean and uncorrelated with the stream,
+so variances add:
+
+$$
+\text{Var}(x_{l+1}) = \text{Var}(x_l) + \text{Var}(f^{\text{attn}}_l)
++ \text{Var}(f^{\text{moe}}_l). \tag{9}
+$$
+
+**Worst case — no normalization.** Each sublayer is approximately scale-homogeneous
+(attention and experts are linear maps; SwiGLU is gated but bias-free), so its output
+std scales with the input std, $\text{std}(f_l) \approx \alpha_l\, \text{std}(x_l)$
+with gain $\alpha_l \approx \sigma\sqrt{F}$, and (9) becomes geometric:
+
+$$
+\text{Var}(x_L) = \text{Var}(x_0) \prod_{l=0}^{L-1} (1 + \alpha_l^2), \qquad
+\alpha_l \approx \sigma \sqrt{F}. \tag{10}
+$$
+
+The growth is exponentially sensitive to $\sigma$: at $\sigma = 0.1$ the per-block
+gain $\alpha \approx 3.8$ gives $(1 + 3.8^2)^{12} \approx 10^{14}$ — guaranteed
+overflow; at $\sigma = 0.02$ the per-block gain is $\alpha \approx 0.76$ and the
+stream *shrinks*, $\text{std}(x_{12}) = 0.02 \sqrt{(1.58)^{12}} \approx 0.31$ — the
+signal decays toward the BF16 noise floor by layer 12. Either way the depth
+dependence is exponential.
+
+**With pre-norm.** RMSNorm pins every sublayer input to unit variance, so the sublayer
+output variances $v^{\text{attn}}_l, v^{\text{moe}}_l$ are bounded by the fan-in gains
+of (6) and no longer compound with the stream magnitude. The recursion becomes
+arithmetic:
+
+$$
+\text{Var}(x_L) = \text{Var}(x_0) + \sum_{l=0}^{L-1} \left( v^{\text{attn}}_l
++ v^{\text{moe}}_l \right) = \text{Var}(x_0) + L\, v. \tag{11}
+$$
+
+Starting from the embedding rows ($\text{Var}(x_0) = \sigma^2 = 4\times10^{-4}$) with
+per-block contribution $v \approx 0.58$ (dominated by the expert W2 fan-in, (6)):
+
+$$
+\text{std}(x_{12}) = \sqrt{0.0004 + 12 \times 0.58} \approx 2.6. \tag{12}
+$$
+
+The stream stays O(1) whether the stack has 12, 24, or 48 layers, and the final
+`models/transformer.py:GPTOSS.norm` (RMSNorm) restores unit RMS before the tied head
+projects to logits — the head always sees an O(1) input.
 
 ### B.8 Forward pass, `positions`, return contract `(logits, aux_loss)`
 
@@ -993,16 +1148,21 @@ sparsity:
 
 ```python
 def num_active_parameters(self) -> int:
-    non_moe = ...  # all params except names containing "experts"
+    non_moe = ...  # all params except names containing "experts" or "router"
     expert_params = 3 * d_model * ffn_dim   # W1, W3, W2 per expert
     moe_active = (n_activated_experts + n_shared_experts) * expert_params
     router_params = d_model * n_routed_experts
     return non_moe + (moe_active + router_params) * n_layers
 ```
 
-Production: **247,106,400** active (~247M), ~50.8% sparsity. This is an
+Production: **247,032,672** active (~247M), ~50.8% sparsity. This is an
 **analytical estimate** aligned with Chinchilla active-param reporting — not a
 runtime profiler. Always prefer `model.num_parameters()` over hand sums.
+
+The `non_moe` sweep skips names containing `"router"` as well as `"experts"`, so the
+router gate is counted exactly once via `router_params`; the counter returns the
+derived figure directly. See [§5](#5-parameter-accounting) (eqs. 3–4) for the
+derivation.
 
 ### B.11 Weight tying
 
@@ -1014,7 +1174,9 @@ self.head.weight = self.embed.weight
 
 The LM head and token embedding share one `(vocab_size, d_model)` matrix.
 
-1. **~98M parameter savings** at vocab 128K × d_model 768 (see [§5](#5-parameter-accounting))
+1. **98,304,000 parameter savings** — the head is a view of the embedding, so the
+   untied total of 600,140,640 drops to 501,836,640 (derived in [§5](#5-parameter-accounting),
+   eqs. 1–2)
 2. **Consistent input/output token geometry** — standard in GPT-2/LLaMA families
 
 Implications:
@@ -1023,6 +1185,9 @@ Implications:
 - Checkpoint `state_dict` contains one key for the shared weight
 - `num_parameters()` must deduplicate — counting both `embed` and `head` would
   double-count
+- `models/transformer.py:GPTOSS.num_active_parameters` inherits the same exclusion:
+  the tied head contributes nothing to the 247M active figure (derived in
+  [§5](#5-parameter-accounting))
 
 Set `weight_tying: false` only for ablation experiments.
 
@@ -1055,7 +1220,7 @@ from models.transformer import ModelConfig, GPTOSS
 cfg = ModelConfig()
 m = GPTOSS(cfg)
 assert m.num_parameters() == 501_836_640
-assert m.num_active_parameters() == 247_106_400
+assert m.num_active_parameters() == 247_032_672
 ```
 
 ---
@@ -1072,4 +1237,4 @@ assert m.num_active_parameters() == 247_106_400
 
 ---
 
-<!-- docs:verified 2026-07-31 · 263838e -->
+<!-- docs:verified 2026-08-04 · 5da1a80 -->
