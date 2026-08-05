@@ -89,10 +89,9 @@ class CheckpointManager:
         for k, v in state.items():
             ptr = v.data_ptr()
             if ptr in seen_ptrs:
-                deduped[k] = v.contiguous().clone()
-            else:
-                seen_ptrs.add(ptr)
-                deduped[k] = v.contiguous()
+                continue
+            seen_ptrs.add(ptr)
+            deduped[k] = v.contiguous()
         self._atomic_write(path, lambda tmp: save_file(deduped, tmp), suffix=".safetensors.tmp")
 
     def _atomic_save_torch(self, obj, path: Path) -> None:

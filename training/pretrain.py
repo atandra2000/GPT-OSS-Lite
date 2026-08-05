@@ -322,7 +322,11 @@ def main(
         drop_last=True,
     )
 
-    logger = TrainingLogger(log_interval=train_cfg.get("log_interval", 50), seq_len=model_cfg.max_seq_len)
+    logger = TrainingLogger(
+        log_interval=train_cfg.get("log_interval", 50),
+        seq_len=model_cfg.max_seq_len,
+        batch_size=micro_bs * accum,
+    )
     ckpt = CheckpointManager(train_cfg["save_dir"])
 
     nan_guard = train_cfg.get("nan_guard", True)

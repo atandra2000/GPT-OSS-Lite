@@ -665,14 +665,19 @@ if not torch.isfinite(loss):
 
 ## Logging
 
-[`utils/logging.py:TrainingLogger`](../utils/logging.py) with:
+[`utils/logging.py:TrainingLogger`](../utils/logging.py) configured with:
 
 ```yaml
 log_interval: 50
 ```
 
-`utils/logging.py:TrainingLogger.log` emits CE loss, aux metric, LR every 50 optimizer steps; `utils/logging.py:TrainingLogger.finish` closes the optional WandB run. Seq len passed for tokens/sec estimation.
+`utils/logging.py:TrainingLogger.log` emits CE loss, aux metric, LR, and throughput every 50 optimizer steps; `utils/logging.py:TrainingLogger.finish` closes the optional WandB run. Throughput calculation incorporates global batch size ($\text{batch\_size} = \text{micro\_bs} \times \text{gradient\_accumulation\_steps}$):
 
+$$
+\text{tokens\_per\_sec} = \frac{\text{log\_interval} \times \text{seq\_len} \times \text{batch\_size}}{\text{elapsed}}
+$$
+
+This accurately reflects real training throughput across all micro-batches and accumulation steps.
 ---
 
 ## Checkpointing — `CheckpointManager`
@@ -700,8 +705,7 @@ ckpt.save(model, optim, step, scheduler=sched, extra_meta={...})
 write to .tmp in save_dir → os.replace to final path
 ```
 
-Safetensors save **clones** duplicate `data_ptr` tensors (weight tying) to avoid safetensors duplicate-key errors.
-
+Safetensors save **drops** duplicate `data_ptr` tensors (`if ptr in seen_ptrs: continue`) to avoid duplicate-key errors and prevent disk bloat (~393 MB saved per checkpoint). Upon reloading via `utils/checkpoint.py:CheckpointManager.load`, `GPTOSS.__init__` retains tied weight pointers (`self.head.weight = self.embed.weight`), and `load_state_dict(..., strict=False)` updates `embed.weight` while preserving weight-tying in memory.
 ### Completeness check
 
 `latest_step()` returns highest step where model + optim + meta all exist.

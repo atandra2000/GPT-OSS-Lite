@@ -329,3 +329,22 @@ def test_sink_bias_clamped_at_forward(small_cfg, device):
     x = torch.randn(1, cfg.max_seq_len, cfg.d_model, device=device, dtype=torch.float64)
     out = layer(x)
     assert torch.isfinite(out).all(), "Forward produced non-finite output with extreme sink_bias"
+
+def test_causal_attention_chunk_prefill_cached_prefix_is_causal():
+    """When T_q > 1 and T_k > T_q (chunk prefill with cached prefix), queries must not see future tokens."""
+    q = torch.randn(1, 2, 4, 16)  # T_q = 4
+    k = torch.randn(1, 2, 12, 16) # T_k = 12 (8 cached prefix + 4 chunk)
+    v = torch.randn(1, 2, 12, 16)
+
+    out1 = causal_attention(q, k, v, window=None, sink_bias=None)
+    v_modified = v.clone()
+    v_modified[0, 0, 11, :] += 100.0
+    out2 = causal_attention(q, k, v_modified, window=None, sink_bias=None)
+
+    # Query at index 0 (global pos 8) must NOT be affected by key at pos 11 (future token)
+    diff_q0 = (out1[0, 0, 0, :] - out2[0, 0, 0, :]).abs().max().item()
+    assert diff_q0 == 0.0, f"Causal leak detected: q=0 output changed by diff {diff_q0}"
+
+    # Query at index 3 (global pos 11) MUST be affected by key at pos 11
+    diff_q3 = (out1[0, 0, 3, :] - out2[0, 0, 3, :]).abs().max().item()
+    assert diff_q3 > 1e-3, "Query at pos 11 failed to attend to key at pos 11"

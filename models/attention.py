@@ -45,24 +45,22 @@ def manual_causal_attention(
 
 
 @functools.lru_cache(maxsize=None)
-def _causal_mask(T: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-    """Causal mask of shape ``(T, T)``: True where attention is allowed."""
-    idx = torch.arange(T, device=device)
-    return idx.unsqueeze(1) >= idx.unsqueeze(0)  # (T_q, T_k)
+def _causal_mask(T_q: int, T_k: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    """Causal mask of shape ``(T_q, T_k)``: True where attention is allowed."""
+    if T_q == T_k:
+        idx = torch.arange(T_q, device=device)
+        return idx.unsqueeze(1) >= idx.unsqueeze(0)
+    idx_q = torch.arange(T_q, device=device) + (T_k - T_q)
+    idx_k = torch.arange(T_k, device=device)
+    return idx_q.unsqueeze(1) >= idx_k.unsqueeze(0)
 
 
 @functools.lru_cache(maxsize=None)
 def _window_mask(T_q: int, T_k: int, window: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
     """Sliding-window mask of shape ``(T_q, T_k)``: True where attention is allowed."""
-    if T_q == T_k:
-        idx = torch.arange(T_q, device=device)
-        # Query i sees keys j with i - j < window (past window), AND causal (j <= i).
-        # The window term is NOT redundant: for window < T it blocks keys j <= i - window.
-        return (idx.unsqueeze(1) - idx.unsqueeze(0) < window) & _causal_mask(T_q, device, dtype)
-    # Decode: T_q=1, T_k grows. Query position is T_k - 1.
-    idx_q = torch.tensor([T_k - 1], device=device)
+    idx_q = torch.arange(T_q, device=device) + (T_k - T_q)
     idx_k = torch.arange(T_k, device=device)
-    return (idx_q.unsqueeze(-1) - idx_k.unsqueeze(0) < window)
+    return (idx_q.unsqueeze(1) - idx_k.unsqueeze(0) < window) & _causal_mask(T_q, T_k, device, dtype)
 
 
 def causal_attention(
@@ -87,12 +85,10 @@ def causal_attention(
         if window is None:
             if T_q == T_k:
                 return F.scaled_dot_product_attention(query_states, key_states, value_states, is_causal=True)
-            return F.scaled_dot_product_attention(query_states, key_states, value_states)
-        # window < T_k path
-        if T_q == T_k:
-            mask = _causal_mask(T_q, device, dtype) & _window_mask(T_q, T_k, window, device, dtype)
-        else:
-            mask = _window_mask(T_q, T_k, window, device, dtype)
+            mask = _causal_mask(T_q, T_k, device, dtype)
+            attn_mask = torch.where(mask, 0.0, float("-inf")).to(dtype).unsqueeze(0).unsqueeze(0)
+            return F.scaled_dot_product_attention(query_states, key_states, value_states, attn_mask=attn_mask)
+        mask = _window_mask(T_q, T_k, window, device, dtype)
         attn_mask = torch.where(mask, 0.0, float("-inf")).to(dtype).unsqueeze(0).unsqueeze(0)
         return F.scaled_dot_product_attention(query_states, key_states, value_states, attn_mask=attn_mask)
 
@@ -104,10 +100,7 @@ def causal_attention(
     v_ext = torch.cat([value_states, sink_v], dim=2)
 
     if window is None or window >= T_k:
-        # Full causal mask + sink column
-        causal = _causal_mask(T_q, device, dtype) if T_q == T_k else torch.ones(T_q, T_k, dtype=torch.bool, device=device)
-    elif T_q == T_k:
-        causal = _causal_mask(T_q, device, dtype) & _window_mask(T_q, T_k, window, device, dtype)
+        causal = _causal_mask(T_q, T_k, device, dtype)
     else:
         causal = _window_mask(T_q, T_k, window, device, dtype)
 
@@ -117,7 +110,6 @@ def causal_attention(
     mask[:, :, :T_k] = torch.where(causal, 0.0, float("-inf")).to(dtype)
     mask[:, :, T_k] = sink_bias.to(dtype).unsqueeze(1).expand(H, T_q)
     return F.scaled_dot_product_attention(query_states, k_ext, v_ext, attn_mask=mask.unsqueeze(0))
-
 
 def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     """Repeat KV heads ``n_rep`` times to match the number of query heads (GQA)."""

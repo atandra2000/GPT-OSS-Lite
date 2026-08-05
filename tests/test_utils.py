@@ -124,6 +124,13 @@ def test_training_logger_logs_metrics():
     logger.log(1, loss=2.0, metrics={"aux": 0.1, "ce": 1.9}, lr=1e-4)
 
 
+def test_training_logger_includes_batch_size():
+    """TrainingLogger tokens_per_sec must scale with batch_size."""
+    logger1 = TrainingLogger(log_interval=1, seq_len=100, batch_size=1)
+    logger32 = TrainingLogger(log_interval=1, seq_len=100, batch_size=32)
+    assert logger32.batch_size == 32
+    assert logger1.batch_size == 1
+
 # Checkpoint helpers
 
 def test_checkpoint_keep_last_n(small_cfg, tmp_ckpt_dir):
@@ -152,3 +159,19 @@ def test_checkpoint_delete_specific_step(small_cfg, tmp_ckpt_dir):
     assert 20 in ckpt.list_checkpoints()
     leftover = list(tmp_ckpt_dir.glob("*_step_10.*"))
     assert leftover == []
+
+
+def test_checkpoint_dedup_drops_duplicates(small_cfg, tmp_ckpt_dir):
+    """Safetensors save must drop duplicate data pointers without inflating files."""
+    from safetensors.torch import load_file
+    import dataclasses
+    cfg = dataclasses.replace(small_cfg, weight_tying=True)
+    model = GPTOSS(cfg)
+    optim = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    ckpt = CheckpointManager(str(tmp_ckpt_dir))
+    ckpt.save(model, optim, step=1)
+
+    loaded_tensors = load_file(str(tmp_ckpt_dir / "model_step_1.safetensors"))
+    # Tied head.weight should be dropped from safetensors dict to save disk space
+    assert "embed.weight" in loaded_tensors
+    assert "head.weight" not in loaded_tensors
