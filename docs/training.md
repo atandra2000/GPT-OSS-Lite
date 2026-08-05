@@ -4,9 +4,7 @@
 
 > **Config reference:** [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml)
 
-> **Related:** [training.md](training.md) (corpus and loader),
-> [moe.md](concepts/moe.md) (aux loss α=0.01, Triton opt-in)
-> (optional `moe_dispatch`).
+> **Related:** [training.md](training.md) (corpus and loader), [moe.md](concepts/moe.md) (aux loss α=0.01, Triton opt-in) (optional `moe_dispatch`).
 
 ---
 
@@ -15,19 +13,11 @@
 ## Abstract
 
 [`training/pretrain.py`](../training/pretrain.py) is the sole pre-training script
-for GPT-OSS-Lite. It implements a **from-scratch PyTorch loop** — no HuggingFace
-Trainer, no Lightning. The default A100 recipe trains a **~502 M total /
-~247 M active** model for **61,000 optimizer steps** on an **8.0 B-token**
-Chinchilla-optimal corpus at **131,072 tokens per step**.
+for GPT-OSS-Lite. It implements a **from-scratch PyTorch loop** — no HuggingFace Trainer, no Lightning. The default A100 recipe trains a **~502 M total / ~247 M active** model for **61,000 optimizer steps** on an **8.0 B-token** Chinchilla-optimal corpus at **131,072 tokens per step**.
 
-Stability features: **3000-step warmup**, cosine decay to **5% of peak LR**,
-**gradient clipping at 1.0**, **NaN guard with rollback** after 5 consecutive
-non-finite losses, **BF16 autocast**, **chunked cross-entropy** (chunk_size
-8192), and **auxiliary MoE load-balancing loss** (α = 0.01).
+Stability features: **3000-step warmup**, cosine decay to **5% of peak LR**, **gradient clipping at 1.0**, **NaN guard with rollback** after 5 consecutive non-finite losses, **BF16 autocast**, **chunked cross-entropy** (chunk_size 8192), and **auxiliary MoE load-balancing loss** (α = 0.01).
 
-Performance features: **`torch.compile(max-autotune)`**, **TF32**, **cuDNN
-benchmark_limit=0**, **cuBLASLt** preferred BLAS, **AdamW foreach+fused**,
-**gradient checkpointing every 3 layers**.
+Performance features: **`torch.compile(max-autotune)`**, **TF32**, **cuDNN benchmark_limit=0**, **cuBLASLt** preferred BLAS, **AdamW foreach+fused**, **gradient checkpointing every 3 layers**.
 
 ---
 
@@ -45,8 +35,7 @@ L = L_CE + α · L_aux
 | `L_aux` | Mean aux loss across 12 MoE layers | Load-balancing (Switch/GShard) |
 | `α` | `aux_loss_alpha` = **0.01** | Switch Transformer default |
 
-The model returns `(logits, aux_loss)` from [`GPTOSS.forward`](../models/transformer.py).
-`aux_loss` is already averaged across layers.
+The model returns `(logits, aux_loss)` from [`GPTOSS.forward`](../models/transformer.py). `aux_loss` is already averaged across layers.
 
 During micro-batches, the **scalar backward target** is:
 
@@ -71,8 +60,7 @@ From [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml):
 | `total_steps` | 61,000 |
 | **Total training tokens** | **61,000 × 131,072 ≈ 8.0 × 10⁹** |
 
-This matches the **8.0 B-token** corpus prepared by the data pipeline
-(Chinchilla-optimal for ~500 M-param models).
+This matches the **8.0 B-token** corpus prepared by the data pipeline (Chinchilla-optimal for ~500 M-param models).
 
 ---
 
@@ -80,8 +68,7 @@ This matches the **8.0 B-token** corpus prepared by the data pipeline
 
 The A100 recipe lives in
 [`configs/pretrain_a100_502m.yaml`](../configs/pretrain_a100_502m.yaml). A smoke
-config [`pretrain_gpu_smoke.yaml`](../configs/pretrain_gpu_smoke.yaml) exercises
-the full stack on 4 GB GPUs.
+config [`pretrain_gpu_smoke.yaml`](../configs/pretrain_gpu_smoke.yaml) exercises the full stack on 4 GB GPUs.
 
 | Block | Headline knobs |
 |---|---|
@@ -144,9 +131,7 @@ def seed_everything(seed: int) -> None:
 | No `--seed` | **Not** reproducible |
 | Checkpoint resume + RNG file | Restores exact continuation |
 
-`CUBLAS_WORKSPACE_CONFIG=:4096:8` selects deterministic cuBLAS workspace
-when seed is set. Without `--seed`, the env var is still set if unset, but
-RNGs are not seeded.
+`CUBLAS_WORKSPACE_CONFIG=:4096:8` selects deterministic cuBLAS workspace when seed is set. Without `--seed`, the env var is still set if unset, but RNGs are not seeded.
 
 Checkpoints include RNG state in `rng_step_N.pt` (see
 [RNG State Persistence](#rng-state-persistence)).
@@ -191,9 +176,7 @@ model = GPTOSS(model_cfg).to(dev)
 [model] total params: 502.xxM, active: 247.xxM
 ```
 
-`ModelConfig` is built from YAML `model:` block via dataclass constructor.
-Invalid configs fail in `ModelConfig.__post_init__` (GQA divisibility, MoE
-counts, YaRN lengths).
+`ModelConfig` is built from YAML `model:` block via dataclass constructor. Invalid configs fail in `ModelConfig.__post_init__` (GQA divisibility, MoE counts, YaRN lengths).
 
 AMP dtype from config:
 
@@ -220,8 +203,7 @@ if compile_enabled:
 | Mode | `"max-autotune"` |
 | `fullgraph` | `False` — allows graph breaks |
 
-First steps incur compile/autotune latency. Failure prints warning and
-continues without compile.
+First steps incur compile/autotune latency. Failure prints warning and continues without compile.
 
 ---
 
@@ -234,26 +216,19 @@ est = estimate_model_memory_gb(model, seq_len=..., batch_size=micro_bs, grad_che
 assert_fits_in_available_gpu(est)
 ```
 
-From [`utils/memory.py`](../utils/memory.py). OOM risk prints WARNING but does
-not abort (allows smoke tests on small GPUs).
+From [`utils/memory.py`](../utils/memory.py). OOM risk prints WARNING but does not abort (allows smoke tests on small GPUs).
 
-Gradient checkpointing (`grad_checkpoint: true`, every 3 layers) trades ~30%
-extra compute for ~40% activation memory savings at `T=4096`.
+Gradient checkpointing (`grad_checkpoint: true`, every 3 layers) trades ~30% extra compute for ~40% activation memory savings at `T=4096`.
 
 ### Memory accounting derivation
 
-Let $P = 501836640$ be the total parameter count (deduplicated for
-weight tying). Serialized BF16 weights cost 2 bytes per parameter:
+Let $P = 501836640$ be the total parameter count (deduplicated for weight tying). Serialized BF16 weights cost 2 bytes per parameter:
 
 $$
 W_{\mathrm{bf16}} = 2P = 1003673280\ \text{B} \approx 0.94\ \text{GB}, \tag{1}
 $$
 
-the size of a `model_step_N.safetensors` file (≈ 1.00 × 10⁹ B in decimal
-units). In GPU memory the parameters live as FP32 master weights — autocast
-casts to BF16 only at matmul boundaries ([optimizers theory](concepts/optimizers-and-numerics.md) §4.6)
-— and AdamW keeps two more FP32 tensors per parameter, the moments $m$ and
-$v$. Weights + optimizer state + FP32 gradient buffers:
+the size of a `model_step_N.safetensors` file (≈ 1.00 × 10⁹ B in decimal units). In GPU memory the parameters live as FP32 master weights — autocast casts to BF16 only at matmul boundaries ([optimizers theory](concepts/optimizers-and-numerics.md) §4.6) — and AdamW keeps two more FP32 tensors per parameter, the moments $m$ and $v$. Weights + optimizer state + FP32 gradient buffers:
 
 $$
 M_{\mathrm{optim}} = (4 + 4 + 4)\,P = 12P = 6.02 \times 10^{9}\ \text{B} \approx 5.6\ \text{GiB}, \tag{2}
@@ -263,37 +238,17 @@ $$
 M_{\mathrm{fixed}} = (4 + 12)\,P = 16P \approx 7.5\ \text{GiB}. \tag{3}
 $$
 
-Equation (3) is exactly the `param_bytes + optim_bytes` sum in
-`utils/memory.py:estimate_model_memory_gb`: `element_size() × P` for the FP32
-model (4P) plus 12P for the FP32 masters + moments. MoE sparsity does not
-reduce this floor: every expert occasionally receives gradients, so all
-501.8M parameters carry state.
+Equation (3) is exactly the `param_bytes + optim_bytes` sum in `utils/memory.py:estimate_model_memory_gb`: `element_size() × P` for the FP32 model (4P) plus 12P for the FP32 masters + moments. MoE sparsity does not reduce this floor: every expert occasionally receives gradients, so all 501.8M parameters carry state.
 
-**Activations with gradient checkpointing.** The estimator scales saved
-activations by a store factor `s(g) = 1/g + (1 − 1/g)·½` for checkpointing
-every $g$-th block: at `grad_checkpoint_every=3`, one of every three blocks
-saves no forward activations and the other two save about half, so
-$s(3) = 2/3$ — a 33% saving (the ~40% rough figure above). The activation
-block is the attention activations plus the MoE intermediates (3 live experts
-per layer × 3 matrices each):
+**Activations with gradient checkpointing.** The estimator scales saved activations by a store factor `s(g) = 1/g + (1 − 1/g)·½` for checkpointing every $g$-th block: at `grad_checkpoint_every=3`, one of every three blocks saves no forward activations and the other two save about half, so $s(3) = 2/3$ — a 33% saving (the ~40% rough figure above). The activation block is the attention activations plus the MoE intermediates (3 live experts per layer × 3 matrices each):
 
 $$
 M_{\mathrm{act}} = s(3)\,\big[\,12 \cdot T \cdot B \cdot d_{\mathrm{model}} + 12 \cdot 3 \cdot 3 \cdot T \cdot B \cdot f_{\mathrm{ffn}}\big] \cdot 2\ \text{B} \approx 7.1\ \text{GiB} \quad \text{at } T{=}4096,\ B{=}8. \tag{4}
 $$
 
-The KV cache during training sizes windowed layers at $\max(W, T) = 4096$
-(`win_len = window if steady_state else max(window, seq_len)`), so no sliding
-savings before steady-state inference: 6 windowed + 6 global layers × 4096
-token-slots × 8 batch × 1536 B per slot ≈ 0.56 GiB.
+The KV cache during training sizes windowed layers at $\max(W, T) = 4096$ (`win_len = window if steady_state else max(window, seq_len)`), so no sliding savings before steady-state inference: 6 windowed + 6 global layers × 4096 token-slots × 8 batch × 1536 B per slot ≈ 0.56 GiB.
 
-**Total vs the microbench threshold.** The full estimate — eq. (3) + KV +
-eq. (4) + ~2 GiB runtime overhead — is ≈ 17.2 GiB, comfortably under the
-**25 GB ceiling** of `scripts/microbench_a100.py` (`--threshold-gb 25.0`,
-chosen to leave ~55 GB of the 80 GB A100 for batch scaling). The 17.2 GiB
-figure is *derived* from the estimator's formula; the measured
-`torch.cuda.max_memory_allocated` peak on an A100 is **`[INFERENCE]`** —
-`.benchmarks/` is empty. Confirm with
-`python3 scripts/microbench_a100.py --config configs/pretrain_a100_502m.yaml --batch-size 8 --seq-len 4096`.
+**Total vs the microbench threshold.** The full estimate — eq. (3) + KV + eq. (4) + ~2 GiB runtime overhead — is ≈ 17.2 GiB, comfortably under the **25 GB ceiling** of `scripts/microbench_a100.py` (`--threshold-gb 25.0`, chosen to leave ~55 GB of the 80 GB A100 for batch scaling). The 17.2 GiB figure is *derived* from the estimator's formula; the measured `torch.cuda.max_memory_allocated` peak on an A100 is **`[INFERENCE]`** — `.benchmarks/` is empty. Confirm with `python3 scripts/microbench_a100.py --config configs/pretrain_a100_502m.yaml --batch-size 8 --seq-len 4096`.
 
 ---
 
@@ -316,47 +271,27 @@ Embedding is excluded from decay because it is tied to the LM head weight.
 
 ### Parameter-group derivation
 
-AdamW applies the decoupled update ([optimizers theory](concepts/optimizers-and-numerics.md)
-eq. 11) to every parameter of a group with that group's decay $\lambda$:
+AdamW applies the decoupled update ([optimizers theory](concepts/optimizers-and-numerics.md) eq. 11) to every parameter of a group with that group's decay $\lambda$:
 
 $$
 \theta \leftarrow (1 - \eta\lambda)\,\theta - \eta\,\frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon}. \tag{5}
 $$
 
-The two groups are built by a substring filter over parameter names. Let
-$K = \{\text{bias}, \text{norm}, \text{embed}\}$ and $n(p)$ the parameter
-name; the partition is
+The two groups are built by a substring filter over parameter names. Let $K = \{\text{bias}, \text{norm}, \text{embed}\}$ and $n(p)$ the parameter name; the partition is
 
 $$
 \text{decay} = \{\,p : n(p) \text{ contains no keyword of } K\,\}, \qquad
 \text{no-decay} = \{\,p : n(p) \text{ contains a keyword of } K\,\}. \tag{6}
 $$
 
-Every named parameter satisfies exactly one predicate, so the groups are
-exhaustive and disjoint — no tensor is decayed twice and none is missed. Two
-details make the weight-tying exclusion sound:
+Every named parameter satisfies exactly one predicate, so the groups are exhaustive and disjoint — no tensor is decayed twice and none is missed. Two details make the weight-tying exclusion sound:
 
 - `model.named_parameters()` deduplicates by tensor identity
-  (`remove_duplicate=True`, the default). Because
-  `models/transformer.py:GPTOSS.__init__` assigns
-  `self.head.weight = self.embed.weight`, the shared tensor is yielded once,
-  under its first-registered name `embed.weight`, which the keyword `embed`
-  catches — the `head.weight` alias never reaches the decay group, so the tied
-  tensor has a single group entry.
+  (`remove_duplicate=True`, the default). Because `models/transformer.py:GPTOSS.__init__` assigns `self.head.weight = self.embed.weight`, the shared tensor is yielded once, under its first-registered name `embed.weight`, which the keyword `embed` catches — the `head.weight` alias never reaches the decay group, so the tied tensor has a single group entry.
 - The split at production scale (verified): decay holds **403,513,344**
-  parameters (372 tensors), no-decay holds **98,323,296** (38 tensors), and
-  the two sum to 501,836,640 exactly. The no-decay total decomposes as
-  $128000 \times 768 = 98304000$ (tied embedding) +
-  $25 \times 768 = 19200$ (24 per-block RMSNorm gains + final norm) +
-  $12 \times 8 = 96$ (per-head sink biases) = 98,323,296.
+  parameters (372 tensors), no-decay holds **98,323,296** (38 tensors), and the two sum to 501,836,640 exactly. The no-decay total decomposes as $128000 \times 768 = 98304000$ (tied embedding) + $25 \times 768 = 19200$ (24 per-block RMSNorm gains + final norm) + $12 \times 8 = 96$ (per-head sink biases) = 98,323,296.
 
-Why these three classes: the embedding is tied to the LM head, so its rows
-serve both the input projection and the logit projection — decaying it would
-directly shrink the scale the head weight applies to the final hidden state.
-RMSNorm gains are reparameterization-redundant scales (the norm is
-scale-invariant in its input), and biases are additive offsets with no
-overfitting risk; decaying either is at best meaningless, at worst harmful to
-the residual stream. This mirrors LLaMA/GPT-3 practice.
+Why these three classes: the embedding is tied to the LM head, so its rows serve both the input projection and the logit projection — decaying it would directly shrink the scale the head weight applies to the final hidden state. RMSNorm gains are reparameterization-redundant scales (the norm is scale-invariant in its input), and biases are additive offsets with no overfitting risk; decaying either is at best meaningless, at worst harmful to the residual stream. This mirrors LLaMA/GPT-3 practice.
 
 ### AdamW settings
 
@@ -383,9 +318,7 @@ optim = AdamW(
 | `foreach` | True | Faster multi-tensor update |
 | `fused` | True on CUDA | ~1.5–2× vs default loop on A100 |
 
-**Why eps=1e-6?** BF16 has 7 mantissa bits; `1e-8` underflows in Adam's
-second moment, silently stalling late training. Matches DeepSeek-V3 and
-LLaMA-3 recipes.
+**Why eps=1e-6?** BF16 has 7 mantissa bits; `1e-8` underflows in Adam's second moment, silently stalling late training. Matches DeepSeek-V3 and LLaMA-3 recipes.
 
 ---
 
@@ -409,15 +342,11 @@ else:              cosine from 1.0 → 0.05 over (total - warmup) steps
 
 Peak LR = **4e-4**; floor LR = **2e-5** (5% of peak).
 
-Warmup **3000 steps** ≈ 4.9% of total — industry MoE standard 2–5% for
-top-k routing stability.
+Warmup **3000 steps** ≈ 4.9% of total — industry MoE standard 2–5% for top-k routing stability.
 
 ### Closed form and LR budget
 
-`training/pretrain.py:make_warmup_cosine_lambda` defines the LR multiplier
-$\lambda(s)$ as an exact piecewise function of the optimizer step $s$, with
-warmup $W = 3000$, total steps $T = 61000$, and floor ratio
-$\lambda_{\min} = 0.05$:
+`training/pretrain.py:make_warmup_cosine_lambda` defines the LR multiplier $\lambda(s)$ as an exact piecewise function of the optimizer step $s$, with warmup $W = 3000$, total steps $T = 61000$, and floor ratio $\lambda_{\min} = 0.05$:
 
 $$
 \lambda(s) = \begin{cases}
@@ -427,18 +356,9 @@ $$
 \end{cases} \tag{7}
 $$
 
-The warmup branch is the linear ramp $s/W$; the cosine branch interpolates
-$\lambda$ from 1.0 down to $\lambda_{\min}$ with **zero slope at both
-endpoints** (the cosine's derivative is $\propto \sin$, which vanishes at
-$s = W$ and $s = T$), avoiding the kinks of a linear decay. The third branch
-clamps the floor: the schedule never reaches zero, so the final steps refine
-rather than add noise.
+The warmup branch is the linear ramp $s/W$; the cosine branch interpolates $\lambda$ from 1.0 down to $\lambda_{\min}$ with **zero slope at both endpoints** (the cosine's derivative is $\propto \sin$, which vanishes at $s = W$ and $s = T$), avoiding the kinks of a linear decay. The third branch clamps the floor: the schedule never reaches zero, so the final steps refine rather than add noise.
 
-**Effective LR area.** The total LR budget of the run is the integral of
-$\lambda$ over the schedule. Warmup contributes a triangle of area $W/2$; the
-cosine half-wave integrates to exactly half its rectangle (a full period of
-$\cos$ integrates to zero), so the decay contributes
-$(T - W)(1 + \lambda_{\min})/2$:
+**Effective LR area.** The total LR budget of the run is the integral of $\lambda$ over the schedule. Warmup contributes a triangle of area $W/2$; the cosine half-wave integrates to exactly half its rectangle (a full period of $\cos$ integrates to zero), so the decay contributes $(T - W)(1 + \lambda_{\min})/2$:
 
 $$
 A = \int_0^W \frac{s}{W}\,ds + \int_W^T \Big[\lambda_{\min}
@@ -453,27 +373,11 @@ A = \frac{3000}{2} + \frac{58000}{2}\,(1.05) = 1500 + 30450 = 31950, \qquad
 \bar\lambda = \frac{A}{T} = \frac{31950}{61000} \approx 0.52. \tag{9}
 $$
 
-The run's total LR budget equals **31,950 optimizer steps at constant peak
-LR** — about 52% of the nominal 61,000 steps. Two consequences: (i)
-$\bar\lambda \approx 0.52$ is the mean multiplier, the right comparator
-against a constant-LR baseline of equal step count; (ii) warmup contributes
-only $1500 / 31950 \approx 4.7\%$ of the area despite occupying 4.9% of the
-steps — the triangle shape halves its budget.
+The run's total LR budget equals **31,950 optimizer steps at constant peak LR** — about 52% of the nominal 61,000 steps. Two consequences: (i) $\bar\lambda \approx 0.52$ is the mean multiplier, the right comparator against a constant-LR baseline of equal step count; (ii) warmup contributes only $1500 / 31950 \approx 4.7\%$ of the area despite occupying 4.9% of the steps — the triangle shape halves its budget.
 
-**Why 3000 warmup steps for MoE.** At initialization the router logits are
-Gaussian-scaled by `models/transformer.py:ModelConfig.init_std` = 0.02, so the
-routing softmax is nearly uniform and top-2 selection is effectively random;
-router gradients are correspondingly noisy, and the aux loss (α = 0.01,
+**Why 3000 warmup steps for MoE.** At initialization the router logits are Gaussian-scaled by `models/transformer.py:ModelConfig.init_std` = 0.02, so the routing softmax is nearly uniform and top-2 selection is effectively random; router gradients are correspondingly noisy, and the aux loss (α = 0.01,
 [moe.md](concepts/moe.md)) injects a second, weaker signal that can collapse the gate
-onto one expert before the CE signal stabilizes. Warmup also neutralizes the
-worst Adam pathology: at $t = 1$ the bias-corrected step is
-$\hat{m}_1 / \sqrt{\hat{v}_1} = \operatorname{sign}(g_1)$ — every coordinate
-moves by exactly $\pm\eta$ ([optimizers theory](concepts/optimizers-and-numerics.md) §4.3) —
-so an immediate peak LR would apply full-magnitude sign-noise steps to every
-weight. Ramping $\eta$ from 0 damps both effects. The 3000-step ramp spans
-$3000 \times 131072 \approx 0.39$B tokens, ~4.9% of the 8B-token corpus;
-$W/T = 4.9\%$ sits inside the 2–5% band the config comment calls the MoE
-industry standard (2000 steps, 3.3%, "was on the low end").
+onto one expert before the CE signal stabilizes. Warmup also neutralizes the worst Adam pathology: at $t = 1$ the bias-corrected step is $\hat{m}_1 / \sqrt{\hat{v}_1} = \operatorname{sign}(g_1)$ — every coordinate moves by exactly $\pm\eta$ ([optimizers theory](concepts/optimizers-and-numerics.md) §4.3) — so an immediate peak LR would apply full-magnitude sign-noise steps to every weight. Ramping $\eta$ from 0 damps both effects. The 3000-step ramp spans $3000 \times 131072 \approx 0.39$B tokens, ~4.9% of the 8B-token corpus; $W/T = 4.9\%$ sits inside the 2–5% band the config comment calls the MoE industry standard (2000 steps, 3.3%, "was on the low end").
 
 ```python
 sched = LambdaLR(optim, lr_lambda)
@@ -499,8 +403,7 @@ loader = DataLoader(
 
 See [training.md](training.md) for `training/pretrain.py:PretrainDataset` internals.
 
-Default path: `data/pretrain_chinchilla` — directory of `shard_*.bin` + optional
-`manifest.json`.
+Default path: `data/pretrain_chinchilla` — directory of `shard_*.bin` + optional `manifest.json`.
 
 ---
 
@@ -562,8 +465,7 @@ RMSNorm in the model keeps activations in native dtype (no FP32 copy in norm).
 
 ## Chunked Cross-Entropy
 
-`training/pretrain.py:chunked_cross_entropy` avoids materialising the full
-`(B·T, vocab)` softmax by summing chunk-local losses:
+`training/pretrain.py:chunked_cross_entropy` avoids materialising the full `(B·T, vocab)` softmax by summing chunk-local losses:
 
 ```python
 def chunked_cross_entropy(logits, targets, chunk_size=4096):
@@ -586,49 +488,28 @@ ce = chunked_cross_entropy(logits, target_ids, chunk_size=8192)
 
 At `B=8`, `T=4096`: `n_total = 32,768` tokens → 4 CE chunks (was 8 at 4096).
 
-**Memory:** avoids materialising full `(B×T, vocab)` softmax — peak intermediate
-~`chunk_size × vocab_size` instead of `B×T × vocab_size`.
+**Memory:** avoids materialising full `(B×T, vocab)` softmax — peak intermediate ~`chunk_size × vocab_size` instead of `B×T × vocab_size`.
 
-With `vocab=128000`, chunk 8192 ≈ 1 GB BF16 logits slice — well under 80 GB
-with model + activations.
+With `vocab=128000`, chunk 8192 ≈ 1 GB BF16 logits slice — well under 80 GB with model + activations.
 
 ### Equivalence proof
 
-Let $N = B \cdot T = 32768$ be the number of tokens in the batch and
-$V = 128000$ the vocabulary. The per-token cross-entropy for logits
-$z_t \in \mathbb{R}^{V}$ and target token $y_t$ is
+Let $N = B \cdot T = 32768$ be the number of tokens in the batch and $V = 128000$ the vocabulary. The per-token cross-entropy for logits $z_t \in \mathbb{R}^{V}$ and target token $y_t$ is
 
 $$
 \ell_t = -\log \operatorname{softmax}(z_t)_{y_t} = -z_{t,y_t} + \log \sum_{v=1}^{V} e^{z_{t,v}}, \tag{10}
 $$
 
-and the full-batch loss is the mean $\mathcal{L} = \tfrac{1}{N}\sum_{t=1}^{N}\ell_t$.
-The softmax normalizes over the **vocabulary axis only** — each token's
-probability is computed independently of the other $N-1$ tokens. That is what
-makes chunking free: cross-entropy is additive over tokens, so for any
-partition of $\{1,\dots,N\}$ into chunks $S_1,\dots,S_C$,
+and the full-batch loss is the mean $\mathcal{L} = \tfrac{1}{N}\sum_{t=1}^{N}\ell_t$. The softmax normalizes over the **vocabulary axis only** — each token's probability is computed independently of the other $N-1$ tokens. That is what makes chunking free: cross-entropy is additive over tokens, so for any partition of $\{1,\dots,N\}$ into chunks $S_1,\dots,S_C$,
 
 $$
 \frac{1}{N}\sum_{c=1}^{C}\sum_{t \in S_c} \ell_t
 = \frac{1}{N}\sum_{t=1}^{N} \ell_t = \mathcal{L}. \tag{11}
 $$
 
-`training/pretrain.py:chunked_cross_entropy` computes exactly the left-hand
-side: each `F.cross_entropy(..., reduction="sum")` yields
-$\sum_{t \in S_c}\ell_t$, the chunk sums accumulate, and the final
-`total_loss / n_total` divides by $N$. The only cross-token operation in the
-entire loss is that final mean, and summing chunk-local sums before dividing
-recovers it identically. If the loss had any normalization over the *token*
-axis, chunking would change it — it does not. Chunked and full CE are equal in
-real arithmetic; in floating point they differ only by summation order and the
-dtype of the accumulator (`total_loss` lives in the logits' dtype, BF16 under
-autocast), a rounding effect that is negligible for losses $O(1)$ over 4
-chunks ([numerics](concepts/optimizers-and-numerics.md)).
+`training/pretrain.py:chunked_cross_entropy` computes exactly the left-hand side: each `F.cross_entropy(..., reduction="sum")` yields $\sum_{t \in S_c}\ell_t$, the chunk sums accumulate, and the final `total_loss / n_total` divides by $N$. The only cross-token operation in the entire loss is that final mean, and summing chunk-local sums before dividing recovers it identically. If the loss had any normalization over the *token* axis, chunking would change it — it does not. Chunked and full CE are equal in real arithmetic; in floating point they differ only by summation order and the dtype of the accumulator (`total_loss` lives in the logits' dtype, BF16 under autocast), a rounding effect that is negligible for losses $O(1)$ over 4 chunks ([numerics](concepts/optimizers-and-numerics.md)).
 
-**Why the memory drops.** A single `F.cross_entropy` over all $N$ tokens
-materializes both the logits and the log-softmax output, each $N \times V \times
-2$ bytes; chunking bounds the live slice to $C = \min(\text{chunk\_size}, N)$
-tokens:
+**Why the memory drops.** A single `F.cross_entropy` over all $N$ tokens materializes both the logits and the log-softmax output, each $N \times V \times 2$ bytes; chunking bounds the live slice to $C = \min(\text{chunk\_size}, N)$ tokens:
 
 $$
 M_{\mathrm{full}} \approx 2 \cdot N \cdot V \cdot 2\ \text{B}
@@ -636,11 +517,7 @@ M_{\mathrm{full}} \approx 2 \cdot N \cdot V \cdot 2\ \text{B}
 M_{\mathrm{chunk}} \approx 2 \cdot C \cdot V \cdot 2\ \text{B}. \tag{12}
 $$
 
-At `chunk_size=8192`, $C = 8192$ gives $M_{\mathrm{chunk}} \approx 4.2$ GB — a
-$N/C = 4\times$ reduction. (Each live slice alone is
-$8192 \times 128000 \times 2 = 2.1 \times 10^9$ B ≈ 2.1 GB; the "≈ 1 GB"
-figure above underestimates the slice, though the conclusion — well under the
-80 GB budget — is unchanged.)
+At `chunk_size=8192`, $C = 8192$ gives $M_{\mathrm{chunk}} \approx 4.2$ GB — a $N/C = 4\times$ reduction. (Each live slice alone is $8192 \times 128000 \times 2 = 2.1 \times 10^9$ B ≈ 2.1 GB; the "≈ 1 GB" figure above underestimates the slice, though the conclusion — well under the 80 GB budget — is unchanged.)
 
 ---
 
@@ -658,11 +535,9 @@ logger.log(step, ce_val, metrics={"aux": aux_val}, lr=lr)
 pbar.set_postfix(ce=f"{ce.item():.4f}", aux=f"{aux_loss.item():.4f}")
 ```
 
-Healthy training: `aux` starts ~1–4, decreases toward ~0.5–1.5 as routing
-balances. If `aux → 0` while one expert dominates, check router gradients.
+Healthy training: `aux` starts ~1–4, decreases toward ~0.5–1.5 as routing balances. If `aux → 0` while one expert dominates, check router gradients.
 
-**Distinct from DeepSeek-v3-Lite:** GPT-OSS uses standard aux loss, not
-aux-loss-free bias updates ([moe.md](concepts/moe.md)).
+**Distinct from DeepSeek-v3-Lite:** GPT-OSS uses standard aux loss, not aux-loss-free bias updates ([moe.md](concepts/moe.md)).
 
 ---
 
@@ -685,22 +560,18 @@ if micro_step % accum == 0:
     optim.zero_grad(set_to_none=True)
 ```
 
-`set_to_none=True` frees gradient tensors instead of zeroing — lower peak
-memory.
+`set_to_none=True` frees gradient tensors instead of zeroing — lower peak memory.
 
 ### Equivalence derivation
 
-Gradient accumulation with $k = 4$ micro-batches of $m$ sequences each is
-exact, not an approximation. Let the full-batch objective over all
-$N = k \cdot m$ samples be
+Gradient accumulation with $k = 4$ micro-batches of $m$ sequences each is exact, not an approximation. Let the full-batch objective over all $N = k \cdot m$ samples be
 
 $$
 \mathcal{L}(\theta) = \frac{1}{km}\sum_{i=1}^{k}\sum_{j=1}^{m} \ell_{i,j}(\theta), \qquad
 \nabla\mathcal{L} = \frac{1}{km}\sum_{i,j} \nabla\ell_{i,j}, \tag{13}
 $$
 
-and let $\mathcal{L}_i$ be micro-batch $i$'s loss, a mean over its $m$
-samples. The sum of micro-batch gradients, each scaled by $1/k$, is
+and let $\mathcal{L}_i$ be micro-batch $i$'s loss, a mean over its $m$ samples. The sum of micro-batch gradients, each scaled by $1/k$, is
 
 $$
 \frac{1}{k}\sum_{i=1}^{k} \nabla\mathcal{L}_i
@@ -709,14 +580,9 @@ $$
 = \nabla\mathcal{L}, \tag{14}
 $$
 
-because gradients accumulate linearly — each sample appears in exactly one
-micro-batch, and averaging commutes with the gradient. PyTorch's
-`loss.backward()` implements the left-hand side: it adds each scaled
-micro-batch gradient into `.grad`, so after $k$ micro-batches `.grad` holds
-$\nabla\mathcal{L}$ exactly.
+because gradients accumulate linearly — each sample appears in exactly one micro-batch, and averaging commutes with the gradient. PyTorch's `loss.backward()` implements the left-hand side: it adds each scaled micro-batch gradient into `.grad`, so after $k$ micro-batches `.grad` holds $\nabla\mathcal{L}$ exactly.
 
-The combined objective follows the same rule term by term. With
-`loss = (ce + aux_alpha * aux_loss) / accum` in `training/pretrain.py:main`:
+The combined objective follows the same rule term by term. With `loss = (ce + aux_alpha * aux_loss) / accum` in `training/pretrain.py:main`:
 
 $$
 \sum_{i=1}^{k} \nabla\Big(\frac{\text{ce}_i + \alpha\,\text{aux}_i}{k}\Big)
@@ -725,18 +591,7 @@ $$
 = \nabla\mathcal{L}_{\mathrm{CE}} + \alpha\,\nabla\mathcal{L}_{\mathrm{aux}}, \tag{15}
 $$
 
-so both the CE and the aux term inherit the same $1/k$ scale and the relative
-weight $\alpha = 0.01$ is preserved. The division happens *before*
-`backward()`, scaling the gradients as they are accumulated. Why not divide
-afterward? Adam's update ratio $\hat{m}/\sqrt{\hat{v}}$ is scale-invariant
-([optimizers theory](concepts/optimizers-and-numerics.md) eq. 9), but `clip_grad_norm_` at
-1.0 is not — an un-scaled accumulated gradient would have a $k \times$ larger
-norm and would trip the clip far more often — and the decoupled weight decay
-is also un-scaled, so the decay/update balance would shift with $k$. Dividing
-keeps behavior identical for any $k$: `accum=1` and `accum=4` produce the same
-update scale, which is why the optimizer step and the LR scheduler tick only
-at the `micro_step % accum == 0` boundary, and
-`optim.zero_grad(set_to_none=True)` then releases the accumulated buffers.
+so both the CE and the aux term inherit the same $1/k$ scale and the relative weight $\alpha = 0.01$ is preserved. The division happens *before* `backward()`, scaling the gradients as they are accumulated. Why not divide afterward? Adam's update ratio $\hat{m}/\sqrt{\hat{v}}$ is scale-invariant ([optimizers theory](concepts/optimizers-and-numerics.md) eq. 9), but `clip_grad_norm_` at 1.0 is not — an un-scaled accumulated gradient would have a $k \times$ larger norm and would trip the clip far more often — and the decoupled weight decay is also un-scaled, so the decay/update balance would shift with $k$. Dividing keeps behavior identical for any $k$: `accum=1` and `accum=4` produce the same update scale, which is why the optimizer step and the LR scheduler tick only at the `micro_step % accum == 0` boundary, and `optim.zero_grad(set_to_none=True)` then releases the accumulated buffers.
 
 ---
 
@@ -773,8 +628,7 @@ if use_grad_ckpt and (layer_idx % grad_ckpt_every == 0):
 | `grad_checkpoint` | `true` |
 | `grad_checkpoint_every` | **3** |
 
-Every 3rd block (layers 0, 3, 6, 9) recomputes forward on backward. Layers
-1, 2, 4, 5, 7, 8, 10, 11 store activations normally.
+Every 3rd block (layers 0, 3, 6, 9) recomputes forward on backward. Layers 1, 2, 4, 5, 7, 8, 10, 11 store activations normally.
 
 ---
 
@@ -805,8 +659,7 @@ if not torch.isfinite(loss):
 | No checkpoint available | `RuntimeError` |
 | `nan_guard: false` | Immediate `RuntimeError` on non-finite |
 
-**Never disable** NaN guard in production without explicit approval
-([`AGENTS.md`](../AGENTS.md) rule 6).
+**Never disable** NaN guard in production without explicit approval ([`AGENTS.md`](../AGENTS.md) rule 6).
 
 ---
 
@@ -818,9 +671,7 @@ if not torch.isfinite(loss):
 log_interval: 50
 ```
 
-`utils/logging.py:TrainingLogger.log` emits CE loss, aux metric, LR every 50
-optimizer steps; `utils/logging.py:TrainingLogger.finish` closes the optional
-WandB run. Seq len passed for tokens/sec estimation.
+`utils/logging.py:TrainingLogger.log` emits CE loss, aux metric, LR every 50 optimizer steps; `utils/logging.py:TrainingLogger.finish` closes the optional WandB run. Seq len passed for tokens/sec estimation.
 
 ---
 
@@ -834,8 +685,7 @@ WandB run. Seq len passed for tokens/sec estimation.
 ckpt.save(model, optim, step, scheduler=sched, extra_meta={...})
 ```
 
-`utils/checkpoint.py:CheckpointManager.save` writes atomically;
-`utils/checkpoint.py:CheckpointManager.load` restores weights and returns meta.
+`utils/checkpoint.py:CheckpointManager.save` writes atomically; `utils/checkpoint.py:CheckpointManager.load` restores weights and returns meta.
 
 | File | Format | Contents |
 |---|---|---|
@@ -850,23 +700,13 @@ ckpt.save(model, optim, step, scheduler=sched, extra_meta={...})
 write to .tmp in save_dir → os.replace to final path
 ```
 
-Safetensors save **clones** duplicate `data_ptr` tensors (weight tying) to
-avoid safetensors duplicate-key errors.
+Safetensors save **clones** duplicate `data_ptr` tensors (weight tying) to avoid safetensors duplicate-key errors.
 
 ### Completeness check
 
 `latest_step()` returns highest step where model + optim + meta all exist.
 
-Step discovery and retention both run through the same completeness filter.
-`utils/checkpoint.py:CheckpointManager.list_checkpoints` returns every complete
-step and `utils/checkpoint.py:CheckpointManager.latest_step` returns the newest
-of them; the NaN guard resolves its rollback point through `latest_step`
-rather than trusting a running step counter, and `list_checkpoints` shows which
-steps exist before an interactive `--resume-from`. Retention is explicit:
-`utils/checkpoint.py:CheckpointManager.keep_last_n` keeps the newest `n`
-complete checkpoints and `utils/checkpoint.py:CheckpointManager.delete_checkpoint`
-removes all four files (`model`/`optim`/`sched`/`meta`) of one step, so a
-partial or obsolete step can be cleaned without disturbing its neighbours.
+Step discovery and retention both run through the same completeness filter. `utils/checkpoint.py:CheckpointManager.list_checkpoints` returns every complete step and `utils/checkpoint.py:CheckpointManager.latest_step` returns the newest of them; the NaN guard resolves its rollback point through `latest_step` rather than trusting a running step counter, and `list_checkpoints` shows which steps exist before an interactive `--resume-from`. Retention is explicit: `utils/checkpoint.py:CheckpointManager.keep_last_n` keeps the newest `n` complete checkpoints and `utils/checkpoint.py:CheckpointManager.delete_checkpoint` removes all four files (`model`/`optim`/`sched`/`meta`) of one step, so a partial or obsolete step can be cleaned without disturbing its neighbours.
 
 ---
 
@@ -893,8 +733,7 @@ torch.set_rng_state(rng_state["torch"])
 torch.cuda.set_rng_state_all(rng_state["cuda"])
 ```
 
-Resume **without** `--seed` still loads weights/optimizer; RNG only restored
-if rng file exists.
+Resume **without** `--seed` still loads weights/optimizer; RNG only restored if rng file exists.
 
 ---
 
@@ -912,8 +751,7 @@ rng_state = {
 torch.save(rng_state, ckpt.save_dir / f"rng_step_{step}.pt")
 ```
 
-Saved alongside final checkpoint. Enables bit-exact continuation of data
-order (with same DataLoader worker config).
+Saved alongside final checkpoint. Enables bit-exact continuation of data order (with same DataLoader worker config).
 
 ---
 
@@ -1013,10 +851,7 @@ total_tokens     = 61,000 × 131,072 = 7,995,392,000 ≈ 8.0B
 
 ## Part B — Configuration reference
 
-> **YAML encyclopedia** for `configs/pretrain_a100_502m.yaml` and
-> `configs/pretrain_gpu_smoke.yaml`. Every `model`, `training`, and `data` key
-> is documented with defaults, valid ranges, and interaction effects. For how
-> configs connect to code, see [foundations-and-architecture.md](concepts/foundations-and-architecture.md).
+> **YAML encyclopedia** for `configs/pretrain_a100_502m.yaml` and `configs/pretrain_gpu_smoke.yaml`. Every `model`, `training`, and `data` key is documented with defaults, valid ranges, and interaction effects. For how configs connect to code, see [foundations-and-architecture.md](concepts/foundations-and-architecture.md).
 
 ### B.1 How configs are loaded (`yaml.safe_load` → `ModelConfig` / dicts)
 
@@ -1061,13 +896,11 @@ CLI overrides:
 | `train_data_path` | `data/pretrain_chinchilla` | `data/pretrain_smoke` |
 | Checkpoints | `checkpoints/pretrain_a100` | `checkpoints/gpu_smoke` |
 
-Smoke config preserves **structural** invariants (alternation, sink, YaRN, MoE
-top-k) at miniature scale — not Chinchilla token counts.
+Smoke config preserves **structural** invariants (alternation, sink, YaRN, MoE top-k) at miniature scale — not Chinchilla token counts.
 
 #### Smoke config rationale
 
-`pretrain_gpu_smoke.yaml` exists to answer: "Does the full stack run on my GPU
-in seconds?"
+`pretrain_gpu_smoke.yaml` exists to answer: "Does the full stack run on my GPU in seconds?"
 
 | Field | Why |
 |-------|-----|
@@ -1122,8 +955,7 @@ total_tokens = total_steps × tokens_step
 3000 / 61000 ≈ 4.9%
 ```
 
-Industry MoE recipes often use 2–5% warmup; 3000 steps was chosen for router
-stability with top-2-of-8 routing.
+Industry MoE recipes often use 2–5% warmup; 3000 steps was chosen for router stability with top-2-of-8 routing.
 
 **Minimum learning rate:**
 
@@ -1139,8 +971,7 @@ floor(61000 / 2000) = 30 interval saves + 1 final
 
 **Wall-time estimate (A100 80GB):**
 
-At ~35–40% MFU and ~131K tokens/step, expect **16–20 hours** for 61K steps
-(hardware-dependent).
+At ~35–40% MFU and ~131K tokens/step, expect **16–20 hours** for 61K steps (hardware-dependent).
 
 #### Smoke config
 
@@ -1153,9 +984,7 @@ Not Chinchilla-optimal — sufficient to exercise the pipeline.
 
 ### B.4 `model` block — every field
 
-Master table — **A100** = `pretrain_a100_502m.yaml`, **Smoke** = `pretrain_gpu_smoke.yaml`.
-All keys map to `ModelConfig` in `models/transformer.py`; invalid combinations
-raise in `__post_init__`.
+Master table — **A100** = `pretrain_a100_502m.yaml`, **Smoke** = `pretrain_gpu_smoke.yaml`. All keys map to `ModelConfig` in `models/transformer.py`; invalid combinations raise in `__post_init__`.
 
 #### Core dimensions and GQA
 
@@ -1229,9 +1058,7 @@ raise in `__post_init__`.
 | `nan_guard_max_consecutive` | `5` | `5` | NaN steps before reload latest ckpt |
 | `save_dir` | `checkpoints/pretrain_a100` | `checkpoints/gpu_smoke` | Safetensors + optim + RNG |
 
-**Implicit defaults** (not in YAML): `num_workers=4`, `pin_memory=true` on CUDA;
-chunked CE `chunk_size=8192` in `pretrain.py`. Full loop detail: see sections
-above in this document.
+**Implicit defaults** (not in YAML): `num_workers=4`, `pin_memory=true` on CUDA; chunked CE `chunk_size=8192` in `pretrain.py`. Full loop detail: see sections above in this document.
 
 ### B.6 `data` block — every field
 
@@ -1239,18 +1066,14 @@ above in this document.
 |-----|------|-------|-------|
 | `train_data_path` | `data/pretrain_chinchilla` | `data/pretrain_smoke` | `shard_*.bin` dir; prepare first |
 
-**`gptoss-default` mixture** (from A100 YAML comments): FineWeb-Edu 50%,
-FineWeb 20%, The Stack Python 15%, OpenMath 10%, arXiv 5%. Includes 10%
-long-context augmentation (4096 packed sequences). See
+**`gptoss-default` mixture** (from A100 YAML comments): FineWeb-Edu 50%, FineWeb 20%, The Stack Python 15%, OpenMath 10%, arXiv 5%. Includes 10% long-context augmentation (4096 packed sequences). See
 [training.md](training.md).
 
 ### B.7 Cross-field interactions
 
 #### `max_seq_len` × batch × Chinchilla
 
-Changing `micro_batch_size` or `gradient_accumulation_steps` changes
-`tokens_step` and therefore total tokens for fixed `total_steps`. Re-derive
-`total_steps` if you change batch while holding 8B tokens fixed:
+Changing `micro_batch_size` or `gradient_accumulation_steps` changes `tokens_step` and therefore total tokens for fixed `total_steps`. Re-derive `total_steps` if you change batch while holding 8B tokens fixed:
 
 ```
 total_steps = 8_000_000_000 / (micro_batch_size × accum × max_seq_len)
@@ -1271,10 +1094,7 @@ Mismatch triggers `ModelConfig` validation errors or degenerate ramps (see
 
 #### `window_size` vs `max_seq_len`
 
-Windowed layers cache `min(window_size, T)` tokens per layer. Reduction vs pure
-GQA approaches **2×** only when `T >> window_size` (e.g. 128K). At `T=4096` with
-`W=128`, `scripts/kv_cache_benchmark.py` still reports ~1.9× because six layers
-store 128 slots while six store the full 4096.
+Windowed layers cache `min(window_size, T)` tokens per layer. Reduction vs pure GQA approaches **2×** only when `T >> window_size` (e.g. 128K). At `T=4096` with `W=128`, `scripts/kv_cache_benchmark.py` still reports ~1.9× because six layers store 128 slots while six store the full 4096.
 
 #### `moe_dispatch` × hardware
 
@@ -1285,8 +1105,7 @@ store 128 slots while six store the full 4096.
 
 #### `compile` × `grad_checkpoint`
 
-Both reduce memory pressure differently — compile optimizes kernels; checkpointing
-drops activations. Compatible together on A100.
+Both reduce memory pressure differently — compile optimizes kernels; checkpointing drops activations. Compatible together on A100.
 
 #### `sink_bias` × `dtype`
 
@@ -1357,11 +1176,9 @@ python3 -m pytest tests/test_training.py tests/test_validation.py -v
 
 ### From Raw Text to `PretrainDataset`
 
-> **Shim:** [`data/prepare_data.py`](../data/prepare_data.py) delegates to
-> `LLM/shared_data/` universal pipeline.
+> **Shim:** [`data/prepare_data.py`](../data/prepare_data.py) delegates to `LLM/shared_data/` universal pipeline.
 
-> **Training consumer:** [`training/pretrain.py`](../training/pretrain.py)
-> `PretrainDataset` class.
+> **Training consumer:** [`training/pretrain.py`](../training/pretrain.py) `PretrainDataset` class.
 
 > **Related:** [training.md](training.md) (loader knobs, `train_data_path`).
 
@@ -1371,15 +1188,9 @@ python3 -m pytest tests/test_training.py tests/test_validation.py -v
 
 ### Abstract
 
-GPT-OSS-Lite trains on an **8.0 billion-token** Chinchilla-optimal corpus
-assembled from quality-filtered web, code, math, and scientific prose sources.
-The corpus is prepared by a **four-stage pipeline** (download → clean →
-tokenize → pack) implemented in the shared `LLM/shared_data/` package and
-invoked through a thin project shim at [`data/prepare_data.py`](../data/prepare_data.py).
+GPT-OSS-Lite trains on an **8.0 billion-token** Chinchilla-optimal corpus assembled from quality-filtered web, code, math, and scientific prose sources. The corpus is prepared by a **four-stage pipeline** (download → clean → tokenize → pack) implemented in the shared `LLM/shared_data/` package and invoked through a thin project shim at [`data/prepare_data.py`](../data/prepare_data.py).
 
-Tokenised output is stored as **uint32 shards** of **50 million tokens** each,
-with **EOS-separated documents** and a JSON **manifest**. Training reads shards
-via mmap through [`PretrainDataset`](../training/pretrain.py) in
+Tokenised output is stored as **uint32 shards** of **50 million tokens** each, with **EOS-separated documents** and a JSON **manifest**. Training reads shards via mmap through [`PretrainDataset`](../training/pretrain.py) in
 [`training/pretrain.py`](../training/pretrain.py), yielding `(input_ids,
 target_ids)` windows of length `max_seq_len` (4096).
 
@@ -1467,18 +1278,13 @@ return shared_main()
 | `LLM/shared_data/config/mixture.yaml` | Source weights |
 | `LLM/shared_data/config/data_config.yaml` | Tokenizer, shard, dedup knobs |
 
-There is **no** `data/shared_data/` vendored copy in this repo. The shim uses
-**universal defaults** — no project-local `data_config.yaml` override is
-required for GPT-OSS-Lite.
+There is **no** `data/shared_data/` vendored copy in this repo. The shim uses **universal defaults** — no project-local `data_config.yaml` override is required for GPT-OSS-Lite.
 
 ---
 
 ### Shared Package — `LLM/shared_data/`
 
-The four-stage pipeline lives in the **workspace-level** package at
-`LLM/shared_data/` (sibling of `GPT-OSS-Lite/` under `LLM/`). Run
-`data/prepare_data.py` from a CoreProjects-style layout where that package
-exists, or ensure `LLM/` is on `PYTHONPATH`.
+The four-stage pipeline lives in the **workspace-level** package at `LLM/shared_data/` (sibling of `GPT-OSS-Lite/` under `LLM/`). Run `data/prepare_data.py` from a CoreProjects-style layout where that package exists, or ensure `LLM/` is on `PYTHONPATH`.
 
 ```
 LLM/
@@ -1497,8 +1303,7 @@ LLM/
         └── pretrain_chinchilla/ ← training consumption path
 ```
 
-Other LLM projects in the portfolio may vendor `data/shared_data/` for
-standalone clones; GPT-OSS-Lite does not in this repository.
+Other LLM projects in the portfolio may vendor `data/shared_data/` for standalone clones; GPT-OSS-Lite does not in this repository.
 
 ### CLI flags (delegated)
 
@@ -1533,11 +1338,9 @@ All flags are parsed by `shared_data.prepare_data`:
  data.jsonl        data.jsonl         tokens.bin         manifest.json
 ```
 
-Each stage runs as a **subprocess** (`_run_module`) so OOM in tokenisation
-does not kill the orchestrator.
+Each stage runs as a **subprocess** (`_run_module`) so OOM in tokenisation does not kill the orchestrator.
 
-**Pipeline version:** `PIPELINE_VERSION = "1.0.0"` in
-`shared_data/config.py`.
+**Pipeline version:** `PIPELINE_VERSION = "1.0.0"` in `shared_data/config.py`.
 
 **Corpus target:** `UNIVERSAL_TOTAL_TOKENS = 8_000_000_000`.
 
@@ -1549,8 +1352,7 @@ does not kill the orchestrator.
 
 **Input:** `mixture.yaml` source definitions.
 
-**Output:** `data/raw/<source_id>/data.jsonl` — one JSON object per line with
-a `text` field (or configured `text_field`).
+**Output:** `data/raw/<source_id>/data.jsonl` — one JSON object per line with a `text` field (or configured `text_field`).
 
 **Behaviour:**
 
@@ -1668,8 +1470,7 @@ pack:
 ```
 
 - **`cross_document_boundary_ok: false`** — a document never spans two shards.
-  Downstream `PretrainDataset` can align windows on EOS without stitching
-  unrelated text.
+  Downstream `PretrainDataset` can align windows on EOS without stitching unrelated text.
 - Target **50 M tokens per shard** (~190 MB as uint32).
 - `ShardWriter` atomic flush + `shard_writer_state.json` for crash resume.
 
@@ -1712,16 +1513,11 @@ data_mix: "gptoss-default"
 
 ### Long-context augmentation (training config note)
 
-The A100 config comments note **10% of sequences packed to 4096** with
-document-boundary awareness and passkey-style inserts for eval readiness.
-This is a **training-time packing policy** (when building the chinchilla
-subset path) — the universal pipeline produces EOS-separated shards; project
-pack scripts may further curate `data/pretrain_chinchilla/`.
+The A100 config comments note **10% of sequences packed to 4096** with document-boundary awareness and passkey-style inserts for eval readiness. This is a **training-time packing policy** (when building the chinchilla subset path) — the universal pipeline produces EOS-separated shards; project pack scripts may further curate `data/pretrain_chinchilla/`.
 
 ### Code + math combined
 
-Code (0.15) + math (0.10) = **25%** reasoning-heavy tokens — below the 30%
-"reasoning diet" ceiling but aligned with GPT-OSS long-context focus (more web
+Code (0.15) + math (0.10) = **25%** reasoning-heavy tokens — below the 30% "reasoning diet" ceiling but aligned with GPT-OSS long-context focus (more web
 + long-form arxiv).
 
 ---
@@ -1730,45 +1526,24 @@ Code (0.15) + math (0.10) = **25%** reasoning-heavy tokens — below the 30%
 
 ### BPE merge algorithm
 
-The LLaMA-3 tokenizer is a **byte-level byte-pair encoding** (BPE): a greedy
-algorithm that grows a fixed vocabulary of $V = 128000$ entries by fusing
-the most frequent adjacent pair in the corpus, one merge at a time. Training
-starts from the 256 raw byte values (one entry per byte value, which guarantees
-every possible string is spellable — nothing is out-of-vocabulary) and
-iterates:
+The LLaMA-3 tokenizer is a **byte-level byte-pair encoding** (BPE): a greedy algorithm that grows a fixed vocabulary of $V = 128000$ entries by fusing the most frequent adjacent pair in the corpus, one merge at a time. Training starts from the 256 raw byte values (one entry per byte value, which guarantees every possible string is spellable — nothing is out-of-vocabulary) and iterates:
 
 1. **Count** — for every adjacent pair $(u, v)$ in the current token stream
    $x_1, x_2, \ldots, x_L$, tally how often $u$ is immediately followed by $v$.
 2. **Fuse** — pick the most frequent pair, add the fused token $ab$ to the
-   vocabulary, and replace every occurrence of the adjacent pair $a\,b$ with
-   the single token $ab$.
+   vocabulary, and replace every occurrence of the adjacent pair $a\,b$ with the single token $ab$.
 3. **Repeat** until $|\mathcal{V}| = 128000$.
 
-With $\mathcal{V}_t$ the vocabulary after $t$ merges and $f_t(u,v)$ the corpus
-pair count under the current segmentation, one merge step is
+With $\mathcal{V}_t$ the vocabulary after $t$ merges and $f_t(u,v)$ the corpus pair count under the current segmentation, one merge step is
 
 $$\mathcal{V}_{t+1} = \mathcal{V}_t \cup \{ab\}, \qquad (a,b) = \arg\max_{(u,v)} f_t(u,v), \qquad f_t(u,v) = \sum_{k=1}^{L-1} \mathbb{1}[x_k = u \;\wedge\; x_{k+1} = v]
 \tag{1}$$
 
-Each applied merge shortens the stream by exactly one token per occurrence, so
-argmax-frequency is the greedy maximiser of immediate compression per merge —
-the same criterion tiktoken-style BPE uses. Encoding a new string replays the
-learned merges greedily left to right; decoding expands each token back to the
-byte string it was built from. Merges are order-dependent and
-overlap-ambiguous (in a run $a\,a\,a$ the pair $(a,a)$ occurs twice but a
-left-to-right sweep fuses only once), so a pretrained tokenizer is a fixed
-codec: re-training the BPE changes the ids, which is why GPT-OSS-Lite and
-LLaMA-3-Lite pin the same `name: llama3` tokenizer and can share bit-identical
-shards. The full treatment — merge economics, the 128K coverage-versus-parameter
-trade-off, and the ambiguity bounds — lives in
+Each applied merge shortens the stream by exactly one token per occurrence, so argmax-frequency is the greedy maximiser of immediate compression per merge — the same criterion tiktoken-style BPE uses. Encoding a new string replays the learned merges greedily left to right; decoding expands each token back to the byte string it was built from. Merges are order-dependent and overlap-ambiguous (in a run $a\,a\,a$ the pair $(a,a)$ occurs twice but a left-to-right sweep fuses only once), so a pretrained tokenizer is a fixed codec: re-training the BPE changes the ids, which is why GPT-OSS-Lite and LLaMA-3-Lite pin the same `name: llama3` tokenizer and can share bit-identical shards. The full treatment — merge economics, the 128K coverage-versus-parameter trade-off, and the ambiguity bounds — lives in
 [tokenization.md](concepts/tokenization.md); this section only states
 what the pipeline relies on.
 
-The vocabulary is also a parameter budget: at $V = 128000$ and $d = 768$,
-the tied embedding/output head costs $V \cdot d = 98304000$ parameters —
-about 19.6% of the 501.8M total — before any transformer block, so the
-tokenizer choice is load-bearing for the model's size, not just its data
-([tokenization.md §3.6](concepts/tokenization.md)).
+The vocabulary is also a parameter budget: at $V = 128000$ and $d = 768$, the tied embedding/output head costs $V \cdot d = 98304000$ parameters — about 19.6% of the 501.8M total — before any transformer block, so the tokenizer choice is load-bearing for the model's size, not just its data ([tokenization.md §3.6](concepts/tokenization.md)).
 
 | Field | Value |
 |---|---|
@@ -1778,12 +1553,9 @@ tokenizer choice is load-bearing for the model's size, not just its data
 | `pad_token_id` | 128002 |
 | Config `model.vocab_size` | 128000 (must match) |
 
-GPT-OSS-Lite and **LLaMA-3-Lite** share this tokenizer — the shards produced by
-both projects are **bit-identical** and can be shared verbatim (same BPE, same
-EOS, same uint32 pack format).
+GPT-OSS-Lite and **LLaMA-3-Lite** share this tokenizer — the shards produced by both projects are **bit-identical** and can be shared verbatim (same BPE, same EOS, same uint32 pack format).
 
-Token IDs are stored as **uint32** even though vocab fits in uint16 — uint32
-is the safe universal dtype up to 4.29 B tokens per shard file.
+Token IDs are stored as **uint32** even though vocab fits in uint16 — uint32 is the safe universal dtype up to 4.29 B tokens per shard file.
 
 ---
 
@@ -1803,20 +1575,17 @@ Each `shard_NNNNN.bin`:
 
 ### Byte math
 
-The format decision is a byte budget. Each token id is a little-endian uint32,
-so every token costs exactly four bytes on disk:
+The format decision is a byte budget. Each token id is a little-endian uint32, so every token costs exactly four bytes on disk:
 
 $$B_{\text{token}} = 4 \text{ B/token}
 \tag{2}$$
 
-At $S = 50000000$ tokens per shard (`shard_size_tokens` in the shared
-`data_config.yaml`), one shard file is
+At $S = 50000000$ tokens per shard (`shard_size_tokens` in the shared `data_config.yaml`), one shard file is
 
 $$B_{\text{shard}} = S \cdot B_{\text{token}} = 5 \times 10^7 \times 4 = 2.0 \times 10^8 \text{ B} = 200 \text{ MB} \;(\approx 190.7 \text{ MiB})
 \tag{3}$$
 
-— the "~190 MB" figure quoted in the config, depending on whether the unit is
-decimal (MB) or binary (MiB). The 8.0 B-token corpus packs into
+— the "~190 MB" figure quoted in the config, depending on whether the unit is decimal (MB) or binary (MiB). The 8.0 B-token corpus packs into
 
 $$K = \left\lceil \frac{N_{\text{tok}}}{S} \right\rceil = \left\lceil \frac{8 \times 10^9}{5 \times 10^7} \right\rceil = 160 \text{ shards}
 \tag{4}$$
@@ -1826,32 +1595,19 @@ and occupies
 $$B_{\text{total}} = K \cdot B_{\text{shard}} = N_{\text{tok}} \cdot B_{\text{token}} = 8 \times 10^9 \times 4 = 3.2 \times 10^{10} \text{ B} = 32 \text{ GB}
 \tag{5}$$
 
-on disk. The ceiling in (4) is real: packing targets 50M tokens but stops at a
-document boundary (`cross_document_boundary_ok: false`), so the final shard may
-hold fewer tokens, and `shard_count` in the manifest records what was actually
-written.
+on disk. The ceiling in (4) is real: packing targets 50M tokens but stops at a document boundary (`cross_document_boundary_ok: false`), so the final shard may hold fewer tokens, and `shard_count` in the manifest records what was actually written.
 
-**Why uint32 and not uint16 or uint8.** The dtype must represent every token
-id the stream can contain: ordinary tokens run to $V - 1 = 127999$, and the
-EOS special is $\text{eos\_token\_id} = 128009$. The candidate widths
-satisfy
+**Why uint32 and not uint16 or uint8.** The dtype must represent every token id the stream can contain: ordinary tokens run to $V - 1 = 127999$, and the EOS special is $\text{eos\_token\_id} = 128009$. The candidate widths satisfy
 
 $$2^{8} = 256 < 2^{16} = 65536 < 128009 \leq 2^{32}
 \tag{6}$$
 
-so neither uint8 nor uint16 can encode the vocabulary at all — the minimum
-width is $\lceil \log_2 128009 \rceil = 17$ bits, and the next native type
-is uint32. Its ceiling is far above any realistic id:
+so neither uint8 nor uint16 can encode the vocabulary at all — the minimum width is $\lceil \log_2 128009 \rceil = 17$ bits, and the next native type is uint32. Its ceiling is far above any realistic id:
 
 $$2^{32} - 1 = 4294967295 \gg 128009
 \tag{7}$$
 
-the headroom behind the config comment that uint32 is safe "up to 4.29 B
-tokens". The width is a storage cost, not a compute cost: at read time
-`training/pretrain.py:PretrainDataset._init_sharded` maps the manifest dtype to
-a torch int type (`uint32` → `torch.int32`) and mmaps the file, so the
-4 B/token layout never inflates the active working set — only the disk
-footprint.
+the headroom behind the config comment that uint32 is safe "up to 4.29 B tokens". The width is a storage cost, not a compute cost: at read time `training/pretrain.py:PretrainDataset._init_sharded` maps the manifest dtype to a torch int type (`uint32` → `torch.int32`) and mmaps the file, so the 4 B/token layout never inflates the active working set — only the disk footprint.
 
 ### Alternative: torch_save format
 
@@ -1895,9 +1651,7 @@ fields: `eos_token_id`, `vocab_size`, `total_tokens`, `shard_count`, `dtype`.
 
 ### How `PretrainDataset` consumes each field
 
-`training/pretrain.py:PretrainDataset._load_manifest` reads exactly five
-optional fields and caches them on the dataset; it never validates them against
-the filesystem. Consumption per field:
+`training/pretrain.py:PretrainDataset._load_manifest` reads exactly five optional fields and caches them on the dataset; it never validates them against the filesystem. Consumption per field:
 
 | Field | Loader behaviour | Role |
 |---|---|---|
@@ -1907,18 +1661,12 @@ the filesystem. Consumption per field:
 | `shard_count` | Stored as `self.shard_count` (default `0`) | Declared shard count; the actual list comes from globbing `shard_*.bin`, so a mismatch surfaces only via the checklist. |
 | `dtype` | Stored as `self.dtype` (default `"uint32"` when the key is missing; `None` if no manifest), then mapped in `training/pretrain.py:PretrainDataset._init_sharded` via `{"uint32": torch.int32, "uint16": torch.int16, "uint8": torch.int8}` | **Load-bearing**: sets the mmap element type in `training/pretrain.py:PretrainDataset._load_shard` (`torch.from_file`) and the byte-per-token divisor in `training/pretrain.py:PretrainDataset._size_in_tokens`. A wrong `dtype` silently halves or quadruples every token count. |
 
-The last row is the only field that changes loader *arithmetic*.
-`training/pretrain.py:PretrainDataset._init_sharded` computes each shard's
-token count from its file size and the dtype width,
+The last row is the only field that changes loader *arithmetic*. `training/pretrain.py:PretrainDataset._init_sharded` computes each shard's token count from its file size and the dtype width,
 
 $$n_i = \frac{\text{bytes}(i)}{b}, \qquad b = \text{itemsize}(\texttt{dtype})
 \tag{8}$$
 
-with $b = 4$ for uint32, then builds cumulative `shard_offsets` from those
-$n_i$. `total_tokens` and `shard_count` are therefore advisory — the bytes on
-disk and `dtype` are authoritative — which is why a missing manifest degrades
-silently (all fields fall back to `None`/`0`/`"uint32"` inside
-`training/pretrain.py:PretrainDataset._load_manifest`) and the
+with $b = 4$ for uint32, then builds cumulative `shard_offsets` from those $n_i$. `total_tokens` and `shard_count` are therefore advisory — the bytes on disk and `dtype` are authoritative — which is why a missing manifest degrades silently (all fields fall back to `None`/`0`/`"uint32"` inside `training/pretrain.py:PretrainDataset._load_manifest`) and the
 [validation checklist](#validation-checklist) re-verifies the manifest before a
 61k-step run.
 
@@ -1943,9 +1691,7 @@ data/pretrain_chinchilla/
 └── ...                          # ~160 shards for 8B tokens
 ```
 
-This path is a **project-local packed subset** or symlink/copy of universal
-`data/pretrain_chinchilla/` after pipeline completion. The name `pretrain_chinchilla`
-reflects Chinchilla-optimal 8B token budget for the 502M model.
+This path is a **project-local packed subset** or symlink/copy of universal `data/pretrain_chinchilla/` after pipeline completion. The name `pretrain_chinchilla` reflects Chinchilla-optimal 8B token budget for the 502M model.
 
 Intermediate pipeline dirs (under `data/` or `$LLM_DATA_ROOT`):
 
@@ -1974,8 +1720,7 @@ PretrainDataset(data_path: str, max_seq_len: int)
 - `data_path`: file or directory.
 - `max_seq_len`: 4096 for default config.
 
-Raises `FileNotFoundError` with hint to run `python data/prepare_data.py` if
-missing.
+Raises `FileNotFoundError` with hint to run `python data/prepare_data.py` if missing.
 
 ### Layout modes
 
@@ -2013,8 +1758,7 @@ def _load_shard(shard_idx):
     # caches last-loaded shard in self._cache_shard
 ```
 
-Only one shard cached — sufficient for sequential-ish access; random shuffle
-across windows may reload shards frequently (acceptable with mmap).
+Only one shard cached — sufficient for sequential-ish access; random shuffle across windows may reload shards frequently (acceptable with mmap).
 
 ### Cross-shard windows
 
@@ -2023,8 +1767,7 @@ across windows may reload shards frequently (acceptable with mmap).
 1. Fast path: if window fits in one shard, slice locally.
 2. Slow path: concatenate slices from multiple shards, then split input/target.
 
-Windows may cross **shard** boundaries but individual **documents** never cross
-shards (packing invariant) — EOS alignment preserved within shard interior.
+Windows may cross **shard** boundaries but individual **documents** never cross shards (packing invariant) — EOS alignment preserved within shard interior.
 
 ---
 
@@ -2059,8 +1802,7 @@ Each batch: `input_ids` `(8, 4096)`, `target_ids` `(8, 4096)`.
 
 ### Cross-Project Sharing
 
-The universal pipeline at `LLM/shared_data/` is shared by five LLM projects.
-**Prepare once** if `$LLM_DATA_ROOT` points to a common directory:
+The universal pipeline at `LLM/shared_data/` is shared by five LLM projects. **Prepare once** if `$LLM_DATA_ROOT` points to a common directory:
 
 ```bash
 export LLM_DATA_ROOT=/path/to/shared/llm_corpus
@@ -2084,11 +1826,9 @@ All projects mmap the same `shard_*.bin` files.
 | tokenize | Per-source progress state |
 | pack | `shard_writer_state.json` + partial shard tmp |
 
-Re-running `prepare_data.py` picks up incomplete work. Manifest rebuilt from
-on-disk shards after pack — never references missing files.
+Re-running `prepare_data.py` picks up incomplete work. Manifest rebuilt from on-disk shards after pack — never references missing files.
 
-Orchestrator seeds RNG: `seed=42` from `data_config.yaml` for reproducible
-sampling during pack.
+Orchestrator seeds RNG: `seed=42` from `data_config.yaml` for reproducible sampling during pack.
 
 ---
 
@@ -2223,8 +1963,7 @@ After packing, smoke-load the corpus (requires `data/pretrain_chinchilla`):
 python3 -c "from training.pretrain import PretrainDataset; d=PretrainDataset('data/pretrain_chinchilla', 4096); print(len(d), d[0][0].shape)"
 ```
 
-`test_data_pipeline.py` is skipped when the sibling `shared_data` package is not
-importable (CoreProjects layout).
+`test_data_pipeline.py` is skipped when the sibling `shared_data` package is not importable (CoreProjects layout).
 
 ---
 

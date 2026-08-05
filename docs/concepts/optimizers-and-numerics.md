@@ -2,105 +2,53 @@
 
 ## Part A — Optimizers (From Gradient Descent to AdamW)
 
-> **Chapter T4.** The optimizer is the only component that touches every
-> parameter of a 502M-parameter model on every one of 61,000 steps. This
-> chapter derives the machinery — momentum, Adam's bias correction, decoupled
-> weight decay, mixed-precision state, gradient clipping, warmup — and then
-> reads the exact construction in `training/pretrain.py`.
+> **Chapter T4.** The optimizer is the only component that touches every parameter of a 502M-parameter model on every one of 61,000 steps. This chapter derives the machinery — momentum, Adam's bias correction, decoupled weight decay, mixed-precision state, gradient clipping, warmup — and then reads the exact construction in `training/pretrain.py`.
 >
-> **Related:** [training.md](../training.md) §11 (optimizer section) ·
-> [foundations-and-architecture.md](foundations-and-architecture.md) §10 (BF16 vs FP16) ·
-> [numerics](optimizers-and-numerics.md) (IEEE-754 bit layouts) ·
-> [moe.md](moe.md) §16 (numerical stability) ·
-> [moe theory](moe.md) (routing instability).
+> **Related:** [training.md](../training.md) §11 (optimizer section) · [foundations-and-architecture.md](foundations-and-architecture.md) §10 (BF16 vs FP16) · [numerics](optimizers-and-numerics.md) (IEEE-754 bit layouts) · [moe.md](moe.md) §16 (numerical stability) · [moe theory](moe.md) (routing instability).
 
 ---
 
 ### 1. Sixty-second summary
 
-The training loop optimizes a ~502M-parameter (247M active) top-2-of-8 MoE
-decoder with AdamW: first and second moment estimates with bias correction,
-decoupled weight decay, FP32 optimizer state under a BF16 forward pass, global
-gradient-norm clipping at 1.0, and a 3000-step linear warmup followed by cosine
-decay to 5% of peak LR. The optimizer is constructed in
-`training/pretrain.py:main` with two parameter groups (decay vs no-decay),
-`foreach=True`, `fused=True` on CUDA, and `eps=1e-6`. Every design choice —
-β₁=0.9, β₂=0.95, wd=0.1, lr=4e-4, clip=1.0, warmup — exists because this is a
-short (8B-token), single-pass pretraining run over a sparsely routed model
-whose gradients mix two objectives (cross-entropy and an auxiliary load-balance
-loss). No pretraining run has completed yet; all runtime figures are targets.
+The training loop optimizes a ~502M-parameter (247M active) top-2-of-8 MoE decoder with AdamW: first and second moment estimates with bias correction, decoupled weight decay, FP32 optimizer state under a BF16 forward pass, global gradient-norm clipping at 1.0, and a 3000-step linear warmup followed by cosine decay to 5% of peak LR. The optimizer is constructed in `training/pretrain.py:main` with two parameter groups (decay vs no-decay), `foreach=True`, `fused=True` on CUDA, and `eps=1e-6`. Every design choice — β₁=0.9, β₂=0.95, wd=0.1, lr=4e-4, clip=1.0, warmup — exists because this is a short (8B-token), single-pass pretraining run over a sparsely routed model whose gradients mix two objectives (cross-entropy and an auxiliary load-balance loss). No pretraining run has completed yet; all runtime figures are targets.
 
 ### 2. Why it matters here
 
-GPT-OSS-Lite budgets exactly 61,000 steps × 131,072 tokens ≈ 8.0B tokens — a
-Chinchilla-optimal single pass over the corpus. There is no second epoch to
-recover from a bad optimizer setting. Three properties of this model make the
-optimizer load-bearing:
+GPT-OSS-Lite budgets exactly 61,000 steps × 131,072 tokens ≈ 8.0B tokens — a Chinchilla-optimal single pass over the corpus. There is no second epoch to recover from a bad optimizer setting. Three properties of this model make the optimizer load-bearing:
 
 - **MoE routing noise.** The router in `models/moe.py:MoERouter` selects 2 of 8
-  experts per token. Early in training the gate is near-random, so per-batch
-  gradients through the router are large and the auxiliary loss
-  `models/moe.py:aux_load_balancing_loss` (α=0.01) injects a second gradient
-  signal roughly an order of magnitude smaller than the CE gradient. Adam's
-  per-coordinate scaling and the 3000-step warmup are what keep the gate from
-  collapsing onto one expert (see [moe theory](moe.md)).
+  experts per token. Early in training the gate is near-random, so per-batch gradients through the router are large and the auxiliary loss `models/moe.py:aux_load_balancing_loss` (α=0.01) injects a second gradient signal roughly an order of magnitude smaller than the CE gradient. Adam's per-coordinate scaling and the 3000-step warmup are what keep the gate from collapsing onto one expert (see [moe theory](moe.md)).
 - **Weight decay must not touch everything.** RMSNorm gains are scale
-  parameters, the sink bias is a learned offset clamped to $[-10, 15]$
-  (`models/attention.py:SINK_CLAMP_MIN/MAX`), and the embedding is tied to the
-  head. Decaying them is either meaningless or harmful, so the optimizer splits
-  parameters into decay / no-decay groups.
+  parameters, the sink bias is a learned offset clamped to $[-10, 15]$ (`models/attention.py:SINK_CLAMP_MIN/MAX`), and the embedding is tied to the head. Decaying them is either meaningless or harmful, so the optimizer splits parameters into decay / no-decay groups.
 - **BF16 arithmetic.** The forward pass runs in BF16 (7 mantissa bits) but the
-  optimizer state runs in FP32. Getting that split wrong silently rounds away
-  most updates (derived in §4.6).
+  optimizer state runs in FP32. Getting that split wrong silently rounds away most updates (derived in §4.6).
 
 ### 3. Intuition
 
-Think of the loss surface as terrain and the optimizer as a hiker with three
-improvements over naive hill descent. First, a **ball** (momentum): it keeps
-rolling in the direction it was already going, so it averages out noisy
-measurements of the slope. Second, a **per-axis ruler** (Adam): instead of one
-step size for every direction, it measures the typical slope magnitude along
-each coordinate and takes a step of *relative* size — this is what makes
-training work when one coordinate's gradient is 1000× another's. Third, a
-**speed limit and a launch ramp** (clipping + warmup): the hiker never takes a
-step longer than a fixed bound, and starts at rest, because the first slope
-measurements are the noisiest ones.
+Think of the loss surface as terrain and the optimizer as a hiker with three improvements over naive hill descent. First, a **ball** (momentum): it keeps rolling in the direction it was already going, so it averages out noisy measurements of the slope. Second, a **per-axis ruler** (Adam): instead of one step size for every direction, it measures the typical slope magnitude along each coordinate and takes a step of *relative* size — this is what makes training work when one coordinate's gradient is 1000× another's. Third, a **speed limit and a launch ramp** (clipping + warmup): the hiker never takes a step longer than a fixed bound, and starts at rest, because the first slope measurements are the noisiest ones.
 
 ### 4. Theory + derivation
 
 ### 4.1 Gradient descent and the fixed-step limit
 
-Let $L(\theta)$ be the training objective and $g_t = \nabla_\theta L(\theta_t)$
-the gradient at step $t$. Gradient descent with learning rate $\eta$:
+Let $L(\theta)$ be the training objective and $g_t = \nabla_\theta L(\theta_t)$ the gradient at step $t$. Gradient descent with learning rate $\eta$:
 
 $$
 \theta_{t+1} = \theta_t - \eta g_t. \tag{1}
 $$
 
-Expand the loss after the step to second order, with Hessian
-$H_t = \nabla^2_\theta L(\theta_t)$:
+Expand the loss after the step to second order, with Hessian $H_t = \nabla^2_\theta L(\theta_t)$:
 
 $$
 L(\theta_t - \eta g_t) = L(\theta_t) - \eta\, g_t^{\top} g_t
 + \tfrac{1}{2}\eta^2 g_t^{\top} H_t g_t + O(\eta^3). \tag{2}
 $$
 
-The step decreases the loss only while $\eta < 2\, g^{\top}g / (g^{\top}Hg)$,
-and the step size that maximizes the decrease is
-$\eta^* = g^{\top}g / (g^{\top}Hg)$. The trouble is visible in a
-coordinate-separable quadratic $L = \tfrac{1}{2}\sum_i h_i \theta_i^2$ (hessian
-eigenvalues $h_i$): gradient descent gives $\theta_i \leftarrow (1-\eta h_i)\theta_i$,
-which converges only for $\eta < 2/h_{\max}$, and the convergence rate is set by
-the condition number $\kappa = h_{\max}/h_{\min}$. In contrast, a *per-coordinate*
-step $\eta_i = 1/h_i$ converges in one step. Real transformer losses have a
-huge spread of $h_i$ (attention logits vs embedding rows), so a single global
-$\eta$ is forced to be small enough for the stiffest direction. This is the
-entire motivation for the adaptive scaling Adam implements.
+The step decreases the loss only while $\eta < 2\, g^{\top}g / (g^{\top}Hg)$, and the step size that maximizes the decrease is $\eta^* = g^{\top}g / (g^{\top}Hg)$. The trouble is visible in a coordinate-separable quadratic $L = \tfrac{1}{2}\sum_i h_i \theta_i^2$ (hessian eigenvalues $h_i$): gradient descent gives $\theta_i \leftarrow (1-\eta h_i)\theta_i$, which converges only for $\eta < 2/h_{\max}$, and the convergence rate is set by the condition number $\kappa = h_{\max}/h_{\min}$. In contrast, a *per-coordinate* step $\eta_i = 1/h_i$ converges in one step. Real transformer losses have a huge spread of $h_i$ (attention logits vs embedding rows), so a single global $\eta$ is forced to be small enough for the stiffest direction. This is the entire motivation for the adaptive scaling Adam implements.
 
 ### 4.2 Momentum: the EMA of gradients
 
-Momentum replaces the raw gradient with an exponential moving average
-$m_t$ ("velocity"), with decay $\beta_1 \in (0,1)$:
+Momentum replaces the raw gradient with an exponential moving average $m_t$ ("velocity"), with decay $\beta_1 \in (0,1)$:
 
 $$
 m_t = \beta_1 m_{t-1} + (1-\beta_1) g_t, \qquad m_0 = 0. \tag{3}
@@ -112,34 +60,24 @@ $$
 m_t = (1-\beta_1) \sum_{i=0}^{t-1} \beta_1^{i}\, g_{t-i}. \tag{4}
 $$
 
-The weights sum to $\sum_{i=0}^{t-1} (1-\beta_1)\beta_1^i = 1 - \beta_1^t < 1$:
-at small $t$ the estimate is systematically *too small* — biased toward zero,
-because the missing early terms are absent rather than zero. For a stationary
-gradient $g$, $\mathbb{E}[m_t] = (1-\beta_1^t)\,g$, so dividing by
-$1-\beta_1^t$ removes the bias:
+The weights sum to $\sum_{i=0}^{t-1} (1-\beta_1)\beta_1^i = 1 - \beta_1^t < 1$: at small $t$ the estimate is systematically *too small* — biased toward zero, because the missing early terms are absent rather than zero. For a stationary gradient $g$, $\mathbb{E}[m_t] = (1-\beta_1^t)\,g$, so dividing by $1-\beta_1^t$ removes the bias:
 
 $$
 \hat{m}_t = \frac{m_t}{1-\beta_1^t}. \tag{5}
 $$
 
-The window of the EMA: the coefficient of $g_{t-k}$ is $\beta_1^k$, which
-halves at $k = \ln 2 / \ln(1/\beta_1)$ — about 6.6 steps for $\beta_1 = 0.9$,
-i.e. the velocity averages roughly the last seven gradients.
+The window of the EMA: the coefficient of $g_{t-k}$ is $\beta_1^k$, which halves at $k = \ln 2 / \ln(1/\beta_1)$ — about 6.6 steps for $\beta_1 = 0.9$, i.e. the velocity averages roughly the last seven gradients.
 
 ### 4.3 Adam: per-coordinate adaptive steps
 
-Adam (Kingma & Ba, 2015) maintains a second EMA over *squared* gradients
-$v_t$, with its own decay $\beta_2$:
+Adam (Kingma & Ba, 2015) maintains a second EMA over *squared* gradients $v_t$, with its own decay $\beta_2$:
 
 $$
 m_t = \beta_1 m_{t-1} + (1-\beta_1) g_t, \qquad
 v_t = \beta_2 v_{t-1} + (1-\beta_2) g_t^2. \tag{6}
 $$
 
-If the gradient components are stationary with $\mathbb{E}[g_i^2] = \nu_i$, the
-same unrolling argument gives $\mathbb{E}[v_t] = (1-\beta_2^t)\,\nu$, so the
-*second* moment needs its own correction — this is why the correction exponent
-must be the *age* $t$, not the step number modulo anything:
+If the gradient components are stationary with $\mathbb{E}[g_i^2] = \nu_i$, the same unrolling argument gives $\mathbb{E}[v_t] = (1-\beta_2^t)\,\nu$, so the *second* moment needs its own correction — this is why the correction exponent must be the *age* $t$, not the step number modulo anything:
 
 $$
 \hat{m}_t = \frac{m_t}{1-\beta_1^t}, \qquad
@@ -152,35 +90,19 @@ $$
 \theta_{t+1} = \theta_t - \eta\, \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon}, \tag{8}
 $$
 
-where $\varepsilon > 0$ prevents division by zero and sets the noise floor.
-Per coordinate, $\sqrt{\hat{v}_{t,i}}$ is the RMS of recent gradients, so (8)
-implements exactly the per-coordinate scaling $\eta_i \propto 1/\sqrt{h_i}$ of
-§4.1 — the effective preconditioner is $\text{diag}(\hat{v})^{-1/2}$.
+where $\varepsilon > 0$ prevents division by zero and sets the noise floor. Per coordinate, $\sqrt{\hat{v}_{t,i}}$ is the RMS of recent gradients, so (8) implements exactly the per-coordinate scaling $\eta_i \propto 1/\sqrt{h_i}$ of §4.1 — the effective preconditioner is $\text{diag}(\hat{v})^{-1/2}$.
 
-Two consequences are worth deriving because they explain design choices later.
-First, **scale invariance**: if every gradient were multiplied by $c > 0$
-(e.g. rescaling the whole loss), then $\hat{m} \to c\hat{m}$ and
-$\sqrt{\hat{v}} \to c\sqrt{\hat{v}}$, so the ratio — and the step — is
-unchanged:
+Two consequences are worth deriving because they explain design choices later. First, **scale invariance**: if every gradient were multiplied by $c > 0$ (e.g. rescaling the whole loss), then $\hat{m} \to c\hat{m}$ and $\sqrt{\hat{v}} \to c\sqrt{\hat{v}}$, so the ratio — and the step — is unchanged:
 
 $$
 \frac{c\hat{m}}{c\sqrt{\hat{v}}} = \frac{\hat{m}}{\sqrt{\hat{v}}}. \tag{9}
 $$
 
-This is why one optimizer can absorb the mixed CE + α·aux objective of this
-repo: the two terms differ by an order of magnitude in gradient scale, but Adam
-is invariant to the overall scale of each coordinate's gradient history.
-Second, **early-steps behavior**: for $t = 1$ the correction gives
-$\hat{m}_1 = g_1$ and $\hat{v}_1 = g_1^2$, hence
-$\hat{m}_1 / \sqrt{\hat{v}_1} = \operatorname{sign}(g_1)$ — the very first Adam
-step moves *every* coordinate by exactly $\pm \eta$, regardless of gradient
-magnitude. This is the mathematical reason warmup exists (§4.8).
+This is why one optimizer can absorb the mixed CE + α·aux objective of this repo: the two terms differ by an order of magnitude in gradient scale, but Adam is invariant to the overall scale of each coordinate's gradient history. Second, **early-steps behavior**: for $t = 1$ the correction gives $\hat{m}_1 = g_1$ and $\hat{v}_1 = g_1^2$, hence $\hat{m}_1 / \sqrt{\hat{v}_1} = \operatorname{sign}(g_1)$ — the very first Adam step moves *every* coordinate by exactly $\pm \eta$, regardless of gradient magnitude. This is the mathematical reason warmup exists (§4.8).
 
 ### 4.4 AdamW: decoupled weight decay
 
-L2 regularization adds $\tfrac{1}{2}\lambda\|\theta\|^2$ to the loss, so the
-gradient becomes $g + \lambda\theta$ and Adam's update becomes (absorbing the
-regularizer into the moments):
+L2 regularization adds $\tfrac{1}{2}\lambda\|\theta\|^2$ to the loss, so the gradient becomes $g + \lambda\theta$ and Adam's update becomes (absorbing the regularizer into the moments):
 
 $$
 \theta_{t+1} = \theta_t - \eta\, \frac{\hat{m}_t + \lambda\theta_t}
@@ -189,23 +111,14 @@ $$
 - \eta\, \frac{\hat{m}_t}{\sqrt{\hat{v}_t}+\varepsilon}. \tag{10}
 $$
 
-The approximation keeps the dominant term: because $\hat{v}$ is an EMA, the
-decay term $\lambda\theta_t$ enters the update *divided by* $\sqrt{\hat{v}_t}$,
-and it is also smeared through the momentum history. The decay is therefore
-per-coordinate adaptive: coordinates with large past gradients (large
-$\sqrt{\hat{v}}$) get *less* decay, so the effective regularization varies by
-orders of magnitude across a weight matrix. AdamW (Loshchilov & Hutter, 2019)
-moves the decay out of the moments entirely:
+The approximation keeps the dominant term: because $\hat{v}$ is an EMA, the decay term $\lambda\theta_t$ enters the update *divided by* $\sqrt{\hat{v}_t}$, and it is also smeared through the momentum history. The decay is therefore per-coordinate adaptive: coordinates with large past gradients (large $\sqrt{\hat{v}}$) get *less* decay, so the effective regularization varies by orders of magnitude across a weight matrix. AdamW (Loshchilov & Hutter, 2019) moves the decay out of the moments entirely:
 
 $$
 \theta_{t+1} = (1 - \eta\lambda)\, \theta_t
 - \eta\, \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon}. \tag{11}
 $$
 
-In (11) the shrinkage factor $(1 - \eta\lambda)$ is identical for every
-coordinate and every step; with no gradient the weight decays exactly
-geometrically, $\theta_t = (1-\eta\lambda)^t \theta_0$. Comparing (10) and
-(11), the difference is the placement of $\lambda\theta$:
+In (11) the shrinkage factor $(1 - \eta\lambda)$ is identical for every coordinate and every step; with no gradient the weight decays exactly geometrically, $\theta_t = (1-\eta\lambda)^t \theta_0$. Comparing (10) and (11), the difference is the placement of $\lambda\theta$:
 
 $$
 \text{L2-Adam: decay} = \eta\lambda\theta\,/\,(\sqrt{\hat v}+\varepsilon)
@@ -213,101 +126,55 @@ $$
 \text{AdamW: decay} = \eta\lambda\theta. \tag{12}
 $$
 
-Why decoupling wins for transformers: transformer weight matrices are
-reparameterization-redundant with the following norm layer (RMSNorm rescales
-its input), so what matters is the *magnitude* of the weights feeding
-activations, not the loss contribution of their norm; a uniform, predictable
-shrinkage (11) keeps weight norms in a steady state, while the adaptive decay
-of (10) lets coordinates with long gradient histories escape regularization
-exactly where drift is likeliest (large matrices). Every mainstream LLM recipe
-(GPT-3, LLaMA, DeepSeek-V3) uses the decoupled form.
+Why decoupling wins for transformers: transformer weight matrices are reparameterization-redundant with the following norm layer (RMSNorm rescales its input), so what matters is the *magnitude* of the weights feeding activations, not the loss contribution of their norm; a uniform, predictable shrinkage (11) keeps weight norms in a steady state, while the adaptive decay of (10) lets coordinates with long gradient histories escape regularization exactly where drift is likeliest (large matrices). Every mainstream LLM recipe (GPT-3, LLaMA, DeepSeek-V3) uses the decoupled form.
 
 ### 4.5 Hyperparameters for this run
 
-From `configs/pretrain_a100_502m.yaml` (training section): `beta1: 0.9`,
-`beta2: 0.95`, `weight_decay: 0.1`, `lr: 4.0e-4`, `min_lr_ratio: 0.05`,
-`warmup_steps: 3000`, `total_steps: 61000`, `grad_clip: 1.0`, `eps: 1e-6`.
+From `configs/pretrain_a100_502m.yaml` (training section): `beta1: 0.9`, `beta2: 0.95`, `weight_decay: 0.1`, `lr: 4.0e-4`, `min_lr_ratio: 0.05`, `warmup_steps: 3000`, `total_steps: 61000`, `grad_clip: 1.0`, `eps: 1e-6`.
 
 - **β₁ = 0.9.** Half-life ≈ 6.6 steps (§4.2): the velocity averages roughly
-  one gradient-accumulation window (4 micro-batches) plus a bit. Lower values
-  track noise, higher values lag schedule changes.
+  one gradient-accumulation window (4 micro-batches) plus a bit. Lower values track noise, higher values lag schedule changes.
 - **β₂ = 0.95.** The variance window is deliberately short (half-life ≈ 13.5
-  steps, effective sample count $1/(1-\beta_2) = 20$) versus the Adam default
-  0.999 (1000 steps). Pretraining here runs 61K steps over a cosine schedule;
-  a 1000-step variance window would feed stale $\hat{v}$ to the
-  preconditioner after every LR change. LLaMA-style recipes use the same 0.95.
+  steps, effective sample count $1/(1-\beta_2) = 20$) versus the Adam default 0.999 (1000 steps). Pretraining here runs 61K steps over a cosine schedule; a 1000-step variance window would feed stale $\hat{v}$ to the preconditioner after every LR change. LLaMA-style recipes use the same 0.95.
 - **wd = 0.1.** Per-step relative shrinkage $\eta\lambda = 4\times10^{-5}$ at
-  peak LR: small enough that gradients dominate, large enough to counteract
-  slow drift of expert matrices and router logits. It is a standard
-  pretraining value (GPT-3, LLaMA), not a tuned one.
+  peak LR: small enough that gradients dominate, large enough to counteract slow drift of expert matrices and router logits. It is a standard pretraining value (GPT-3, LLaMA), not a tuned one.
 - **lr = 4e-4 with init_std = 0.02.** A step of size $\eta$ is 2% of the
-  typical weight magnitude set by `init_std` — large enough to reorganize
-  weight norms within a few hundred steps, small enough not to scramble the
-  residual stream. Adam's step per coordinate is $O(\eta)$ (§4.3), so the LR
-  *is* the step size; 4e-4 at 131K tokens/step over 8B tokens is the standard
-  Chinchilla-scale recipe.
+  typical weight magnitude set by `init_std` — large enough to reorganize weight norms within a few hundred steps, small enough not to scramble the residual stream. Adam's step per coordinate is $O(\eta)$ (§4.3), so the LR *is* the step size; 4e-4 at 131K tokens/step over 8B tokens is the standard Chinchilla-scale recipe.
 - **min_lr_ratio = 0.05.** Cosine floor at $2\times10^{-5}$; the schedule never
   reaches zero, so the final steps still refine rather than add noise.
 - **eps = 1e-6.** See §6 (pitfall 2); it is the BF16-safe floor.
 
 ### 4.6 Vectorized updates and FP32 master weights
 
-BF16 stores 1 sign + 8 exponent + 7 mantissa bits; FP32 stores 23 mantissa
-bits. For a value in $[training.md](../training.md) is an **`[INFERENCE]` estimate** — `.benchmarks/`
-is empty. `fused` requires all parameters of a group to share a dtype and be
-contiguous, which the all-FP32 state here satisfies; the code gates it on
-`dev.type == "cuda"` and falls back to `foreach` on CPU.
+BF16 stores 1 sign + 8 exponent + 7 mantissa bits; FP32 stores 23 mantissa bits. For a value in $[training.md](../training.md) is an **`[INFERENCE]` estimate** — `.benchmarks/` is empty. `fused` requires all parameters of a group to share a dtype and be contiguous, which the all-FP32 state here satisfies; the code gates it on `dev.type == "cuda"` and falls back to `foreach` on CPU.
 
 ### 4.7 Global-norm gradient clipping
 
-Let $g$ be the flattened gradient of all $N$ parameters and $G$ its Euclidean
-norm:
+Let $g$ be the flattened gradient of all $N$ parameters and $G$ its Euclidean norm:
 
 $$
 G = \|g\|_2 = \left( \sum_{i=1}^{N} g_i^2 \right)^{1/2}. \tag{14}
 $$
 
-Clipping projects $g$ onto the $\ell_2$ ball of radius $c$ — the closest vector
-to $g$ with norm $\le c$, found by rescaling the whole gradient by one scalar:
+Clipping projects $g$ onto the $\ell_2$ ball of radius $c$ — the closest vector to $g$ with norm $\le c$, found by rescaling the whole gradient by one scalar:
 
 $$
 g_{\text{clipped}} = g \cdot \min\!\left(1, \frac{c}{G}\right), \qquad
 \|g_{\text{clipped}}\|_2 \le c. \tag{15}
 $$
 
-The direction of $g$ is untouched and every coordinate is scaled by the *same*
-factor, so relative magnitudes — which Adam respects via (9) — are preserved.
-The bound on the update: because $|g_i| \le G \le c$ after clipping, the
-per-coordinate step in (8) is bounded by $O(\eta)$ rather than
-$\eta \times (\text{spike}/\text{typical})$. With $N \approx 5\times10^8$
-dimensions, an unclipped norm of $G \approx \sqrt{N}\,\sigma$ (for
-per-coordinate std $\sigma$) exceeds $c = 1.0$ whenever $\sigma \gtrsim
-4.5\times10^{-5}$ [derived estimate]; so clipping is a safety valve that binds
-during warmup and routing instability, not a constant brake.
+The direction of $g$ is untouched and every coordinate is scaled by the *same* factor, so relative magnitudes — which Adam respects via (9) — are preserved. The bound on the update: because $|g_i| \le G \le c$ after clipping, the per-coordinate step in (8) is bounded by $O(\eta)$ rather than $\eta \times (\text{spike}/\text{typical})$. With $N \approx 5\times10^8$ dimensions, an unclipped norm of $G \approx \sqrt{N}\,\sigma$ (for per-coordinate std $\sigma$) exceeds $c = 1.0$ whenever $\sigma \gtrsim 4.5\times10^{-5}$ [derived estimate]; so clipping is a safety valve that binds during warmup and routing instability, not a constant brake.
 
 ### 4.8 Warmup: protecting the biased moments
 
-The schedule multiplies the entire update: $\eta \to \eta\lambda(t)$ with
-$\lambda(t) = t/w$ for $t < w$ (linear warmup), then cosine decay to the floor.
-Section 4.3 showed the first Adam step is $\pm\eta$ in *every* coordinate
-because one sample makes $\hat m/\sqrt{\hat v}$ a pure sign. With warmup the
-effective step is:
+The schedule multiplies the entire update: $\eta \to \eta\lambda(t)$ with $\lambda(t) = t/w$ for $t < w$ (linear warmup), then cosine decay to the floor. Section 4.3 showed the first Adam step is $\pm\eta$ in *every* coordinate because one sample makes $\hat m/\sqrt{\hat v}$ a pure sign. With warmup the effective step is:
 
 $$
 \theta_{t+1} = \theta_t - \eta\,\lambda(t)\, \frac{\hat m_t}{\sqrt{\hat v_t}+\varepsilon}, \qquad
 \lambda(t) = \min\!\left(\frac{t}{w},\, \text{cosine}\right), \tag{16}
 $$
 
-so the early steps grow linearly from zero while $\hat v$ accumulates its
-effective $1/(1-\beta_2) = 20$ samples. The relative error of the variance
-estimate after $n$ samples scales as $\sim 1/\sqrt{n}$: at $n = 20$ that is
-~22%, at $n = 1$ it is 100% — warmup does not fix the bias (the correction
-(7) already does), it bounds the *variance* of early steps. The repo's choice
-of $w = 3000$ (4.9% of the run) sits in the 2–5% band recommended for MoE
-training per the YAML comment, because router gradients are largest and noisiest
-exactly during warmup. Note also that $\lambda(t)$ multiplies the decoupled
-decay in (11) too — weight decay ramps up with the learning rate, which is
-desirable: don't shrink weights before gradients have set their scale.
+so the early steps grow linearly from zero while $\hat v$ accumulates its effective $1/(1-\beta_2) = 20$ samples. The relative error of the variance estimate after $n$ samples scales as $\sim 1/\sqrt{n}$: at $n = 20$ that is ~22%, at $n = 1$ it is 100% — warmup does not fix the bias (the correction (7) already does), it bounds the *variance* of early steps. The repo's choice of $w = 3000$ (4.9% of the run) sits in the 2–5% band recommended for MoE training per the YAML comment, because router gradients are largest and noisiest exactly during warmup. Note also that $\lambda(t)$ multiplies the decoupled decay in (11) too — weight decay ramps up with the learning rate, which is desirable: don't shrink weights before gradients have set their scale.
 
 ### 5. Code walkthrough
 
@@ -321,13 +188,7 @@ decay_params = [p for n, p in model.named_parameters() if not any(nd in n.lower(
 no_decay_params = [p for n, p in model.named_parameters() if any(nd in n.lower() for nd in no_decay)]
 ```
 
-Substring matching: any parameter whose name contains `bias`, `norm`, or
-`embed` is decay-free. This covers the RMSNorm gains and biases everywhere,
-and the tied embedding — the word embedding and the output head are the *same*
-`Parameter` tensor (`weight_tying: true` in the config), and
-`named_parameters()` lists the shared tensor once under the embedding's name,
-so excluding `embed` excludes the tied head as well. The two groups then go
-into a single `AdamW`:
+Substring matching: any parameter whose name contains `bias`, `norm`, or `embed` is decay-free. This covers the RMSNorm gains and biases everywhere, and the tied embedding — the word embedding and the output head are the *same* `Parameter` tensor (`weight_tying: true` in the config), and `named_parameters()` lists the shared tensor once under the embedding's name, so excluding `embed` excludes the tied head as well. The two groups then go into a single `AdamW`:
 
 ```python
 optim = AdamW(
@@ -343,15 +204,11 @@ optim = AdamW(
 )
 ```
 
-Every hyperparameter comes from `configs/pretrain_a100_502m.yaml` (or its
-default), so the schedule and the optimizer cannot drift out of sync with the
-recipe. `fused=(dev.type == "cuda")` is the only hardware-dependent flag: on
-CPU the same code path runs with `foreach`.
+Every hyperparameter comes from `configs/pretrain_a100_502m.yaml` (or its default), so the schedule and the optimizer cannot drift out of sync with the recipe. `fused=(dev.type == "cuda")` is the only hardware-dependent flag: on CPU the same code path runs with `foreach`.
 
 ### 5.2 Schedule interaction
 
-The schedule is a `LambdaLR` wrapping the lambda returned by
-`training/pretrain.py:make_warmup_cosine_lambda`:
+The schedule is a `LambdaLR` wrapping the lambda returned by `training/pretrain.py:make_warmup_cosine_lambda`:
 
 ```python
 sched = LambdaLR(optim, make_warmup_cosine_lambda(
@@ -361,21 +218,11 @@ sched = LambdaLR(optim, make_warmup_cosine_lambda(
 ))
 ```
 
-`make_warmup_cosine_lambda` returns `lr_lambda(step)` where
-`step / warmup_steps` for `step < warmup_steps`, the cosine
-`min_lr_ratio + (1 - min_lr_ratio) * 0.5 * (1 + cos(π · progress))` afterwards,
-and the constant `min_lr_ratio` past `total_steps` — the exact schedule of
-(16). `LambdaLR` multiplies the group's base LR by this factor, which is why
-warmup scales the *whole* AdamW update including decay (§4.8). The schedule's
-three boundary invariants — zero at step 0, peak at the warmup boundary, floor
-at the end — are pinned by `tests/test_training.py::test_lr_schedule_at_warmup_boundary`,
-`test_lr_schedule_at_end`, and `test_lr_schedule_monotonic_decay_after_warmup`.
+`make_warmup_cosine_lambda` returns `lr_lambda(step)` where `step / warmup_steps` for `step < warmup_steps`, the cosine `min_lr_ratio + (1 - min_lr_ratio) * 0.5 * (1 + cos(π · progress))` afterwards, and the constant `min_lr_ratio` past `total_steps` — the exact schedule of (16). `LambdaLR` multiplies the group's base LR by this factor, which is why warmup scales the *whole* AdamW update including decay (§4.8). The schedule's three boundary invariants — zero at step 0, peak at the warmup boundary, floor at the end — are pinned by `tests/test_training.py::test_lr_schedule_at_warmup_boundary`, `test_lr_schedule_at_end`, and `test_lr_schedule_monotonic_decay_after_warmup`.
 
 ### 5.3 The step: clipping, NaN guard, and optimizer state
 
-Inside the accumulation loop (after `loss = (ce + aux_alpha * aux_loss) / accum`
-in `training/pretrain.py:main`), the optimizer runs only on accumulation
-boundaries:
+Inside the accumulation loop (after `loss = (ce + aux_alpha * aux_loss) / accum` in `training/pretrain.py:main`), the optimizer runs only on accumulation boundaries:
 
 ```python
 if grad_clip > 0:
@@ -385,12 +232,7 @@ sched.step()
 optim.zero_grad(set_to_none=True)
 ```
 
-`clip_grad_norm_` implements (14)–(15) over all parameters before `step()`;
-the `try/except TypeError` around it is a version-compat shim for the
-`foreach` kwarg. Dividing the loss by `accum` before `backward()` keeps the
-accumulated gradient at single-micro-batch scale, so the clip threshold is
-meaningful across `accum=4`. `zero_grad(set_to_none=True)` frees the FP32
-gradient buffers (2.0 GB) after each step instead of zeroing them.
+`clip_grad_norm_` implements (14)–(15) over all parameters before `step()`; the `try/except TypeError` around it is a version-compat shim for the `foreach` kwarg. Dividing the loss by `accum` before `backward()` keeps the accumulated gradient at single-micro-batch scale, so the clip threshold is meaningful across `accum=4`. `zero_grad(set_to_none=True)` frees the FP32 gradient buffers (2.0 GB) after each step instead of zeroing them.
 
 The NaN guard sits *before* the backward/step block:
 
@@ -405,71 +247,31 @@ if not torch.isfinite(loss):
         continue
 ```
 
-When the loss is non-finite the loop **skips `optim.step()` entirely** — it
-never lets a poisoned gradient touch Adam state. That is load-bearing for a
-running-moment optimizer: in (6), if any $g_i$ is NaN then
-$v_t = \beta_2 v_{t-1} + (1-\beta_2)\text{NaN}^2$ is NaN, and because $\beta_2
-v_t$ keeps the NaN in the running sum,
+When the loss is non-finite the loop **skips `optim.step()` entirely** — it never lets a poisoned gradient touch Adam state. That is load-bearing for a running-moment optimizer: in (6), if any $g_i$ is NaN then $v_t = \beta_2 v_{t-1} + (1-\beta_2)\text{NaN}^2$ is NaN, and because $\beta_2 v_t$ keeps the NaN in the running sum,
 
 $$
 v_{t+k} = \beta_2^k\, \text{NaN} + \sum_{j=1}^{k} \beta_2^{k-j}(1-\beta_2)\, g_{t+j}^2
 = \text{NaN} \tag{17}
 $$
 
-for *every* future $k$ — one NaN gradient permanently poisons Adam's second
-moment; the state cannot heal itself. The guard prevents the poison from
-entering, and the rollback branch (after `nan_guard_max_consecutive: 5`
-consecutive NaNs) restores $m, v$ from the last checkpoint
-(`tests/test_training.py::test_checkpoint_round_trip` covers the
-optimizer-state round trip, and `test_nan_guard_detection` pins the
-`torch.isfinite` check). Reproducibility of the whole trajectory rests on
-`training/pretrain.py:seed_everything`, which seeds Python, NumPy, and PyTorch
-RNGs and sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` for deterministic cuBLAS
-before the model — and therefore before Adam's zero-initialized moments — are
-created.
+for *every* future $k$ — one NaN gradient permanently poisons Adam's second moment; the state cannot heal itself. The guard prevents the poison from entering, and the rollback branch (after `nan_guard_max_consecutive: 5` consecutive NaNs) restores $m, v$ from the last checkpoint (`tests/test_training.py::test_checkpoint_round_trip` covers the optimizer-state round trip, and `test_nan_guard_detection` pins the `torch.isfinite` check). Reproducibility of the whole trajectory rests on `training/pretrain.py:seed_everything`, which seeds Python, NumPy, and PyTorch RNGs and sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` for deterministic cuBLAS before the model — and therefore before Adam's zero-initialized moments — are created.
 
 ### 6. Pitfalls + verify
 
 1. **NaN through the optimizer state is permanent.** One NaN gradient makes
-   $v_t$ NaN forever ((17)); a NaN *loss* is caught and skipped, but a finite
-   loss with a NaN gradient (e.g. overflow inside the router softmax) would
-   not be. Guard: `tests/test_training.py::test_nan_guard_detection` plus
-   watching the `[nan-guard]` log lines during a smoke run
-   (`scripts/e2e_gpu_smoke.py`).
+   $v_t$ NaN forever ((17)); a NaN *loss* is caught and skipped, but a finite loss with a NaN gradient (e.g. overflow inside the router softmax) would not be. Guard: `tests/test_training.py::test_nan_guard_detection` plus watching the `[nan-guard]` log lines during a smoke run (`scripts/e2e_gpu_smoke.py`).
 2. **eps=1e-6, not 1e-8.** The classical eps=1e-8 fails outright under FP16
-   (min normal $6.1\times10^{-5}$, min subnormal $6\times10^{-8}$ — 1e-8
-   rounds to zero in the second moment). Under BF16 the range is FP32-like, so
-   nothing underflows, but with only 7 mantissa bits (13) a variance stored
-   near 1e-8 carries ~0.4% relative error, and when $\sqrt{\hat v} \ll \varepsilon$
-   the denominator of (8) is dominated by $\varepsilon$: the step becomes
-   $\eta\hat m/\varepsilon$, amplifying gradient noise instead of normalizing
-   it. 1e-6 is a safe floor given typical BF16 gradient magnitudes; this is
-   the setting DeepSeek-V3 and LLaMA-3 use, and it is pinned in the config
-   comment and [moe.md](moe.md) §16.
+   (min normal $6.1\times10^{-5}$, min subnormal $6\times10^{-8}$ — 1e-8 rounds to zero in the second moment). Under BF16 the range is FP32-like, so nothing underflows, but with only 7 mantissa bits (13) a variance stored near 1e-8 carries ~0.4% relative error, and when $\sqrt{\hat v} \ll \varepsilon$ the denominator of (8) is dominated by $\varepsilon$: the step becomes $\eta\hat m/\varepsilon$, amplifying gradient noise instead of normalizing it. 1e-6 is a safe floor given typical BF16 gradient magnitudes; this is the setting DeepSeek-V3 and LLaMA-3 use, and it is pinned in the config comment and [moe.md](moe.md) §16.
 3. **MoE: the optimizer sees all 501.8M parameters.** Unrouted experts receive
-   zero gradient, but AdamW still applies the decoupled decay (11) to them and
-   keeps their moments alive for when they are next selected. The 4.0 GB
-   optimizer state is over *total* parameters — sparsity does not reduce it.
-   Consequence: an expert starved for many steps still shrinks at
-   $\eta\lambda$ per step, which is part of why the aux loss (α=0.01) must
-   keep routing balanced (see [moe theory](moe.md)).
+   zero gradient, but AdamW still applies the decoupled decay (11) to them and keeps their moments alive for when they are next selected. The 4.0 GB optimizer state is over *total* parameters — sparsity does not reduce it. Consequence: an expert starved for many steps still shrinks at $\eta\lambda$ per step, which is part of why the aux loss (α=0.01) must keep routing balanced (see [moe theory](moe.md)).
 4. **Warmup is not the bias correction.** The correction (7) makes the moments
-   unbiased from step 1; warmup (16) bounds the *variance* of the early
-   sign-like steps (§4.3, §4.8). Cutting warmup on this model means the first
-   step moves every coordinate by $\pm\eta$ — with 8 routed experts' gates at
-   init, that is a reliable way to seed expert collapse. Verify the boundary
-   behavior with the three schedule tests in `tests/test_training.py`.
+   unbiased from step 1; warmup (16) bounds the *variance* of the early sign-like steps (§4.3, §4.8). Cutting warmup on this model means the first step moves every coordinate by $\pm\eta$ — with 8 routed experts' gates at init, that is a reliable way to seed expert collapse. Verify the boundary behavior with the three schedule tests in `tests/test_training.py`.
 5. **`fused` silently requires uniformity.** `fused=True` demands one dtype per
-   group and contiguous tensors; if a future change casts some parameters to
-   BF16 in place, the fused path either errors or (worse) falls back without
-   telling you. The A100 speedup claims (1.5–2×, 35–40% MFU) are
-   **`[INFERENCE]`** until `.benchmarks/` is populated.
+   group and contiguous tensors; if a future change casts some parameters to BF16 in place, the fused path either errors or (worse) falls back without telling you. The A100 speedup claims (1.5–2×, 35–40% MFU) are **`[INFERENCE]`** until `.benchmarks/` is populated.
 
 ---
 
-*Verified 2026-08-04 against `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`,
-`tests/test_training.py`, and [training.md](../training.md). No pretraining run
-has completed; all performance figures are targets or `[INFERENCE]`.*
+*Verified 2026-08-04 against `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`, `tests/test_training.py`, and [training.md](../training.md). No pretraining run has completed; all performance figures are targets or `[INFERENCE]`.*
 
 ## Part B — Numerics (Precision, Range, and the Bit Budget)
 
@@ -772,89 +574,43 @@ The full suite baseline is 192 tests (190 pass + 2 GPU-gated Triton skips on CPU
 
 ## Part C — Sampling (Autoregressive Decode and Token Selection)
 
-> **Chapter on `inference/generate.py`.** How a trained decoder turns logits into
-> tokens: autoregressive factorization, greedy decoding, temperature (Boltzmann)
-> scaling, top-k / top-p truncation, entropy and perplexity, and the determinism
-> rules that make the passkey benchmark meaningful. Engine-level decode (KV
-> cache, ring buffers) is [inference.md](../inference.md) and
-> [kv cache engineering](../inference.md); the softmax that underlies
-> every equation here is derived in [attention math](attention-and-positional.md).
+> **Chapter on `inference/generate.py`.** How a trained decoder turns logits into tokens: autoregressive factorization, greedy decoding, temperature (Boltzmann) scaling, top-k / top-p truncation, entropy and perplexity, and the determinism rules that make the passkey benchmark meaningful. Engine-level decode (KV cache, ring buffers) is [inference.md](../inference.md) and [kv cache engineering](../inference.md); the softmax that underlies every equation here is derived in [attention math](attention-and-positional.md).
 
 ---
 
 ### 60-second summary
 
-A transformer's final layer emits one **logit** $z_i$ per vocabulary token $i$ — an
-unnormalized score. Sampling is the layer that turns those scores into an actual
-next token. The default recipe in this repo: scale logits by $1/T$ (temperature),
-take a softmax to get a probability distribution over the 128,000-token vocabulary,
-truncate the distribution to the smallest high-probability set whose cumulative
-mass reaches `top_p`, then draw one token from that truncated distribution.
-`temperature <= 0` skips all of it and just takes the argmax (greedy).
+A transformer's final layer emits one **logit** $z_i$ per vocabulary token $i$ — an unnormalized score. Sampling is the layer that turns those scores into an actual next token. The default recipe in this repo: scale logits by $1/T$ (temperature), take a softmax to get a probability distribution over the 128,000-token vocabulary, truncate the distribution to the smallest high-probability set whose cumulative mass reaches `top_p`, then draw one token from that truncated distribution. `temperature <= 0` skips all of it and just takes the argmax (greedy).
 
-Why it matters: greedy decode is deterministic and reproducible, but it loops and
-degrades on open-ended text; sampling adds controlled stochasticity. GPT-OSS-Lite's
-headline evaluation — passkey retrieval at up to 131,072 tokens — runs **greedy**
-(`temperature=0.0`), because a retrieval task has one correct answer and sampling
-would add variance to the accuracy estimate. Everything lives in
-`inference/generate.py:generate`; the benchmark harness is
-`inference/long_context.py:PasskeyEvaluator.evaluate`.
+Why it matters: greedy decode is deterministic and reproducible, but it loops and degrades on open-ended text; sampling adds controlled stochasticity. GPT-OSS-Lite's headline evaluation — passkey retrieval at up to 131,072 tokens — runs **greedy** (`temperature=0.0`), because a retrieval task has one correct answer and sampling would add variance to the accuracy estimate. Everything lives in `inference/generate.py:generate`; the benchmark harness is `inference/long_context.py:PasskeyEvaluator.evaluate`.
 
 ### 1. Why it matters here
 
 - **Generation quality.** Greedy decoding maximizes per-step probability, not
-  sequence quality: at every step it re-picks the same high-mass regions, which
-  produces repetitive loops on open-ended generation. Sampling from the
-  temperature-scaled distribution lets the model explore lower-ranked continuations.
+  sequence quality: at every step it re-picks the same high-mass regions, which produces repetitive loops on open-ended generation. Sampling from the temperature-scaled distribution lets the model explore lower-ranked continuations.
 - **The headline metric is a retrieval task.** The passkey benchmark inserts a
-  five-digit number into filler text and asks the model to repeat it
-  ([inference.md](../inference.md)). There is exactly one right answer, so the
-  eval uses greedy decoding — see §5 for the variance argument.
+  five-digit number into filler text and asks the model to repeat it ([inference.md](../inference.md)). There is exactly one right answer, so the eval uses greedy decoding — see §5 for the variance argument.
 - **A 502M-parameter budget makes decode cost visible.** The 12-layer stack
-  (alternating SWA(128)/full attention) was chosen partly so long-context decode
-  stays cheap: the mixed cache stores only 128 tokens on six layers
-  ([foundations-and-architecture.md](foundations-and-architecture.md), [attention-sinks.md](attention-sinks.md)).
-  The sampling layer itself is O(V) per token ($V = 128000$), negligible next to
-  attention — but it runs once per generated token, so its semantics (and any
-  truncation) are the only thing standing between logits and the emitted text.
+  (alternating SWA(128)/full attention) was chosen partly so long-context decode stays cheap: the mixed cache stores only 128 tokens on six layers ([foundations-and-architecture.md](foundations-and-architecture.md), [attention-sinks.md](attention-sinks.md)). The sampling layer itself is O(V) per token ($V = 128000$), negligible next to attention — but it runs once per generated token, so its semantics (and any truncation) are the only thing standing between logits and the emitted text.
 - **Honesty boundary.** No pretraining run has happened yet; the ≥85% passkey
-  accuracy at 128K is a **target**, not a result. What is measured today: the
-  2.00× KV reduction at 128K ([operations.md](../guides/operations.md)) and the 192-test
-  CPU suite.
+  accuracy at 128K is a **target**, not a result. What is measured today: the 2.00× KV reduction at 128K ([operations.md](../guides/operations.md)) and the 192-test CPU suite.
 
 ### 2. Intuition
 
-Think of the vocabulary as a terrain over which the model has placed one "altitude"
-per token — the logit. A softmax is a camera looking at that terrain: it turns
-altitudes into a probability distribution whose mass concentrates near the peaks.
-**Temperature** is the zoom knob: $T < 1$ magnifies altitude differences so the
-highest peak dominates (at $T \to 0$ you see only the summit — greedy); $T > 1$
-flattens the terrain so foothills get a fair share (at $T \to \infty$ everything is
-flat — uniform). **Top-p** then says "ignore everything below this elevation
-contour": keep only the smallest set of peaks that together hold a fraction $p$ of
-the total mass, and renormalize. Finally, instead of always planting the flag on
-the tallest remaining peak (greedy), **sampling** drops a ball on the terrain and
-lets the mass distribution decide where it lands — usually the peak, occasionally
-a shoulder. That occasional "shoulder" is what prevents degenerate repetition.
+Think of the vocabulary as a terrain over which the model has placed one "altitude" per token — the logit. A softmax is a camera looking at that terrain: it turns altitudes into a probability distribution whose mass concentrates near the peaks. **Temperature** is the zoom knob: $T < 1$ magnifies altitude differences so the highest peak dominates (at $T \to 0$ you see only the summit — greedy); $T > 1$ flattens the terrain so foothills get a fair share (at $T \to \infty$ everything is flat — uniform). **Top-p** then says "ignore everything below this elevation contour": keep only the smallest set of peaks that together hold a fraction $p$ of the total mass, and renormalize. Finally, instead of always planting the flag on the tallest remaining peak (greedy), **sampling** drops a ball on the terrain and lets the mass distribution decide where it lands — usually the peak, occasionally a shoulder. That occasional "shoulder" is what prevents degenerate repetition.
 
 ### 3. Theory and derivation
 
 ### 3.1 Autoregressive factorization
 
-A language model assigns a probability to a token sequence $x_1, \ldots, x_T$ from
-a vocabulary $\mathcal{V}$ of size $V$ by the chain rule of probability, conditioned
-only on the past:
+A language model assigns a probability to a token sequence $x_1, \ldots, x_T$ from a vocabulary $\mathcal{V}$ of size $V$ by the chain rule of probability, conditioned only on the past:
 
 $$
 P(x_1, \ldots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_{<t}), \qquad x_{<t} = (x_1, \ldots, x_{t-1})
 \tag{1}
 $$
 
-The decoder-only transformer (causal mask, [foundations-and-architecture.md](foundations-and-architecture.md))
-implements each conditional $P(x_t \mid x_{<t})$ as a softmax over logits
-$z^{(t)} \in \mathbb{R}^{V}$ produced by the shared stack. This factorization is
-what makes generation a loop: sample $x_T$, append, sample $x_{T+1}$, repeat — the
-prefix never needs to be re-sampled.
+The decoder-only transformer (causal mask, [foundations-and-architecture.md](foundations-and-architecture.md)) implements each conditional $P(x_t \mid x_{<t})$ as a softmax over logits $z^{(t)} \in \mathbb{R}^{V}$ produced by the shared stack. This factorization is what makes generation a loop: sample $x_T$, append, sample $x_{T+1}$, repeat — the prefix never needs to be re-sampled.
 
 ### 3.2 Greedy decoding
 
@@ -865,13 +621,7 @@ $$
 \tag{2}
 $$
 
-The second equality holds because softmax is monotonic in its argument. Greedy is
-the mode of each conditional — but the mode of each conditional is not generally the
-mode of the joint (1): a low-probability token can be the right choice if it opens a
-long high-probability continuation. That gap is the theoretical justification for
-sampling. Greedy is also exactly the $T \to 0$ limit of temperature sampling
-(§3.3), and `inference/generate.py:generate` treats every `temperature <= 0` as
-greedy.
+The second equality holds because softmax is monotonic in its argument. Greedy is the mode of each conditional — but the mode of each conditional is not generally the mode of the joint (1): a low-probability token can be the right choice if it opens a long high-probability continuation. That gap is the theoretical justification for sampling. Greedy is also exactly the $T \to 0$ limit of temperature sampling (§3.3), and `inference/generate.py:generate` treats every `temperature <= 0` as greedy.
 
 ### 3.3 Temperature — Boltzmann scaling
 
@@ -882,59 +632,43 @@ p_i = \frac{\exp(z_i / T)}{\sum_{j=1}^{V} \exp(z_j / T)}, \qquad T > 0
 \tag{3}
 $$
 
-This is the Boltzmann distribution of statistical mechanics with $T$ in the role of
-temperature: states (tokens) with higher energy-like score $z_i$ get exponentially
-more mass. To derive the limits, shift by the maximum logit
-$z_{\max} = \max_j z_j$ (numerically stable, probabilities unchanged):
+This is the Boltzmann distribution of statistical mechanics with $T$ in the role of temperature: states (tokens) with higher energy-like score $z_i$ get exponentially more mass. To derive the limits, shift by the maximum logit $z_{\max} = \max_j z_j$ (numerically stable, probabilities unchanged):
 
 $$
 p_i = \frac{\exp\big((z_i - z_{\max})/T\big)}{\sum_{j=1}^{V} \exp\big((z_j - z_{\max})/T\big)}
 \tag{4}
 $$
 
-**Limit $T \to 0^+$.** Let $A = \{ i : z_i = z_{\max} \}$ be the set of argmax
-indices. For $i \notin A$, the exponent $(z_i - z_{\max})/T \to -\infty$, so
-$\exp(\cdot) \to 0$; for $i \in A$ the exponent is $0$ and $\exp(0) = 1$. Hence
+**Limit $T \to 0^+$.** Let $A = \{ i : z_i = z_{\max} \}$ be the set of argmax indices. For $i \notin A$, the exponent $(z_i - z_{\max})/T \to -\infty$, so $\exp(\cdot) \to 0$; for $i \in A$ the exponent is $0$ and $\exp(0) = 1$. Hence
 
 $$
 \lim_{T \to 0^+} p_i = \begin{cases} 1/|A| & i \in A \\ 0 & i \notin A \end{cases}
 \tag{5}
 $$
 
-i.e. a uniform draw over the tied argmax tokens — greedy when $|A| = 1$ (the usual
-case), which is exactly the code path `next_token_logits.argmax(dim=-1)`.
+i.e. a uniform draw over the tied argmax tokens — greedy when $|A| = 1$ (the usual case), which is exactly the code path `next_token_logits.argmax(dim=-1)`.
 
-**Limit $T \to \infty$.** Every exponent in (4) tends to $0$, so every $\exp$ tends
-to $1$ and
+**Limit $T \to \infty$.** Every exponent in (4) tends to $0$, so every $\exp$ tends to $1$ and
 
 $$
 \lim_{T \to \infty} p_i = \frac{1}{V},
 \tag{6}
 $$
 
-the uniform distribution. Greedy and uniform are the two endpoints of the family
-(3); every finite $T$ interpolates between them.
+the uniform distribution. Greedy and uniform are the two endpoints of the family (3); every finite $T$ interpolates between them.
 
-**What $T = 0.7$ does.** Compare two tokens by probability ratio — a scale-free
-quantity:
+**What $T = 0.7$ does.** Compare two tokens by probability ratio — a scale-free quantity:
 
 $$
 \frac{p_i}{p_j} = \exp\!\left(\frac{z_i - z_j}{T}\right).
 \tag{7}
 $$
 
-At $T = 1$ the ratio is $\exp(z_i - z_j)$ (plain softmax). At $T = 0.7 < 1$ the
-exponent is multiplied by $1/T \approx 1.43$, so the ratio between any two tokens is
-amplified: $p_{\text{high}}$ grows, $p_{\text{low}}$ shrinks, and the distribution
-becomes **sharper** than the raw softmax while remaining non-degenerate — it leans
-toward the mode without committing to it. That is the default in
-`inference/generate.py:generate`. (Training uses plain cross-entropy on the $T=1$
-softmax, [training.md](../training.md); temperature is purely a decode-time knob.)
+At $T = 1$ the ratio is $\exp(z_i - z_j)$ (plain softmax). At $T = 0.7 < 1$ the exponent is multiplied by $1/T \approx 1.43$, so the ratio between any two tokens is amplified: $p_{\text{high}}$ grows, $p_{\text{low}}$ shrinks, and the distribution becomes **sharper** than the raw softmax while remaining non-degenerate — it leans toward the mode without committing to it. That is the default in `inference/generate.py:generate`. (Training uses plain cross-entropy on the $T=1$ softmax, [training.md](../training.md); temperature is purely a decode-time knob.)
 
 ### 3.4 Top-k truncation
 
-Top-k keeps only the $k$ largest logits (equivalently, the $k$ largest
-probabilities) and renormalizes the rest to zero:
+Top-k keeps only the $k$ largest logits (equivalently, the $k$ largest probabilities) and renormalizes the rest to zero:
 
 $$
 \tilde{p}_i = \begin{cases} p_i \big/ \displaystyle\sum_{j \in S_k} p_j & i \in S_k \\[6pt] 0 & i \notin S_k \end{cases}
@@ -942,19 +676,11 @@ $$
 \tag{8}
 $$
 
-Effect: the tail of the distribution — thousands of near-zero probabilities that
-together hold real mass — is cut off, so the draw cannot land on a "random" token.
-The cost is a hard cutoff: when the model is confident, top-k may discard tokens
-that the model still considers plausible; when it is uncertain (near-uniform), top-k
-discards genuinely competing options. This repo does **not** implement top-k in
-`inference/generate.py:generate` — it is the classic baseline that top-p
-generalizes, and `top_p` is the tunable here.
+Effect: the tail of the distribution — thousands of near-zero probabilities that together hold real mass — is cut off, so the draw cannot land on a "random" token. The cost is a hard cutoff: when the model is confident, top-k may discard tokens that the model still considers plausible; when it is uncertain (near-uniform), top-k discards genuinely competing options. This repo does **not** implement top-k in `inference/generate.py:generate` — it is the classic baseline that top-p generalizes, and `top_p` is the tunable here.
 
 ### 3.5 Top-p (nucleus) sampling
 
-Top-p keeps the *smallest* set of top-ranked tokens whose cumulative probability
-mass reaches $p$, then renormalizes. Order probabilities
-$p_{(1)} \ge p_{(2)} \ge \cdots \ge p_{(V)}$ and define
+Top-p keeps the *smallest* set of top-ranked tokens whose cumulative probability mass reaches $p$, then renormalizes. Order probabilities $p_{(1)} \ge p_{(2)} \ge \cdots \ge p_{(V)}$ and define
 
 $$
 S_p = \left\{ (1), \ldots, (m) \right\}, \qquad
@@ -964,14 +690,9 @@ m = \min\left\{ m' : \sum_{i=1}^{m'} p_{(i)} \ge p \right\},
 \tag{9}
 $$
 
-The nucleus size $m$ adapts to confidence: a peaked distribution needs $m \approx 1$
-(a few tokens cover 90% of the mass), a flat one needs $m \approx V$. This is the
-property top-k lacks — instead of "always keep 50 tokens," it is "keep however many
-tokens are actually plausible."
+The nucleus size $m$ adapts to confidence: a peaked distribution needs $m \approx 1$ (a few tokens cover 90% of the mass), a flat one needs $m \approx V$. This is the property top-k lacks — instead of "always keep 50 tokens," it is "keep however many tokens are actually plausible."
 
-**Interaction with temperature — order matters.** In
-`inference/generate.py:generate` the pipeline is strictly sequential:
-**temperature first, then softmax, then top-p on the resulting probabilities**:
+**Interaction with temperature — order matters.** In `inference/generate.py:generate` the pipeline is strictly sequential: **temperature first, then softmax, then top-p on the resulting probabilities**:
 
 ```python
 probs = F.softmax(next_token_logits / temperature, dim=-1)
@@ -982,22 +703,11 @@ sorted_probs[mask] = 0.0
 sorted_probs = sorted_probs / sorted_probs.sum(dim=-1, keepdim=True).clamp(min=1e-10)
 ```
 
-Because temperature reshapes the distribution before the nucleus is selected, the
-truncation set depends on $T$: at $T = 0.7$ the distribution is sharper, so the
-nucleus is smaller and more aggressive than it would be at $T = 1$. (Some libraries
-apply top-p to the raw logits before softmax — a different, temperature-agnostic
-set.) The mask implements (9) exactly: token $k$ in sorted order is kept iff the
-mass strictly *before* it satisfies $\sum_{i<k} p_{(i)} \le p$, i.e. the kept
-prefix is the smallest one with cumulative mass $\ge p$; `top_p = 1.0` never masks
-anything, and `clamp(min=1e-10)` guards the renormalization against an empty nucleus
-(e.g. degenerate inputs). The final draw is a single categorical sample per batch
-row via `torch.multinomial(sorted_probs, 1)`, un-permuted with
-`sorted_idx.gather(-1, next_id)`.
+Because temperature reshapes the distribution before the nucleus is selected, the truncation set depends on $T$: at $T = 0.7$ the distribution is sharper, so the nucleus is smaller and more aggressive than it would be at $T = 1$. (Some libraries apply top-p to the raw logits before softmax — a different, temperature-agnostic set.) The mask implements (9) exactly: token $k$ in sorted order is kept iff the mass strictly *before* it satisfies $\sum_{i<k} p_{(i)} \le p$, i.e. the kept prefix is the smallest one with cumulative mass $\ge p$; `top_p = 1.0` never masks anything, and `clamp(min=1e-10)` guards the renormalization against an empty nucleus (e.g. degenerate inputs). The final draw is a single categorical sample per batch row via `torch.multinomial(sorted_probs, 1)`, un-permuted with `sorted_idx.gather(-1, next_id)`.
 
 ### 3.6 Entropy and perplexity
 
-The per-token entropy of the predictive distribution quantifies how much the model
-"knows" at that position:
+The per-token entropy of the predictive distribution quantifies how much the model "knows" at that position:
 
 $$
 H(p) = -\sum_{i=1}^{V} p_i \log p_i \quad (\text{nats}), \qquad
@@ -1005,18 +715,14 @@ H(x_1, \ldots, x_T) = \sum_{t=1}^{T} H\!\big(P(\cdot \mid x_{<t})\big)
 \tag{10}
 $$
 
-The second identity follows from (1): the entropy of the joint factors into the sum
-of conditional entropies. Entropy is $0$ for a degenerate (one-hot) distribution
-and maximal for uniform. The uniform bound, derived from (10) by symmetry
-($p_i = 1/V$):
+The second identity follows from (1): the entropy of the joint factors into the sum of conditional entropies. Entropy is $0$ for a degenerate (one-hot) distribution and maximal for uniform. The uniform bound, derived from (10) by symmetry ($p_i = 1/V$):
 
 $$
 H_{\text{uniform}} = \log V = \log 128000 \approx 11.76 \text{ nats} \approx 16.97 \text{ bits}
 \tag{11}
 $$
 
-Perplexity is the exponential of the average per-token cross-entropy, which at eval
-equals entropy of the model's own distribution:
+Perplexity is the exponential of the average per-token cross-entropy, which at eval equals entropy of the model's own distribution:
 
 $$
 \text{PPL} = \exp\!\left(-\frac{1}{T}\sum_{t=1}^{T} \log P(x_t \mid x_{<t})\right)
@@ -1024,14 +730,7 @@ $$
 \tag{12}
 $$
 
-For the uniform distribution over this vocabulary, $\text{PPL} = V = 128000$ — a
-useful sanity floor: a model that beats 128K perplexity has learned *something*.
-Intuition: perplexity is "the effective number of equally likely choices the model
-feels at each step." High entropy $\Rightarrow$ many plausible continuations
-$\Rightarrow$ sampling matters and greedy is brittle; low entropy $\Rightarrow$ the
-mode is a safe bet. This is precisely the passkey case: after training, the
-distribution at the answer position should be sharply peaked on the true five-digit
-string, so greedy is both the right estimator and the low-variance one.
+For the uniform distribution over this vocabulary, $\text{PPL} = V = 128000$ — a useful sanity floor: a model that beats 128K perplexity has learned *something*. Intuition: perplexity is "the effective number of equally likely choices the model feels at each step." High entropy $\Rightarrow$ many plausible continuations $\Rightarrow$ sampling matters and greedy is brittle; low entropy $\Rightarrow$ the mode is a safe bet. This is precisely the passkey case: after training, the distribution at the answer position should be sharply peaked on the true five-digit string, so greedy is both the right estimator and the low-variance one.
 
 ### 4. Code walkthrough — `inference/generate.py:generate`
 
@@ -1052,25 +751,15 @@ def generate(
 - `max_new_tokens` — number of decode steps; the return tensor has shape
   `(B, T_prompt + max_new_tokens)`.
 - `temperature` — the $T$ of (3). `temperature <= 0` (including exactly `0.0`)
-  switches to the greedy branch (5); strictly positive values use the full
-  sampling pipeline. `top_p` is **ignored** in the greedy branch.
+  switches to the greedy branch (5); strictly positive values use the full sampling pipeline. `top_p` is **ignored** in the greedy branch.
 - `top_p` — the nucleus mass $p$ of (9), applied after temperature/softmax.
 - `use_cache` — when `True`, each decode step runs one token through the model with
-  `inference/generate.py:MixedKVCache`; when `False`, the full prefix is replayed
-  every step (an $O(T^2)$ reference path used by the equivalence test, §6).
+  `inference/generate.py:MixedKVCache`; when `False`, the full prefix is replayed every step (an $O(T^2)$ reference path used by the equivalence test, §6).
 
-**Determinism.** `@torch.no_grad()` disables autograd graph construction, and
-`model.eval()` disables dropout, so the only stochasticity left is
-`torch.multinomial`, which consumes the global PyTorch RNG: for reproducible
-sampling runs, call `torch.manual_seed(seed)` before `generate`. The greedy branch
-consumes no RNG and is deterministic for a fixed model and prompt. (Dropout is the
-only other RNG consumer in the forward pass, and eval disables it; see
+**Determinism.** `@torch.no_grad()` disables autograd graph construction, and `model.eval()` disables dropout, so the only stochasticity left is `torch.multinomial`, which consumes the global PyTorch RNG: for reproducible sampling runs, call `torch.manual_seed(seed)` before `generate`. The greedy branch consumes no RNG and is deterministic for a fixed model and prompt. (Dropout is the only other RNG consumer in the forward pass, and eval disables it; see
 [training.md](../training.md) for the training-time dropout contract.)
 
-**Prefill.** Prompt tokens are embedded and run through all 12 blocks in one pass
-per layer, caching rotated K/V per layer via `inference/generate.py:_attn_forward_layer`
-into a fresh `inference/generate.py:MixedKVCache` (windowed layers store only the
-last 128 tokens, global layers everything — [inference.md](../inference.md)):
+**Prefill.** Prompt tokens are embedded and run through all 12 blocks in one pass per layer, caching rotated K/V per layer via `inference/generate.py:_attn_forward_layer` into a fresh `inference/generate.py:MixedKVCache` (windowed layers store only the last 128 tokens, global layers everything — [inference.md](../inference.md)):
 
 ```python
 x = model.embed(input_ids)
@@ -1081,9 +770,7 @@ x = model.norm(x)
 next_token_logits = model.head(x)[:, -1, :]
 ```
 
-`models/transformer.py:GPTOSS.head` is the final linear to $V = 128000$ logits,
-weight-tied to `models/transformer.py:GPTOSS.embed` (saves ~98M parameters on the
-502M budget, [foundations-and-architecture.md](foundations-and-architecture.md)).
+`models/transformer.py:GPTOSS.head` is the final linear to $V = 128000$ logits, weight-tied to `models/transformer.py:GPTOSS.embed` (saves ~98M parameters on the 502M budget, [foundations-and-architecture.md](foundations-and-architecture.md)).
 
 **Decode loop.** One iteration per new token:
 
@@ -1106,14 +793,11 @@ for step in range(max_new_tokens):
 
 - Greedy branch: `argmax` over logits — (2)/(5).
 - Sampling branch: temperature scaling (3) → softmax → sort descending →
-  cumulative mass → mask (9) → renormalize with an epsilon floor → one
-  multinomial draw per row → map sorted indices back to vocabulary indices.
+  cumulative mass → mask (9) → renormalize with an epsilon floor → one multinomial draw per row → map sorted indices back to vocabulary indices.
 - The new token is written into a pre-allocated `output` buffer of shape
   `(B, T_prompt + max_new_tokens)`.
 
-With `use_cache=True`, the next logits come from embedding only the new token at its
-**absolute** position `positions_step = torch.tensor([cur_pos - 1])` and running one
-decode step per layer (append length-1 K/V to the cache, attend, MoE):
+With `use_cache=True`, the next logits come from embedding only the new token at its **absolute** position `positions_step = torch.tensor([cur_pos - 1])` and running one decode step per layer (append length-1 K/V to the cache, attend, MoE):
 
 ```python
 x_step = model.embed(next_id)
@@ -1124,20 +808,11 @@ x_step = model.norm(x_step)
 next_token_logits = model.head(x_step)[:, -1, :]
 ```
 
-With `use_cache=False` the same logits are recomputed by re-embedding the whole
-prefix `output[:, :T_prompt + step + 1]` and re-running every block with `cache=None`
-— the two paths agree by construction, and `tests/test_inference.py` asserts they
-produce identical output for `max_new_tokens=1`. Absolute positions matter here:
-YaRN extrapolates from the trained 4,096 to 131,072 via scale-32 RoPE
-([attention-and-positional.md](attention-and-positional.md)), and a wrong relative offset would silently
-corrupt every attention layer's positional signal at long context.
+With `use_cache=False` the same logits are recomputed by re-embedding the whole prefix `output[:, :T_prompt + step + 1]` and re-running every block with `cache=None` — the two paths agree by construction, and `tests/test_inference.py` asserts they produce identical output for `max_new_tokens=1`. Absolute positions matter here: YaRN extrapolates from the trained 4,096 to 131,072 via scale-32 RoPE ([attention-and-positional.md](attention-and-positional.md)), and a wrong relative offset would silently corrupt every attention layer's positional signal at long context.
 
 ### 5. The passkey eval path — why `temperature=0.0`
 
-`inference/long_context.py:PasskeyEvaluator.evaluate` loops over context lengths
-`(4096, 8192, 32768, 65536, 131072)`, samples 100 distinct five-digit passkeys per
-length, builds a prompt via `inference/long_context.py:PasskeyEvaluator.build_prompt`
-over deterministic filler (`inference/long_context.py:make_filler_text`), and calls:
+`inference/long_context.py:PasskeyEvaluator.evaluate` loops over context lengths `(4096, 8192, 32768, 65536, 131072)`, samples 100 distinct five-digit passkeys per length, builds a prompt via `inference/long_context.py:PasskeyEvaluator.build_prompt` over deterministic filler (`inference/long_context.py:make_filler_text`), and calls:
 
 ```python
 output_ids = generate(
@@ -1150,33 +825,18 @@ output_ids = generate(
 )
 ```
 
-`temperature=0.0` routes to the argmax branch; `top_p=1.0` is inert. The first
-five-digit number in the decoded continuation is extracted by
-`inference/long_context.py:PasskeyEvaluator.extract_passkey_from_output` and matched
-against the ground truth.
+`temperature=0.0` routes to the argmax branch; `top_p=1.0` is inert. The first five-digit number in the decoded continuation is extracted by `inference/long_context.py:PasskeyEvaluator.extract_passkey_from_output` and matched against the ground truth.
 
-**Why greedy is the right eval choice.** Per trial, the model either answers
-correctly (a Bernoulli variable with success probability $q$). With $n = 100$ trials
-the estimated accuracy has standard deviation
+**Why greedy is the right eval choice.** Per trial, the model either answers correctly (a Bernoulli variable with success probability $q$). With $n = 100$ trials the estimated accuracy has standard deviation
 
 $$
 \sigma = \sqrt{\frac{q(1-q)}{n}} \approx 0.036 \quad \text{at } q = 0.85,\ n = 100
 \tag{13}
 $$
 
-if the draws were i.i.d. Greedy decoding removes the sampling layer from the loop
-entirely: for a fixed prompt the completion is a deterministic function of the
-weights, so the only variation left across trials is the passkey/filler content —
-the estimator measures *the model*, not the sampler's luck. Sampling at the answer
-position would occasionally draw a non-mode token (a wrong digit), depressing and
-noising the measured accuracy. Since the task is a copy/retrieval task — one correct
-answer, sharply peaked distribution — the mode *is* the answer, and greedy is both
-the highest-accuracy and lowest-variance choice (§3.6).
+if the draws were i.i.d. Greedy decoding removes the sampling layer from the loop entirely: for a fixed prompt the completion is a deterministic function of the weights, so the only variation left across trials is the passkey/filler content — the estimator measures *the model*, not the sampler's luck. Sampling at the answer position would occasionally draw a non-mode token (a wrong digit), depressing and noising the measured accuracy. Since the task is a copy/retrieval task — one correct answer, sharply peaked distribution — the mode *is* the answer, and greedy is both the highest-accuracy and lowest-variance choice (§3.6).
 
-**Caveat:** the ≥85% target at 128K is a **target**. No pretraining run has
-completed; `scripts/passkey_eval.py` on an untrained checkpoint produces near-chance
-accuracy (the passkey is one of 100,000 uniformly sampled values, so chance is
-$10^{-5}$ per trial) and exits 0 with a warning, not an error.
+**Caveat:** the ≥85% target at 128K is a **target**. No pretraining run has completed; `scripts/passkey_eval.py` on an untrained checkpoint produces near-chance accuracy (the passkey is one of 100,000 uniformly sampled values, so chance is $10^{-5}$ per trial) and exits 0 with a warning, not an error.
 
 ### 6. Pitfalls and verification
 
@@ -1196,21 +856,13 @@ $10^{-5}$ per trial) and exits 0 with a warning, not an error.
 pytest tests/test_inference.py -v
 ```
 
-covers: generation output shape (`(1, 4 + 8)` for `max_new_tokens=8`,
-`temperature=0.0`), greedy no-crash, the `use_cache` equivalence property, the KV
-ring-buffer order invariants, and passkey prompt construction / regex extraction.
-The sampling branch itself is exercised through the shape and no-crash tests with
-`temperature=0.0`; stochastic-draw behavior is deterministic given a seed and can be
-checked by calling `generate` twice with `torch.manual_seed(0)` and comparing
-outputs. The full passkey pipeline needs a trained checkpoint:
+covers: generation output shape (`(1, 4 + 8)` for `max_new_tokens=8`, `temperature=0.0`), greedy no-crash, the `use_cache` equivalence property, the KV ring-buffer order invariants, and passkey prompt construction / regex extraction. The sampling branch itself is exercised through the shape and no-crash tests with `temperature=0.0`; stochastic-draw behavior is deterministic given a seed and can be checked by calling `generate` twice with `torch.manual_seed(0)` and comparing outputs. The full passkey pipeline needs a trained checkpoint:
 
 ```bash
 python3 scripts/passkey_eval.py --checkpoint path/to/model.safetensors --n-trials 100
 ```
 
-On an untrained model this runs end-to-end, prints an accuracy table at
-~0% per length, and warns "needs trained checkpoint for ≥ 85% target" — expected,
-not a bug ([getting-started.md](../guides/getting-started.md) §12).
+On an untrained model this runs end-to-end, prints an accuracy table at ~0% per length, and warns "needs trained checkpoint for ≥ 85% target" — expected, not a bug ([getting-started.md](../guides/getting-started.md) §12).
 
 ### Where to go next
 

@@ -1,9 +1,6 @@
 # GPT-OSS-Lite — Attention Sinks
 
-> **Authoritative** reference for learned sink bias, sliding-window / full
-> alternation, and the `models/attention.py` implementation. Required reading
-> before changing attention code (see `AGENTS.md`). Positional encoding:
-> [attention-and-positional.md](attention-and-positional.md).
+> **Authoritative** reference for learned sink bias, sliding-window / full alternation, and the `models/attention.py` implementation. Required reading before changing attention code (see `AGENTS.md`). Positional encoding: [attention-and-positional.md](attention-and-positional.md).
 
 ---
 
@@ -41,8 +38,7 @@
 
 ## 1. Executive Summary
 
-GPT-OSS-Lite combines three mechanisms that together enable long-context inference
-with bounded memory:
+GPT-OSS-Lite combines three mechanisms that together enable long-context inference with bounded memory:
 
 | Mechanism | Where | Purpose |
 |-----------|-------|---------|
@@ -50,13 +46,9 @@ with bounded memory:
 | **Sliding-window attention (SWA)** | Even layers (`layer_idx % 2 == 0`) | Cap KV cache at `window_size` tokens per layer |
 | **Full attention** | Odd layers (`layer_idx % 2 == 1`) | Preserve global context across the sequence |
 
-Each attention head carries one scalar `sink_bias[h]`. At forward time the parameter
-is clamped to `[SINK_CLAMP_MIN, SINK_CLAMP_MAX] = [-10, 15]` before entering the
-softmax. The sink is implemented as an **extra softmax column** with zero value vector —
-not as a physical token in the KV cache.
+Each attention head carries one scalar `sink_bias[h]`. At forward time the parameter is clamped to `[SINK_CLAMP_MIN, SINK_CLAMP_MAX] = [-10, 15]` before entering the softmax. The sink is implemented as an **extra softmax column** with zero value vector — not as a physical token in the KV cache.
 
-The reference path (`manual_causal_attention`) and the production path
-(`causal_attention` via SDPA) are mathematically equivalent when masks align.
+The reference path (`manual_causal_attention`) and the production path (`causal_attention` via SDPA) are mathematically equivalent when masks align.
 
 ---
 
@@ -64,23 +56,18 @@ The reference path (`manual_causal_attention`) and the production path
 
 ### 2.1 The long-context memory problem
 
-Autoregressive transformers store key–value (KV) tensors for every prior token.
-Memory grows linearly with sequence length \(T\):
+Autoregressive transformers store key–value (KV) tensors for every prior token. Memory grows linearly with sequence length \(T\):
 
 \[
 \text{KV bytes per layer} \;=\; 2 \cdot H_{\text{kv}} \cdot D \cdot T \cdot \text{bytes\_per\_elem}
 \]
 
-At 128K context with GQA (4 KV heads, head_dim 96, BF16), a single full-attention
-layer needs roughly 200 MB of KV cache per batch element. Twelve such layers exceed
-2 GB — before activations, weights, or MoE routing state.
+At 128K context with GQA (4 KV heads, head_dim 96, BF16), a single full-attention layer needs roughly 200 MB of KV cache per batch element. Twelve such layers exceed 2 GB — before activations, weights, or MoE routing state.
 
 ### 2.2 StreamingLLM (Xiao et al., 2023)
 
 [StreamingLLM](https://arxiv.org/abs/2309.17453) observed that pretrained LLMs
-concentrate disproportionate attention mass on **initial tokens** — even when those
-tokens carry no semantic content (e.g. a BOS padding). The authors called these
-**attention sinks**.
+concentrate disproportionate attention mass on **initial tokens** — even when those tokens carry no semantic content (e.g. a BOS padding). The authors called these **attention sinks**.
 
 Their inference recipe:
 
@@ -88,14 +75,11 @@ Their inference recipe:
 2. Apply a sliding window over the remainder.
 3. Drop middle tokens as the window advances.
 
-The sink tokens act as a "pressure release valve" for attention logits that would
-otherwise need to attend somewhere after middle context is evicted.
+The sink tokens act as a "pressure release valve" for attention logits that would otherwise need to attend somewhere after middle context is evicted.
 
 ### 2.3 From fixed sink tokens to learned sink bias
 
-StreamingLLM uses **physical** sink tokens — real embeddings whose KV entries persist.
-GPT-OSS-Lite instead learns a **scalar logit per head** that enters the softmax
-denominator without storing any extra KV tensor.
+StreamingLLM uses **physical** sink tokens — real embeddings whose KV entries persist. GPT-OSS-Lite instead learns a **scalar logit per head** that enters the softmax denominator without storing any extra KV tensor.
 
 Advantages of the learned-bias formulation:
 
@@ -111,25 +95,19 @@ Advantages of the learned-bias formulation:
 
 ### 3.1 What SWA discards
 
-Sliding-window attention restricts query position \(i\) to keys in
-\([i - W + 1,\; i]\) (causal AND within window \(W\)). When \(i \ge W\), all keys
-before \(i - W + 1\) are masked to \(-\infty\).
+Sliding-window attention restricts query position \(i\) to keys in \([i - W + 1,\; i]\) (causal AND within window \(W\)). When \(i \ge W\), all keys before \(i - W + 1\) are masked to \(-\infty\).
 
-In a full-attention model, early tokens often receive residual attention mass
-because:
+In a full-attention model, early tokens often receive residual attention mass because:
 
 1. **Positional artifacts.** RoPE makes early positions geometrically "special."
 2. **Training distribution.** Models trained on left-padded or BOS-heavy data learn
    to route "overflow" attention to position 0.
 3. **Softmax normalization.** When many keys are masked, surviving keys receive
-   higher relative weight; without a sink, the distribution can become sharp and
-   numerically unstable.
+   higher relative weight; without a sink, the distribution can become sharp and numerically unstable.
 
 ### 3.2 The eviction problem
 
-When token \(j < i - W + 1\) falls outside the window, its KV pair is dropped from
-the cache. Any attention pattern that previously allocated mass to position \(j\)
-must redistribute that mass among surviving keys.
+When token \(j < i - W + 1\) falls outside the window, its KV pair is dropped from the cache. Any attention pattern that previously allocated mass to position \(j\) must redistribute that mass among surviving keys.
 
 If no sink exists:
 
@@ -147,10 +125,7 @@ If a sink exists with learned bias \(s_h\) for head \(h\):
 
 ### 3.3 Intuition: the sink as a softmax garbage collector
 
-Think of softmax attention as a probability distribution over keys. SWA deletes keys
-from the support set. Without a replacement, the distribution must renormalize over
-fewer keys — changing all outputs. The sink adds a **constant-support dummy key**
-whose value is zero, letting the model discard mass silently.
+Think of softmax attention as a probability distribution over keys. SWA deletes keys from the support set. Without a replacement, the distribution must renormalize over fewer keys — changing all outputs. The sink adds a **constant-support dummy key** whose value is zero, letting the model discard mass silently.
 
 ---
 
@@ -158,8 +133,7 @@ whose value is zero, letting the model discard mass silently.
 
 ### 4.1 Standard causal attention
 
-For query \(Q \in \mathbb{R}^{T \times d}\), keys \(K \in \mathbb{R}^{T \times d}\),
-values \(V \in \mathbb{R}^{T \times d}\), head index suppressed:
+For query \(Q \in \mathbb{R}^{T \times d}\), keys \(K \in \mathbb{R}^{T \times d}\), values \(V \in \mathbb{R}^{T \times d}\), head index suppressed:
 
 \[
 \text{Attn}(Q, K, V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d}} + M\right) V
@@ -201,9 +175,7 @@ Output (sink has \(v_{\text{sink}} = 0\)):
 o_i = \sum_{j \in \mathcal{A}(i)} \alpha_{i,j}\, v_j
 \]
 
-The sink column is **stripped** before the value matmul in the reference implementation;
-only \(\alpha_{i,j}\) for real keys participate, but they are renormalized with the
-sink in the denominator.
+The sink column is **stripped** before the value matmul in the reference implementation; only \(\alpha_{i,j}\) for real keys participate, but they are renormalized with the sink in the denominator.
 
 ### 4.4 Effect of bias magnitude
 
@@ -215,22 +187,15 @@ sink in the denominator.
 
 ### 4.5 Per-head independence
 
-`sink_bias` has shape `(n_heads,)`. Each head maintains its own \(s_h\), allowing
-some heads to be "sink-heavy" (local pattern matchers) and others "sink-light"
-(global aggregators within the window).
+`sink_bias` has shape `(n_heads,)`. Each head maintains its own \(s_h\), allowing some heads to be "sink-heavy" (local pattern matchers) and others "sink-light" (global aggregators within the window).
 
 ---
 
 ## 5. Implementation in `models/attention.py`
 
-All symbols refer to `models/attention.py`. Constants are clamped to
-`[SINK_CLAMP_MIN, SINK_CLAMP_MAX] = [-10, 15]` at forward time (see [§6](#6-bf16-clamp-rationale)).
-The reference path (`manual_causal_attention`) and production path (`causal_attention`
-via SDPA) are mathematically equivalent when masks align.
+All symbols refer to `models/attention.py`. Constants are clamped to `[SINK_CLAMP_MIN, SINK_CLAMP_MAX] = [-10, 15]` at forward time (see [§6](#6-bf16-clamp-rationale)). The reference path (`manual_causal_attention`) and production path (`causal_attention` via SDPA) are mathematically equivalent when masks align.
 
-**Full walkthrough in [Part B](#part-b--implementation-modelsattentionpy)** — module
-overview, mask helpers, SDPA paths (including the zero K/V sink column),
-`GPTOSSAttention` forward trace, shape reference, and verification.
+**Full walkthrough in [Part B](#part-b--implementation-modelsattentionpy)** — module overview, mask helpers, SDPA paths (including the zero K/V sink column), `GPTOSSAttention` forward trace, shape reference, and verification.
 
 ---
 
@@ -238,9 +203,7 @@ overview, mask helpers, SDPA paths (including the zero K/V sink column),
 
 ### 6.1 The overflow mechanism
 
-SDPA computes `scores + attn_mask` before softmax. BF16 has limited dynamic range
-(max finite ≈ \(3.4 \times 10^{38}\), but precision collapses at large magnitudes).
-If `sink_bias` grows to hundreds or thousands during training:
+SDPA computes `scores + attn_mask` before softmax. BF16 has limited dynamic range (max finite ≈ \(3.4 \times 10^{38}\), but precision collapses at large magnitudes). If `sink_bias` grows to hundreds or thousands during training:
 
 1. `exp(score + sink_bias)` can overflow to `inf` in intermediate FP32/BF16 paths.
 2. `inf / inf` → NaN in softmax normalization.
@@ -254,11 +217,9 @@ sink_bias_clamped = self.sink_bias.clamp(SINK_CLAMP_MIN, SINK_CLAMP_MAX)
 
 - **Forward:** uses clamped values → stable softmax.
 - **Backward:** gradient flows to the unclamped parameter via `clamp`'s straight-through
-  behavior at interior points; at bounds, gradient is zero (parameter stops growing
-  further in that direction).
+  behavior at interior points; at bounds, gradient is zero (parameter stops growing further in that direction).
 
-The parameter itself is **never** mutated by clamping — tests verify
-`layer.sink_bias == 1000.0` after forward with extreme values.
+The parameter itself is **never** mutated by clamping — tests verify `layer.sink_bias == 1000.0` after forward with extreme values.
 
 ### 6.3 Choice of [-10, 15]
 
@@ -267,14 +228,11 @@ The parameter itself is **never** mutated by clamping — tests verify
 | **-10** | \(e^{-10} \approx 4.5 \times 10^{-5}\) — sink effectively disabled; matches "no sink" within float tolerance |
 | **+15** | \(e^{15} \approx 3.3 \times 10^6\) — sufficient to absorb almost all mass without reaching BF16 danger zone when added to typical attention scores (O(1) to O(10)) |
 
-Empirically, trained sinks in similar architectures rarely exceed single digits.
-The upper bound 15 leaves headroom while staying far from overflow.
+Empirically, trained sinks in similar architectures rarely exceed single digits. The upper bound 15 leaves headroom while staying far from overflow.
 
 ### 6.3 Interaction with manual path
 
-`manual_causal_attention` does not clamp — tests use moderate bias values. Production
-always clamps via `GPTOSSAttention.forward`. If you call `causal_attention` directly
-in custom code, pass pre-clamped bias.
+`manual_causal_attention` does not clamp — tests use moderate bias values. Production always clamps via `GPTOSSAttention.forward`. If you call `causal_attention` directly in custom code, pass pre-clamped bias.
 
 ---
 
@@ -295,9 +253,7 @@ self.is_windowed = (layer_idx % 2 == 0)
 
 ### 7.2 Why alternate instead of all-SWA?
 
-Pure SWA limits every layer to 128 tokens of visible history. Information beyond
-128 tokens is invisible to every layer — unsuitable for 128K passkey retrieval or
-long-range dependency tasks.
+Pure SWA limits every layer to 128 tokens of visible history. Information beyond 128 tokens is invisible to every layer — unsuitable for 128K passkey retrieval or long-range dependency tasks.
 
 Pure full attention at 12 layers × 128K tokens is memory-prohibitive.
 
@@ -320,15 +276,11 @@ Layer 3 (Full): sees tokens [0 .. 50,000]
     ...
 ```
 
-A token's representation is refined by repeated **local → global → local → global**
-cycles. Global layers act as "synchronisation points" that inject full-history context;
-windowed layers compress and denoise locally.
+A token's representation is refined by repeated **local → global → local → global** cycles. Global layers act as "synchronisation points" that inject full-history context; windowed layers compress and denoise locally.
 
 ### 7.4 Headline metric constraint
 
-Replacing alternation with pure full attention breaks the ≥ 1.8× KV-cache reduction
-target at 128K (see [§8](#8-kv-cache-mathematics-at-128k)). This is a hard
-architectural invariant per `AGENTS.md`.
+Replacing alternation with pure full attention breaks the ≥ 1.8× KV-cache reduction target at 128K (see [§8](#8-kv-cache-mathematics-at-128k)). This is a hard architectural invariant per `AGENTS.md`.
 
 ---
 
@@ -390,8 +342,7 @@ B_{\text{mixed}} = (6 \times 128 + 6 \times 131072) \times 1536 = 787200 \times 
 | 65,536 | 2.00× |
 | **131,072** | **≈ 2.00×** |
 
-The headline metric (≥ 1.8× at 128K) is met with margin. See
-`scripts/kv_cache_benchmark.py` for the analytical checker.
+The headline metric (≥ 1.8× at 128K) is met with margin. See `scripts/kv_cache_benchmark.py` for the analytical checker.
 
 ### 8.5 `MixedKVCache` implementation sketch
 
@@ -417,12 +368,9 @@ Attention sinks and positional encoding are **orthogonal mechanisms**:
 
 ### 9.1 YaRN at 128K
 
-Training context: 4,096 tokens (`yarn_original_max_seq_len`).
-Inference target: 131,072 tokens (`yarn_target_seq_len`).
-Scale factor: 32 (`yarn_scale_factor`).
+Training context: 4,096 tokens (`yarn_original_max_seq_len`). Inference target: 131,072 tokens (`yarn_target_seq_len`). Scale factor: 32 (`yarn_scale_factor`).
 
-YaRN interpolates inverse frequencies between base RoPE and scaled-down frequencies
-so positions beyond 4K remain meaningful. See [attention-and-positional.md](attention-and-positional.md).
+YaRN interpolates inverse frequencies between base RoPE and scaled-down frequencies so positions beyond 4K remain meaningful. See [attention-and-positional.md](attention-and-positional.md).
 
 Sinks do not alter RoPE — they operate after Q/K are rotated.
 
@@ -435,9 +383,7 @@ def _n_pruned_dims(self) -> int:
     return 0
 ```
 
-On global layers, the lowest 24 frequency dimensions are pruned (cos → 1, sin → 0),
-reducing high-frequency positional sensitivity that can hurt very long extrapolation.
-Windowed layers use full RoPE — local attention benefits from fine positional detail.
+On global layers, the lowest 24 frequency dimensions are pruned (cos → 1, sin → 0), reducing high-frequency positional sensitivity that can hurt very long extrapolation. Windowed layers use full RoPE — local attention benefits from fine positional detail.
 
 ### 9.3 Combined effect at long context
 
@@ -489,9 +435,7 @@ Clamp runs once per layer per generation, not per token — minor optimisation.
 
 ### 10.4 Mask cache behaviour
 
-`_causal_mask` and `_window_mask` are `lru_cache`d by shape/device/dtype.
-During decode, `T_k` grows every step → new window masks compiled until `T_k`
-stabilises at max context. Prefill at fixed `T` hits cache immediately on repeat runs.
+`_causal_mask` and `_window_mask` are `lru_cache`d by shape/device/dtype. During decode, `T_k` grows every step → new window masks compiled until `T_k` stabilises at max context. Prefill at fixed `T` hits cache immediately on repeat runs.
 
 ---
 
@@ -499,8 +443,7 @@ stabilises at max context. Prefill at fixed `T` hits cache immediately on repeat
 
 ### 11.1 Initialization
 
-`sink_bias` initialized to zeros → each head starts with denominator \(Z + 1\)
-instead of \(Z\). This is a mild, uniform damping.
+`sink_bias` initialized to zeros → each head starts with denominator \(Z + 1\) instead of \(Z\). This is a mild, uniform damping.
 
 ### 11.2 What the model learns
 
@@ -514,14 +457,11 @@ No explicit loss term for sink — it is learned end-to-end through the LM loss.
 
 ### 11.3 Gradient flow
 
-`sink_bias` receives gradients through the softmax denominator. Clamping saturates
-gradients at bounds. Tests confirm gradients reach `sink_bias`, `q_proj`, `kv_proj`,
-`o_proj`.
+`sink_bias` receives gradients through the softmax denominator. Clamping saturates gradients at bounds. Tests confirm gradients reach `sink_bias`, `q_proj`, `kv_proj`, `o_proj`.
 
 ### 11.4 Interaction with aux MoE loss
 
-Sink bias is independent of MoE routing. Standard aux load-balancing loss (α=0.01)
-applies to the FFN path only.
+Sink bias is independent of MoE routing. Standard aux load-balancing loss (α=0.01) applies to the FFN path only.
 
 ---
 
@@ -529,15 +469,11 @@ applies to the FFN path only.
 
 ### 12.1 NaN loss after long training
 
-**Symptom:** Loss becomes NaN mid-run.
-**Check:** Unclamped `sink_bias` magnitudes in checkpoint. If max `|sink_bias| >> 15`,
-overflow may occur before clamp in custom code paths.
-**Fix:** Ensure all paths use `GPTOSSAttention.forward` or manually clamp.
+**Symptom:** Loss becomes NaN mid-run. **Check:** Unclamped `sink_bias` magnitudes in checkpoint. If max `|sink_bias| >> 15`, overflow may occur before clamp in custom code paths. **Fix:** Ensure all paths use `GPTOSSAttention.forward` or manually clamp.
 
 ### 12.2 Passkey retrieval fails at 128K
 
-**Symptom:** Model cannot retrieve a key buried at position 80K.
-**Check list:**
+**Symptom:** Model cannot retrieve a key buried at position 80K. **Check list:**
 1. Are global layers receiving full KV (not truncated)?
 2. Is YaRN configured (`yarn_scale_factor=32`, `target=131072`)?
 3. Is eval using `eval_max_seq_len` not `max_seq_len`?
@@ -545,28 +481,22 @@ overflow may occur before clamp in custom code paths.
 
 ### 12.3 SWA/full mismatch in custom inference
 
-**Symptom:** Results differ between cached and non-cached generation.
-**Check:** `MixedKVCache` ring ordering — `get()` unwraps head pointer for windowed
-layers. Verify `is_windowed` matches `layer_idx % 2`.
+**Symptom:** Results differ between cached and non-cached generation. **Check:** `MixedKVCache` ring ordering — `get()` unwraps head pointer for windowed layers. Verify `is_windowed` matches `layer_idx % 2`.
 
 ### 12.4 Sink appears ineffective
 
-**Symptom:** `sink_bias` stays near zero; no effect on ablation.
-**Possible causes:**
+**Symptom:** `sink_bias` stays near zero; no effect on ablation. **Possible causes:**
 - Sequence shorter than `window_size` during eval — SWA behaves like full attention;
   sink less critical.
 - All layers full-attention in misconfigured model (`is_windowed` always False).
 
 ### 12.5 Attention drift at window boundary
 
-**Symptom:** Perplexity spikes when context crosses multiples of 128 on SWA-only
-ablations.
-**Expected:** Without sink, this is known SWA behaviour. Enable `sink_bias=True`.
+**Symptom:** Perplexity spikes when context crosses multiples of 128 on SWA-only ablations. **Expected:** Without sink, this is known SWA behaviour. Enable `sink_bias=True`.
 
 ### 12.6 Degenerate YaRN + long context
 
-If YaRN ramp is degenerate (see [rope_yarn.md §11](attention-and-positional.md#11-degenerate-ramp-warning)),
-RoPE provides no extrapolation — sinks cannot compensate for positional collapse.
+If YaRN ramp is degenerate (see [rope_yarn.md §11](attention-and-positional.md#11-degenerate-ramp-warning)), RoPE provides no extrapolation — sinks cannot compensate for positional collapse.
 
 ---
 
@@ -583,19 +513,15 @@ We chose learned bias for zero KV overhead and cleaner cache management.
 
 ### 13.2 Shared vs per-layer sink
 
-GPT-OSS uses **per-head** bias within each layer (not shared across layers).
-Each layer's attention pattern differs; sink demand varies by depth.
+GPT-OSS uses **per-head** bias within each layer (not shared across layers). Each layer's attention pattern differs; sink demand varies by depth.
 
 ### 13.3 Sink on global layers
 
-Sink is applied to **both** SWA and full layers when `cfg.sink_bias=True`.
-On full layers the sink is less functionally necessary (no eviction) but harmless —
-the model can learn \(s_h \to -\infty\) equivalent by pushing bias negative (within clamp).
+Sink is applied to **both** SWA and full layers when `cfg.sink_bias=True`. On full layers the sink is less functionally necessary (no eviction) but harmless — the model can learn \(s_h \to -\infty\) equivalent by pushing bias negative (within clamp).
 
 ### 13.4 Why not aux-loss-free routing here
 
-This repo deliberately uses **standard** aux load-balancing for MoE (distinct from
-DeepSeek-v3-Lite). Sink bias is unrelated to expert routing.
+This repo deliberately uses **standard** aux load-balancing for MoE (distinct from DeepSeek-v3-Lite). Sink bias is unrelated to expert routing.
 
 ---
 
@@ -657,11 +583,9 @@ Input x (B, T, d_model)
            └─ o_proj ──► (B, T, d_model)
 ```
 
-There is a single module class `GPTOSSAttention` — not separate SWA/Full classes.
-Layer behaviour is selected by `is_windowed = (layer_idx % 2 == 0)`.
+There is a single module class `GPTOSSAttention` — not separate SWA/Full classes. Layer behaviour is selected by `is_windowed = (layer_idx % 2 == 0)`.
 
-Public symbols: `SINK_CLAMP_MIN`, `SINK_CLAMP_MAX`, `manual_causal_attention`,
-`causal_attention`, `repeat_kv`, `GPTOSSAttention`.
+Public symbols: `SINK_CLAMP_MIN`, `SINK_CLAMP_MAX`, `manual_causal_attention`, `causal_attention`, `repeat_kv`, `GPTOSSAttention`.
 
 ### B.2 Constants (`SINK_CLAMP_MIN`, `SINK_CLAMP_MAX`)
 
@@ -692,8 +616,7 @@ def manual_causal_attention(
 ) -> torch.Tensor:               # (B, H, T, D)
 ```
 
-**Purpose:** Naive \(O(T^2)\) attention for tests and numerical oracle. Not used in
-training or inference hot paths.
+**Purpose:** Naive \(O(T^2)\) attention for tests and numerical oracle. Not used in training or inference hot paths.
 
 **Score computation (FP32):**
 
@@ -722,8 +645,7 @@ if window is not None and window < T:
     scores = scores.masked_fill(outside, float("-inf"))
 ```
 
-For query index `i` and key index `j`: masked when `i - j >= window`.
-When `window >= T`, the window constraint is vacuous — behaves as full causal.
+For query index `i` and key index `j`: masked when `i - j >= window`. When `window >= T`, the window constraint is vacuous — behaves as full causal.
 
 **Sink augmentation:**
 
@@ -736,8 +658,7 @@ if sink_bias is not None:
     return (attn_weights.to(value_states.dtype) @ value_states)
 ```
 
-Steps: concat sink column → softmax over `T+1` columns → strip sink column → matmul
-with `value_states`. When `sink_bias is None`, standard softmax over `T` columns.
+Steps: concat sink column → softmax over `T+1` columns → strip sink column → matmul with `value_states`. When `sink_bias is None`, standard softmax over `T` columns.
 
 ### B.4 Mask helpers (`_causal_mask`, `_window_mask`, cache key)
 
@@ -752,8 +673,7 @@ def _causal_mask(T: int, device: torch.device, dtype: torch.dtype) -> torch.Tens
     return idx.unsqueeze(1) >= idx.unsqueeze(0)  # (T, T)
 ```
 
-Returns `True` where attention is **allowed** (lower-triangular including diagonal).
-Opposite convention from `manual_causal_attention` (which masks `True` = forbidden).
+Returns `True` where attention is **allowed** (lower-triangular including diagonal). Opposite convention from `manual_causal_attention` (which masks `True` = forbidden).
 
 **`_window_mask`:**
 
@@ -777,12 +697,9 @@ idx_k = torch.arange(T_k, device=device)
 return (idx_q.unsqueeze(-1) - idx_k.unsqueeze(0) < window)
 ```
 
-Decode assumes a single new query at position `T_k - 1` attending to cached keys
-`0 .. T_k-1`. No separate causal check needed — all cached keys are in the past.
+Decode assumes a single new query at position `T_k - 1` attending to cached keys `0 .. T_k-1`. No separate causal check needed — all cached keys are in the past.
 
-**Cache key semantics:** `lru_cache` keys on `(T, device, dtype)` or
-`(T_q, T_k, window, device, dtype)`. `maxsize=None` — unbounded cache; typical
-training sees few distinct `(T, window)` pairs per run.
+**Cache key semantics:** `lru_cache` keys on `(T, device, dtype)` or `(T_q, T_k, window, device, dtype)`. `maxsize=None` — unbounded cache; typical training sees few distinct `(T, window)` pairs per run.
 
 ### B.5 `causal_attention` SDPA paths (fast / window / sink column)
 
@@ -796,8 +713,7 @@ def causal_attention(
 ) -> torch.Tensor:               # (B, H, T_q, D_v)
 ```
 
-Production attention via `F.scaled_dot_product_attention`. Supports rectangular
-`T_q \ne T_k` for decode.
+Production attention via `F.scaled_dot_product_attention`. Supports rectangular `T_q \ne T_k` for decode.
 
 **Fast path: no sink, no window**
 
@@ -844,8 +760,7 @@ k_ext = torch.cat([key_states, sink_k], dim=2)   # (B, H, T_k+1, D)
 v_ext = torch.cat([value_states, sink_v], dim=2)
 ```
 
-The sink key is all zeros → dot product \(q \cdot k_{\text{sink}} = 0\). The learned
-bias enters **only** through the attention mask, not through K.
+The sink key is all zeros → dot product \(q \cdot k_{\text{sink}} = 0\). The learned bias enters **only** through the attention mask, not through K.
 
 ```python
 if window is None or window >= T_k:
@@ -867,16 +782,9 @@ return F.scaled_dot_product_attention(query_states, k_ext, v_ext, attn_mask=mask
 | `0 .. T_k-1` | `0.0` if allowed, `-inf` if forbidden | Causal/window mask via `torch.where` |
 | `T_k` (sink) | `sink_bias[h]` | Per-head learned logit |
 
-**Important:** SDPA float masks are **additive**. A boolean→float cast
-(`causal.to(dtype)` → `1.0`/`0.0`) would leave "forbidden" positions unmasked
-and leak future tokens into every softmax — this was a real bug, fixed
-2026-08-04 with a regression test (`tests/test_attention.py::test_sink_path_matches_manual_at_prefill`).
-Blocked positions must be `-inf` explicitly. The sink column is always allowed
-(never `-inf`) — the sink key attends to every query by construction.
+**Important:** SDPA float masks are **additive**. A boolean→float cast (`causal.to(dtype)` → `1.0`/`0.0`) would leave "forbidden" positions unmasked and leak future tokens into every softmax — this was a real bug, fixed 2026-08-04 with a regression test (`tests/test_attention.py::test_sink_path_matches_manual_at_prefill`). Blocked positions must be `-inf` explicitly. The sink column is always allowed (never `-inf`) — the sink key attends to every query by construction.
 
-**SDPA backend notes:** `is_causal=True` path (no sink, no window, square) triggers
-FA2 via PyTorch SDPA when available. Window and sink paths pass `attn_mask` — may
-fall back to math or memory-efficient kernel. Q, K, V must share dtype for SDPA.
+**SDPA backend notes:** `is_causal=True` path (no sink, no window, square) triggers FA2 via PyTorch SDPA when available. Window and sink paths pass `attn_mask` — may fall back to math or memory-efficient kernel. Q, K, V must share dtype for SDPA.
 
 ### B.6 `repeat_kv` (`expand` + `reshape`, no `.contiguous()`)
 
@@ -898,9 +806,7 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     return x.reshape(B, H_kv * n_rep, T, D)
 ```
 
-`expand` creates a broadcast view — no `.contiguous()` copy. SDPA's Flash Attention
-backend handles non-contiguous K/V internally. KV head `h_kv` maps to Q heads
-`2*h_kv` and `2*h_kv + 1` when `n_rep=2`.
+`expand` creates a broadcast view — no `.contiguous()` copy. SDPA's Flash Attention backend handles non-contiguous K/V internally. KV head `h_kv` maps to Q heads `2*h_kv` and `2*h_kv + 1` when `n_rep=2`.
 
 ### B.7 `GPTOSSAttention` construction (sink param, YaRN, pruned RoPE)
 
@@ -956,9 +862,7 @@ def _n_pruned_dims(self) -> int:
     return 0
 ```
 
-Returns number of frequency **pairs** to prune (not individual dims). For
-`head_dim=96` → 24 pairs → 48 scalar dimensions frozen to identity rotation.
-Applied only on **global** (odd-indexed) layers when `yarn_prune_rope_global=True`.
+Returns number of frequency **pairs** to prune (not individual dims). For `head_dim=96` → 24 pairs → 48 scalar dimensions frozen to identity rotation. Applied only on **global** (odd-indexed) layers when `yarn_prune_rope_global=True`.
 
 **Config knobs** (from `ModelConfig` in `models/transformer.py`):
 
@@ -1051,10 +955,7 @@ out = out.transpose(1, 2).contiguous().view(B, T, self.n_heads * self.head_dim)
 return self.o_proj(out)
 ```
 
-**Inference integration** (`inference/generate.py`): duplicates this forward with KV
-caching. RoPE is applied **before** caching; cached K is already position-encoded.
-Sink bias is clamped once per layer per generation via `sink_bias_cache[id(attn)]`.
-Windowed vs global dispatch mirrors `GPTOSSAttention.forward` logic.
+**Inference integration** (`inference/generate.py`): duplicates this forward with KV caching. RoPE is applied **before** caching; cached K is already position-encoded. Sink bias is clamped once per layer per generation via `sink_bias_cache[id(attn)]`. Windowed vs global dispatch mirrors `GPTOSSAttention.forward` logic.
 
 ### B.9 Shape reference
 
@@ -1108,8 +1009,7 @@ python scripts/kv_cache_benchmark.py
   - Sink SDPA: `0.0` = allowed, `-inf` = forbidden for real keys (via `torch.where`),
     `sink_bias` added for the sink column — same convention as the non-sink path
 
-When in doubt, trust `manual_causal_attention` for golden values — the sink SDPA
-path is now equivalent to it (regression: `test_sink_path_matches_manual_at_prefill`).
+When in doubt, trust `manual_causal_attention` for golden values — the sink SDPA path is now equivalent to it (regression: `test_sink_path_matches_manual_at_prefill`).
 
 ---
 

@@ -1,10 +1,6 @@
 # GPT-OSS-Lite — Config and API Reference
 
-> Quick reference for the canonical configuration and the key public API
-> signatures. The full YAML encyclopedia with defaults, validation rules, and
-> cross-field interactions lives in [training.md](../training.md) (Part B —
-> Configuration reference); the class-by-class module map is in
-> [foundations-and-architecture.md](../concepts/foundations-and-architecture.md).
+> Quick reference for the canonical configuration and the key public API signatures. The full YAML encyclopedia with defaults, validation rules, and cross-field interactions lives in [training.md](../training.md) (Part B — Configuration reference); the class-by-class module map is in [foundations-and-architecture.md](../concepts/foundations-and-architecture.md).
 
 ## Model config (`ModelConfig`)
 
@@ -86,12 +82,9 @@ Training hyperparameters (`aux_loss_alpha`, `compile`, etc.) live under `trainin
 | `save_dir` | checkpoints/pretrain_a100 | checkpoints/gpu_smoke | Safetensors + optim + RNG |
 | `train_data_path` | data/pretrain_chinchilla | data/pretrain_smoke | `shard_*.bin` dir; prepare first |
 
-**Implicit defaults** (not in YAML): `num_workers=4`, `pin_memory=true` on CUDA;
-chunked CE `chunk_size=8192` in `training/pretrain.py`.
+**Implicit defaults** (not in YAML): `num_workers=4`, `pin_memory=true` on CUDA; chunked CE `chunk_size=8192` in `training/pretrain.py`.
 
-**`gptoss-default` mixture** (from A100 YAML comments): FineWeb-Edu 50%,
-FineWeb 20%, The Stack Python 15%, OpenMath 10%, arXiv 5%. Includes 10%
-long-context augmentation (4096 packed sequences). See
+**`gptoss-default` mixture** (from A100 YAML comments): FineWeb-Edu 50%, FineWeb 20%, The Stack Python 15%, OpenMath 10%, arXiv 5%. Includes 10% long-context augmentation (4096 packed sequences). See
 [training.md](../training.md) (Data Pipeline part).
 
 ---

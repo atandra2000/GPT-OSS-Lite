@@ -1,17 +1,8 @@
 # GPT-OSS-Lite — Documentation Index
 
-> **Start here.** This directory is the canonical reference for GPT-OSS-Lite:
-> a faithful from-scratch PyTorch reproduction of OpenAI's GPT-OSS long-context
-> architecture (~502M total / ~247M active parameters, 12-layer alternating
-> sliding-window / full attention, YaRN 128K, top-2-of-8 MoE). For a one-page
-> project overview see the root [README.md](../README.md).
+> **Start here.** This directory is the canonical reference for GPT-OSS-Lite: a faithful from-scratch PyTorch reproduction of OpenAI's GPT-OSS long-context architecture (~502M total / ~247M active parameters, 12-layer alternating sliding-window / full attention, YaRN 128K, top-2-of-8 MoE). For a one-page project overview see the root [README.md](../README.md).
 
-The documentation is organized into four layers: **concept chapters**
-(`docs/concepts/`) that consolidate theory + implementation per topic, a
-**reference** (`docs/references/`) for config tables and API signatures,
-**guides** (`docs/guides/`) for onboarding and operations, and two top-level
-chapters for training and inference. Every code symbol is cited as a
-machine-verified `file.py:Symbol` anchor (see `tests/test_doc_refs.py`).
+The documentation is organized into four layers: **concept chapters** (`docs/concepts/`) that consolidate theory + implementation per topic, a **reference** (`docs/references/`) for config tables and API signatures, **guides** (`docs/guides/`) for onboarding and operations, and two top-level chapters for training and inference. Every code symbol is cited as a machine-verified `file.py:Symbol` anchor (see `tests/test_doc_refs.py`).
 
 ---
 
@@ -22,11 +13,9 @@ machine-verified `file.py:Symbol` anchor (see `tests/test_doc_refs.py`).
 | KV-cache reduction at 128K | ≥ 1.8× vs pure GQA full attention (**measured 2.00×**) | `scripts/kv_cache_benchmark.py` |
 | Passkey retrieval at 128K | ≥ 85% (trained checkpoint — **target**, no run yet) | `scripts/passkey_eval.py` |
 
-**Stack:** PyTorch 2.x, BF16, FA2 via SDPA, optional `torch.compile(max-autotune)`,
-opt-in Triton MoE via `moe_dispatch: triton_grouped`.
+**Stack:** PyTorch 2.x, BF16, FA2 via SDPA, optional `torch.compile(max-autotune)`, opt-in Triton MoE via `moe_dispatch: triton_grouped`.
 
-**Authoritative project rules:** [AGENTS.md](../AGENTS.md) (sink clamp, aux loss,
-sliding/full alternation, Triton contract).
+**Authoritative project rules:** [AGENTS.md](../AGENTS.md) (sink clamp, aux loss, sliding/full alternation, Triton contract).
 
 ---
 
@@ -109,8 +98,7 @@ python3 scripts/check_docs.py --stamp-footers
 
 Rules for writers: anchors are `file.py:Symbol` (never line numbers); block
 math uses `$$...$$`; every quantitative claim is derived or marked `[INFERENCE]`;
-`tests/test_doc_refs.py` fails on any stale anchor. The 2026-08-04 massive
-expansion is complete and consolidated into this canonical layout.
+`tests/test_doc_refs.py` fails on any stale anchor. The 2026-08-04 massive expansion is complete and consolidated into this canonical layout.
 
 Every chapter file ends with a verification footer:
 

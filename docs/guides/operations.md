@@ -1,9 +1,6 @@
 # GPT-OSS-Lite — Operations
 
-> Purpose: runbooks for benchmarks, checkpoints/logging/memory helpers, and the
-> OPT-1…24 performance catalog. For training see [training.md](../training.md); for
-> inference internals see [foundations-and-architecture.md](../concepts/foundations-and-architecture.md) §9 and
-> [inference.md](../inference.md).
+> Purpose: runbooks for benchmarks, checkpoints/logging/memory helpers, and the OPT-1…24 performance catalog. For training see [training.md](../training.md); for inference internals see [foundations-and-architecture.md](../concepts/foundations-and-architecture.md) §9 and [inference.md](../inference.md).
 
 ---
 
@@ -77,8 +74,7 @@ python3 scripts/e2e_gpu_smoke.py  # when GPU available
 
 ### A.2 `_bootstrap.py`
 
-**Purpose:** Deduplicate `sys.path` setup and micro-benchmark utilities across
-profiling scripts.
+**Purpose:** Deduplicate `sys.path` setup and micro-benchmark utilities across profiling scripts.
 
 **Exports:**
 
@@ -93,8 +89,7 @@ profiling scripts.
 from _bootstrap import micro_cfg, time_fn
 ```
 
-Scripts that `import _bootstrap` must be run with `scripts/` as cwd **or** rely
-on the path fix inside `_bootstrap` (parent of `scripts/` is added automatically).
+Scripts that `import _bootstrap` must be run with `scripts/` as cwd **or** rely on the path fix inside `_bootstrap` (parent of `scripts/` is added automatically).
 
 **Expected output:** None — library module only.
 
@@ -102,9 +97,7 @@ on the path fix inside `_bootstrap` (parent of `scripts/` is added automatically
 
 ### A.3 `check_docs.py`
 
-**Purpose:** Validate all `docs/**/*.md` files for broken links, stale
-patterns, control characters, and missing backtick paths. Optionally refresh the
-doc size table in [README.md](../README.md) or stamp verification footers.
+**Purpose:** Validate all `docs/**/*.md` files for broken links, stale patterns, control characters, and missing backtick paths. Optionally refresh the doc size table in [README.md](../README.md) or stamp verification footers.
 
 #### Invocation
 
@@ -145,9 +138,7 @@ On failure, prints `docs/<file>:<line>: <message>` to stderr and exits 1.
 
 ### A.4 `kv_cache_benchmark.py` (headline ≥1.8×)
 
-**Purpose:** Prove the **architectural KV-cache reduction** of the alternating
-sliding-window / full-attention design without loading a model or GPU. This is
-the analytical counterpart to `MixedKVCache` described in
+**Purpose:** Prove the **architectural KV-cache reduction** of the alternating sliding-window / full-attention design without loading a model or GPU. This is the analytical counterpart to `MixedKVCache` described in
 [foundations-and-architecture.md](../concepts/foundations-and-architecture.md) §9 and [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24)
 (OPT-11/12).
 
@@ -201,16 +192,13 @@ GQA: 4 KV heads, head_dim=96
 
 Exit code **0** if reduction at 128K ≥ **1.8×**; otherwise exit **1**.
 
-At long context the ratio approaches $12 / (6 + 6 \times 128/131072) \approx 2.00\times$.
-See [foundations-and-architecture.md](../concepts/foundations-and-architecture.md) §A.4 for the intuition.
+At long context the ratio approaches $12 / (6 + 6 \times 128/131072) \approx 2.00\times$. See [foundations-and-architecture.md](../concepts/foundations-and-architecture.md) §A.4 for the intuition.
 
 ---
 
 ### A.5 `passkey_eval.py`
 
-**Purpose:** Measure **passkey retrieval accuracy** at long context lengths using
-`inference/long_context.py::PasskeyEvaluator`. Target: **≥85%** at 128K on a
-**trained** checkpoint.
+**Purpose:** Measure **passkey retrieval accuracy** at long context lengths using `inference/long_context.py::PasskeyEvaluator`. Target: **≥85%** at 128K on a **trained** checkpoint.
 
 #### Invocation
 
@@ -231,9 +219,7 @@ python3 scripts/passkey_eval.py \
 | `--position` | `middle` | Passkey placement: `start`, `middle`, `end` |
 | `--seed` | 42 | Base RNG seed |
 
-Loads `configs/pretrain_a100_502m.yaml` for `ModelConfig`. Uses a lightweight
-char-level tokenizer stub for eval plumbing — swap for production BPE when the
-data pipeline tokenizer is wired (see [training.md](../training.md)).
+Loads `configs/pretrain_a100_502m.yaml` for `ModelConfig`. Uses a lightweight char-level tokenizer stub for eval plumbing — swap for production BPE when the data pipeline tokenizer is wired (see [training.md](../training.md)).
 
 #### Expected output (trained model)
 
@@ -253,9 +239,7 @@ Passkey eval: checkpoint=model_step_60000.safetensors, device=cuda
 
 #### Untrained model
 
-On a random-init checkpoint, accuracy is near chance. The script still exits **0**
-but prints a warning — full pretraining is required for the headline pass.
-See [getting-started.md](getting-started.md) when available.
+On a random-init checkpoint, accuracy is near chance. The script still exits **0** but prints a warning — full pretraining is required for the headline pass. See [getting-started.md](getting-started.md) when available.
 
 **Related:** [sampling](../concepts/optimizers-and-numerics.md) — greedy (`temperature=0.0`) semantics the eval loop relies on.
 
@@ -263,9 +247,7 @@ See [getting-started.md](getting-started.md) when available.
 
 ### A.6 `e2e_gpu_smoke.py`
 
-**Purpose:** Single-script integration test exercising every major subsystem on a
-**tiny** model that fits in **~4 GB VRAM** (verified on sm_75). Run this after
-any change to attention, MoE, checkpointing, or generation.
+**Purpose:** Single-script integration test exercising every major subsystem on a **tiny** model that fits in **~4 GB VRAM** (verified on sm_75). Run this after any change to attention, MoE, checkpointing, or generation.
 
 #### What it tests (8 steps)
 
@@ -313,8 +295,7 @@ Exit **0** on success; raises `SystemExit(1)` on any failure.
 
 #### Component profiler — `profile_components.py`
 
-**Purpose:** Break down forward latency by subsystem on `micro_cfg()` — useful
-when deciding which [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24) entry to profile next.
+**Purpose:** Break down forward latency by subsystem on `micro_cfg()` — useful when deciding which [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24) entry to profile next.
 
 ##### Invocation
 
@@ -358,8 +339,7 @@ Absolute numbers vary by hardware. Compare **before/after** a change, not across
 
 #### MoE dispatch profiler — `profile_moe.py`
 
-**Purpose:** Isolate MoE forward vs vectorized dispatch cost without YaRN prune
-overhead (`yarn_prune_rope_global=False` via `dataclasses.replace`).
+**Purpose:** Isolate MoE forward vs vectorized dispatch cost without YaRN prune overhead (`yarn_prune_rope_global=False` via `dataclasses.replace`).
 
 ##### Invocation
 
@@ -376,16 +356,14 @@ moe.forward          3.45 ms
 _dispatch_vectorized 2.10 ms
 ```
 
-For Triton grouped dispatch timing, enable `moe_dispatch="triton_grouped"` in a
-custom config and profile via `e2e_gpu_smoke.py` or a one-off script. See
+For Triton grouped dispatch timing, enable `moe_dispatch="triton_grouped"` in a custom config and profile via `e2e_gpu_smoke.py` or a one-off script. See
 [moe.md](../concepts/moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
 
 ---
 
 #### Inference profiler — `profile_inference.py`
 
-**Purpose:** Measure `inference/generate.py::generate()` throughput (tokens/sec)
-for several prompt lengths with greedy decoding (`temperature=0.0`).
+**Purpose:** Measure `inference/generate.py::generate()` throughput (tokens/sec) for several prompt lengths with greedy decoding (`temperature=0.0`).
 
 ##### Invocation
 
@@ -403,9 +381,7 @@ prompt=32, new=64: 52.1 ms (1228 tok/s)
 prompt=128, new=64: 61.3 ms (1044 tok/s)
 ```
 
-Decode cost is dominated by per-step `MixedKVCache` updates and MoE forward.
-Longer prompts increase prefill time but decode tok/s should stabilize once the
-cache is warm. See OPT-11/12/13/14/22 in [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24).
+Decode cost is dominated by per-step `MixedKVCache` updates and MoE forward. Longer prompts increase prefill time but decode tok/s should stabilize once the cache is warm. See OPT-11/12/13/14/22 in [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24).
 
 **Related:** [kv cache engineering](../inference.md) — decode-bandwidth model behind the tok/s ceiling.
 
@@ -415,9 +391,7 @@ cache is warm. See OPT-11/12/13/14/22 in [Part C](operations.md#part-c--optimiza
 
 #### VRAM microbench — `microbench_a100.py`
 
-**Purpose:** Verify production model fits under a VRAM ceiling at
-`batch_size=8`, `seq_len=4096`. Uses **actual** `torch.cuda.max_memory_allocated`
-on GPU; falls back to `utils/memory.py:estimate_model_memory_gb` on CPU.
+**Purpose:** Verify production model fits under a VRAM ceiling at `batch_size=8`, `seq_len=4096`. Uses **actual** `torch.cuda.max_memory_allocated` on GPU; falls back to `utils/memory.py:estimate_model_memory_gb` on CPU.
 
 ##### Invocation
 
@@ -455,9 +429,7 @@ Estimator math is documented in [§B.3](operations.md#b3-estimate_model_memory_g
 
 #### Step-time / MFU — `step_time_a100.py`
 
-**Purpose:** Measure training **tokens/sec** and approximate **MFU** (Model FLOPs
-Utilization) on A100 BF16. Optional `torch.compile(max-autotune)` mirrors
-production `training.compile: true`.
+**Purpose:** Measure training **tokens/sec** and approximate **MFU** (Model FLOPs Utilization) on A100 BF16. Optional `torch.compile(max-autotune)` mirrors production `training.compile: true`.
 
 ##### Invocation
 
@@ -494,8 +466,7 @@ Enables TF32 + cuDNN benchmark (see [OPT-20](operations.md#opt-20--cudnnbenchmar
 
 Exit **0** if MFU ≥ 35% on CUDA; CPU-only runs report tokens/sec without MFU.
 
-**Note:** This script uses plain `cross_entropy`, not `chunked_cross_entropy` —
-it measures raw step time, not the production CE path. For production parity see
+**Note:** This script uses plain `cross_entropy`, not `chunked_cross_entropy` — it measures raw step time, not the production CE path. For production parity see
 [training.md](../training.md).
 
 **Related:** [optimizers](../concepts/optimizers-and-numerics.md) (AdamW fused/foreach path) · [numerics](../concepts/optimizers-and-numerics.md) (TF32/BF16 matmul assumptions).
@@ -512,9 +483,7 @@ it measures raw step time, not the production CE path. For production parity see
 
 **File:** `utils/checkpoint.py`
 
-`utils/checkpoint.py:CheckpointManager` is the single sanctioned API for saving
-and loading training state. The training loop in `training/pretrain.py` constructs
-one instance per run:
+`utils/checkpoint.py:CheckpointManager` is the single sanctioned API for saving and loading training state. The training loop in `training/pretrain.py` constructs one instance per run:
 
 ```python
 ckpt = CheckpointManager(train_cfg["save_dir"])
@@ -537,8 +506,7 @@ Additionally, `pretrain.py` saves RNG state separately:
 |------|----------|
 | `rng_step_N.pt` | Python, NumPy, PyTorch, CUDA RNG states |
 
-RNG files are **not** managed by `CheckpointManager` — the training script writes
-them directly after the final save. See [training.md](../training.md) §25.
+RNG files are **not** managed by `CheckpointManager` — the training script writes them directly after the final save. See [training.md](../training.md) §25.
 
 #### `save(model, optimizer, step, scheduler=None, extra_meta=None)`
 
@@ -548,8 +516,7 @@ Saves all three core files atomically. Logs:
 [checkpoint] saved step 2000 → checkpoints/pretrain_a100
 ```
 
-`extra_meta` merges into `meta_step_N.json` — e.g. `{"aux_loss": 0.0042}` or
-`{"final": true, "seed": 42}`.
+`extra_meta` merges into `meta_step_N.json` — e.g. `{"aux_loss": 0.0042}` or `{"final": true, "seed": 42}`.
 
 #### `load(model, step, device="cuda", optimizer=None, scheduler=None, strict=True)`
 
@@ -558,11 +525,9 @@ Saves all three core files atomically. Logs:
 3. Optionally restores optimizer and scheduler from `.pt` files.
 4. Returns `meta` dict from JSON (or `{"step": step}` if meta missing).
 
-**Strict mode:** If `strict=True` (default), missing or unexpected keys raise
-`RuntimeError`. Set `strict=False` for partial loads during architecture experiments.
+**Strict mode:** If `strict=True` (default), missing or unexpected keys raise `RuntimeError`. Set `strict=False` for partial loads during architecture experiments.
 
-**Missing optimizer:** Warns and leaves optimizer at current state — useful when
-fine-tuning with a new optimizer but warm-started weights.
+**Missing optimizer:** Warns and leaves optimizer at current state — useful when fine-tuning with a new optimizer but warm-started weights.
 
 #### Complete checkpoint definition
 
@@ -572,8 +537,7 @@ A step is **complete** only when all three exist:
 - `optim_step_N.pt`
 - `meta_step_N.json`
 
-`sched_step_N.pt` is optional. Incomplete steps are ignored by `latest_step()` and
-`list_checkpoints()`.
+`sched_step_N.pt` is optional. Incomplete steps are ignored by `latest_step()` and `list_checkpoints()`.
 
 ---
 
@@ -591,19 +555,15 @@ def _atomic_write(self, path: Path, writer, *, suffix: str) -> None:
         raise
 ```
 
-**Why temp files live in `save_dir`:** `os.replace` across filesystems is not
-atomic. Same-directory rename guarantees readers never see a partial file.
+**Why temp files live in `save_dir`:** `os.replace` across filesystems is not atomic. Same-directory rename guarantees readers never see a partial file.
 
-**Suffixes:** `.safetensors.tmp`, `.pt.tmp`, `.json.tmp` — distinguishable in
-`ls` during crash recovery.
+**Suffixes:** `.safetensors.tmp`, `.pt.tmp`, `.json.tmp` — distinguishable in `ls` during crash recovery.
 
-`tests/test_training.py::test_checkpoint_atomicity_no_partial_files` verifies no
-`.tmp` files remain after successful save.
+`tests/test_training.py::test_checkpoint_atomicity_no_partial_files` verifies no `.tmp` files remain after successful save.
 
 ---
 
-Weight tying (`embed.weight` ↔ `head.weight`) creates **two state_dict keys
-pointing at the same storage**. `safetensors` rejects duplicate `data_ptr` values.
+Weight tying (`embed.weight` ↔ `head.weight`) creates **two state_dict keys pointing at the same storage**. `safetensors` rejects duplicate `data_ptr` values.
 
 `_atomic_save_safetensors` deduplicates:
 
@@ -618,11 +578,9 @@ for k, v in state.items():
         deduped[k] = v.contiguous()
 ```
 
-First occurrence is saved in-place (contiguous). Duplicates get an explicit clone.
-On load, both keys restore correctly because safetensors stores independent tensors.
+First occurrence is saved in-place (contiguous). Duplicates get an explicit clone. On load, both keys restore correctly because safetensors stores independent tensors.
 
-**Impact:** Checkpoint size increases by one embedding matrix (~98M params × 2 bytes
-≈ 196 MB for production config) — acceptable for correctness.
+**Impact:** Checkpoint size increases by one embedding matrix (~98M params × 2 bytes ≈ 196 MB for production config) — acceptable for correctness.
 
 ---
 
@@ -648,15 +606,13 @@ Removes all four filename patterns for that step (model, optim, sched, meta).
 
 #### `keep_last_n(n: int)`
 
-Deletes all complete checkpoints except the `n` most recent. Example — retain
-only the last 3 during long runs:
+Deletes all complete checkpoints except the `n` most recent. Example — retain only the last 3 during long runs:
 
 ```python
 ckpt.keep_last_n(3)
 ```
 
-Call after `save()` on a schedule to cap disk usage. Not invoked automatically
-by `pretrain.py` — add if checkpoint dir grows too large.
+Call after `save()` on a schedule to cap disk usage. Not invoked automatically by `pretrain.py` — add if checkpoint dir grows too large.
 
 ---
 
@@ -664,8 +620,7 @@ by `pretrain.py` — add if checkpoint dir grows too large.
 
 **File:** `utils/logging.py`
 
-`TrainingLogger` prints a human-readable rolling summary every `log_interval`
-steps and optionally forwards metrics to Weights & Biases.
+`TrainingLogger` prints a human-readable rolling summary every `log_interval` steps and optionally forwards metrics to Weights & Biases.
 
 #### Construction
 
@@ -696,8 +651,7 @@ logger = TrainingLogger(
 step=    200 | loss=3.2145 | ppl=24.89 | lr=2.67e-04 | tps=142,350 | aux=0.0031
 ```
 
-**Note:** `loss` logged is **cross-entropy only** — `pretrain.py` passes
-`ce.item()`, not `ce + aux_alpha * aux`. Aux appears under `metrics={"aux": ...}`.
+**Note:** `loss` logged is **cross-entropy only** — `pretrain.py` passes `ce.item()`, not `ce + aux_alpha * aux`. Aux appears under `metrics={"aux": ...}`.
 
 #### `finish()`
 
@@ -738,9 +692,7 @@ If `wandb` is not installed, prints:
 
 ### B.3 `estimate_model_memory_gb` / Mixed KV term / `assert_fits_in_available_gpu`
 
-**File:** `utils/memory.py` — `utils/memory.py:estimate_model_memory_gb` estimates
-steady-state VRAM; `utils/memory.py:assert_fits_in_available_gpu` enforces the
-budget at startup.
+**File:** `utils/memory.py` — `utils/memory.py:estimate_model_memory_gb` estimates steady-state VRAM; `utils/memory.py:assert_fits_in_available_gpu` enforces the budget at startup.
 
 ```python
 def estimate_model_memory_gb(
@@ -754,8 +706,7 @@ def estimate_model_memory_gb(
 ) -> float
 ```
 
-Returns estimated **peak VRAM in GB** for forward + backward at the given batch
-and sequence length. Requires `model.cfg` (`ModelConfig`) — returns `0.0` if absent.
+Returns estimated **peak VRAM in GB** for forward + backward at the given batch and sequence length. Requires `model.cfg` (`ModelConfig`) — returns `0.0` if absent.
 
 Called at training startup in `pretrain.py` before the first step:
 
@@ -784,8 +735,7 @@ $$
 
 ---
 
-The estimator counts **only KV tensors**, not Q — matching inference `MixedKVCache`
-and the analytical benchmark in `scripts/kv_cache_benchmark.py`.
+The estimator counts **only KV tensors**, not Q — matching inference `MixedKVCache` and the analytical benchmark in `scripts/kv_cache_benchmark.py`.
 
 ```python
 per_token = 2 * n_kv_heads * head_dim * dtype_bytes   # K + V, BF16 → 2 bytes
@@ -813,19 +763,15 @@ At $T = 4096$, `steady_state=False`:
 - Global: $4096$
 - Total KV: $(6 \times 4096 + 6 \times 4096) \times B \times 1536$ — same as full attention **during training prefill**.
 
-At **inference steady state** (`steady_state=True`), windowed layers hold only
-$W = 128$ tokens:
+At **inference steady state** (`steady_state=True`), windowed layers hold only $W = 128$ tokens:
 
 $$
 KV_{\text{inf}} = (6 \times 128 + 6 \times T) \times B \times 1536 \text{ bytes}
 $$
 
-At $T = 131072$, $B = 1$: ratio vs pure full $\approx 1.92\times$ reduction —
-matching `kv_cache_benchmark.py`.
+At $T = 131072$, $B = 1$: ratio vs pure full $\approx 1.92\times$ reduction — matching `kv_cache_benchmark.py`.
 
-**Why two modes:** Training forward sees the full sequence in every layer (no
-incremental cache during `GPTOSS.forward`). Inference with `MixedKVCache` ring
-buffers is cheaper — use `steady_state=True` when budgeting decode VRAM.
+**Why two modes:** Training forward sees the full sequence in every layer (no incremental cache during `GPTOSS.forward`). Inference with `MixedKVCache` ring buffers is cheaper — use `steady_state=True` when budgeting decode VRAM.
 
 ---
 
@@ -835,9 +781,7 @@ buffers is cheaper — use `steady_state=True` when budgeting decode VRAM.
 optim_bytes = sum(p.numel() for p in model.parameters()) * 12
 ```
 
-Assumes AdamW with FP32 master weights and moments (4 + 4 + 4 bytes per param).
-Matches `eps=1e-6`, `foreach=True`, `fused=True` in [training.md](../training.md) —
-see [OPT-9](operations.md#opt-9--adamw-foreachtrue-fusedtrue-on-cuda)/[OPT-17](operations.md#opt-17--adamw-eps1e-6-not-1e-8).
+Assumes AdamW with FP32 master weights and moments (4 + 4 + 4 bytes per param). Matches `eps=1e-6`, `foreach=True`, `fused=True` in [training.md](../training.md) — see [OPT-9](operations.md#opt-9--adamw-foreachtrue-fusedtrue-on-cuda)/[OPT-17](operations.md#opt-17--adamw-eps1e-6-not-1e-8).
 
 #### Activations with gradient checkpointing
 
@@ -853,9 +797,7 @@ MoE intermediate adds:
 act_bytes += n_layers * 3 * 3 * seq_len * batch_size * ffn_dim * dtype_bytes * store_factor
 ```
 
-The `3 * 3` factor approximates three active expert paths (top-2 routed + shared)
-with a conservative width multiplier. This is a **heuristic** — actual peaks depend
-on routing distribution.
+The `3 * 3` factor approximates three active expert paths (top-2 routed + shared) with a conservative width multiplier. This is a **heuristic** — actual peaks depend on routing distribution.
 
 With `grad_ckpt_every=3` (production default):
 
@@ -863,8 +805,7 @@ $$
 \text{store\_factor} = \frac{1}{3} + \frac{2}{3} \times 0.5 = \frac{2}{3}
 $$
 
-Roughly **33% activation memory savings** vs no checkpointing — consistent with
-the ~30% compute overhead cited in [foundations-and-architecture.md](../concepts/foundations-and-architecture.md).
+Roughly **33% activation memory savings** vs no checkpointing — consistent with the ~30% compute overhead cited in [foundations-and-architecture.md](../concepts/foundations-and-architecture.md).
 
 #### GPU overhead heuristic
 
@@ -872,8 +813,7 @@ the ~30% compute overhead cited in [foundations-and-architecture.md](../concepts
 overhead_gb = min(13.7, max(2.0, total_gb * 0.17))
 ```
 
-On CPU or no CUDA: `overhead_gb = 2.0`. Override with explicit `overhead_gb=0.0`
-in tests (`tests/test_utils.py`).
+On CPU or no CUDA: `overhead_gb = 2.0`. Override with explicit `overhead_gb=0.0` in tests (`tests/test_utils.py`).
 
 ---
 
@@ -889,9 +829,7 @@ def assert_fits_in_available_gpu(estimate_gb: float, safety_margin_gb: float = 2
 [memory] Estimated peak VRAM: 22.4 GB / 80.0 GB — OK.
 ```
 
-`pretrain.py` catches `RuntimeError` and prints a **warning** instead of aborting —
-allows exploratory runs on tight GPUs. Tighten policy by removing the try/except
-if hard failure is preferred.
+`pretrain.py` catches `RuntimeError` and prints a **warning** instead of aborting — allows exploratory runs on tight GPUs. Tighten policy by removing the try/except if hard failure is preferred.
 
 ---
 
@@ -976,9 +914,7 @@ logger.finish()
 | **Impact** | Measured or estimated gain; always verify on your hardware |
 | **Files** | Primary source locations |
 
-**Numbering gaps:** OPT-6, OPT-7, and OPT-16 cover stability and compilation
-entries from the same audit pass. All 24 IDs are assigned; there are no reserved
-slots beyond that.
+**Numbering gaps:** OPT-6, OPT-7, and OPT-16 cover stability and compilation entries from the same audit pass. All 24 IDs are assigned; there are no reserved slots beyond that.
 
 **Stale patterns to avoid in docs and configs:**
 
@@ -992,10 +928,7 @@ slots beyond that.
 
 #### OPT-1 — Mask cache via `functools.lru_cache`
 
-**Problem:** Building causal and sliding-window boolean masks every forward pass
-allocates $O(T^2)$ tensors and burns GPU time. At $T = 4096$ training and at
-decode with growing $T_k$, mask construction was a measurable fraction of attention
-latency.
+**Problem:** Building causal and sliding-window boolean masks every forward pass allocates $O(T^2)$ tensors and burns GPU time. At $T = 4096$ training and at decode with growing $T_k$, mask construction was a measurable fraction of attention latency.
 
 **Fix:** Cache masks by shape/device/dtype signature:
 
@@ -1010,8 +943,7 @@ def _window_mask(T_q: int, T_k: int, window: int, device: torch.device, dtype: t
     ...
 ```
 
-`causal_attention()` composes `_causal_mask & _window_mask` for prefill and
-calls `_window_mask` alone for decode ($T_q = 1$, $T_k$ growing).
+`causal_attention()` composes `_causal_mask & _window_mask` for prefill and calls `_window_mask` alone for decode ($T_q = 1$, $T_k$ growing).
 
 **Impact:**
 
@@ -1028,9 +960,7 @@ calls `_window_mask` alone for decode ($T_q = 1$, $T_k$ growing).
 
 #### OPT-2 — `repeat_kv` without `.contiguous()`
 
-**Problem:** GQA expands $n_{\text{kv\_heads}}$ to $n_{\text{heads}}$ by repeating
-each KV head. A naive `repeat_interleave` + `.contiguous()` forces a full tensor
-copy every layer — $12 \times$ per forward at 12 layers.
+**Problem:** GQA expands $n_{\text{kv\_heads}}$ to $n_{\text{heads}}$ by repeating each KV head. A naive `repeat_interleave` + `.contiguous()` forces a full tensor copy every layer — $12 \times$ per forward at 12 layers.
 
 **Fix:** `expand` + `reshape` preserves a non-contiguous view SDPA accepts:
 
@@ -1046,9 +976,7 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 FlashAttention / SDPA flash path handles non-contiguous K/V internally.
 
-**Impact:** Eliminates redundant memcpy on every attention layer. Profiled in
-`scripts/profile_components.py` as sub-millisecond but scales with layer count
-and batch.
+**Impact:** Eliminates redundant memcpy on every attention layer. Profiled in `scripts/profile_components.py` as sub-millisecond but scales with layer count and batch.
 
 **Files:** `models/attention.py`, `inference/generate.py`
 
@@ -1058,12 +986,9 @@ and batch.
 
 #### OPT-3 — Sink path via extended K/V + mask column
 
-**Problem:** Learned attention-sink bias must enter the softmax denominator
-without changing output dimensionality. A separate manual attention path would
-bypass SDPA/FA2.
+**Problem:** Learned attention-sink bias must enter the softmax denominator without changing output dimensionality. A separate manual attention path would bypass SDPA/FA2.
 
-**Fix:** Append a synthetic sink key/value (zeros) and put clamped sink bias on
-the mask's last column:
+**Fix:** Append a synthetic sink key/value (zeros) and put clamped sink bias on the mask's last column:
 
 ```python
 sink_k = torch.zeros(B, H, 1, D, device=device, dtype=dtype)
@@ -1076,9 +1001,7 @@ return F.scaled_dot_product_attention(query_states, k_ext, v_ext, attn_mask=mask
 
 Sink receives zero value — only the bias logit affects weights.
 
-**Impact:** Single SDPA code path for both sink and non-sink layers; enables FA2
-for the bulk of the computation. See [attention-sinks.md](../concepts/attention-sinks.md) for
-the full mathematical treatment.
+**Impact:** Single SDPA code path for both sink and non-sink layers; enables FA2 for the bulk of the computation. See [attention-sinks.md](../concepts/attention-sinks.md) for the full mathematical treatment.
 
 **Files:** `models/attention.py` (`causal_attention` sink branch)
 
@@ -1088,8 +1011,7 @@ the full mathematical treatment.
 
 #### OPT-22 — Decode-specific window mask ($T_q = 1$)
 
-**Problem:** During autoregressive decode, $T_q = 1$ but $T_k$ grows. Building a
-full $(T_k, T_k)$ causal mask each step is $O(T_k^2)$ — catastrophic at 128K.
+**Problem:** During autoregressive decode, $T_q = 1$ but $T_k$ grows. Building a full $(T_k, T_k)$ causal mask each step is $O(T_k^2)$ — catastrophic at 128K.
 
 **Fix:** `_window_mask` special-cases $T_q \neq T_k$:
 
@@ -1103,11 +1025,9 @@ idx_k = torch.arange(T_k, device=device)
 return (idx_q.unsqueeze(-1) - idx_k.unsqueeze(0) < window)
 ```
 
-Combined with `MixedKVCache` ring buffer (OPT-11), effective KV length for
-windowed layers stays $\leq W$ regardless of global position.
+Combined with `MixedKVCache` ring buffer (OPT-11), effective KV length for windowed layers stays $\leq W$ regardless of global position.
 
-**Impact:** Decode attention mask is $O(T_k)$ not $O(T_k^2)$. Essential for 128K
-inference throughput.
+**Impact:** Decode attention mask is $O(T_k)$ not $O(T_k^2)$. Essential for 128K inference throughput.
 
 **Files:** `models/attention.py` (`_window_mask`), `inference/generate.py`
 
@@ -1119,11 +1039,9 @@ inference throughput.
 
 #### OPT-4 — RMSNorm native dtype activations
 
-**Problem:** Naive RMSNorm upcasts the full activation tensor to FP32 for
-`mean` + `rsqrt`, doubling memory bandwidth and breaking BF16 end-to-end paths.
+**Problem:** Naive RMSNorm upcasts the full activation tensor to FP32 for `mean` + `rsqrt`, doubling memory bandwidth and breaking BF16 end-to-end paths.
 
-**Fix:** Compute RMS statistics in FP32 on a **detached** slice, multiply back
-in native dtype:
+**Fix:** Compute RMS statistics in FP32 on a **detached** slice, multiply back in native dtype:
 
 ```python
 def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1133,8 +1051,7 @@ def forward(self, x: torch.Tensor) -> torch.Tensor:
 
 Only the reduction runs in FP32; `x` stays BF16 throughout.
 
-**Impact:** ~2× less activation memory traffic in norm layers; preserves BF16
-through SDPA without dtype promotion surprises.
+**Impact:** ~2× less activation memory traffic in norm layers; preserves BF16 through SDPA without dtype promotion surprises.
 
 **Files:** `models/transformer.py` (`RMSNorm`)
 
@@ -1144,9 +1061,7 @@ through SDPA without dtype promotion surprises.
 
 #### OPT-23 — `apply_rope` dtype preservation
 
-**Problem:** If `cos`/`sin` stay FP32 while `q`/`k` are BF16, PyTorch promotes
-the RoPE output to FP32. SDPA then rejects mixed dtypes across Q/K/V or silently
-upcasts — breaking FA2 eligibility.
+**Problem:** If `cos`/`sin` stay FP32 while `q`/`k` are BF16, PyTorch promotes the RoPE output to FP32. SDPA then rejects mixed dtypes across Q/K/V or silently upcasts — breaking FA2 eligibility.
 
 **Fix:** Explicit cast before multiply:
 
@@ -1156,8 +1071,7 @@ sin_full = sin.repeat_interleave(2, dim=-1).to(x.dtype)
 return x * cos_full + x_rotated * sin_full
 ```
 
-**Impact:** Q and K remain BF16 through attention; required for production
-`dtype: bf16` config. Documented in [attention-and-positional.md](../concepts/attention-and-positional.md).
+**Impact:** Q and K remain BF16 through attention; required for production `dtype: bf16` config. Documented in [attention-and-positional.md](../concepts/attention-and-positional.md).
 
 **Files:** `models/rotary.py` (`apply_rope`)
 
@@ -1167,8 +1081,7 @@ return x * cos_full + x_rotated * sin_full
 
 #### OPT-5 — Stacked expert dispatch (default `moe_dispatch="stacked"`)
 
-**Problem:** Per-expert Python loops over tokens scatter memory access and launch
-many small GEMMs — poor GPU utilization at MoE scale.
+**Problem:** Per-expert Python loops over tokens scatter memory access and launch many small GEMMs — poor GPU utilization at MoE scale.
 
 **Fix:** `MoELayer._dispatch_vectorized`:
 
@@ -1179,8 +1092,7 @@ many small GEMMs — poor GPU utilization at MoE scale.
 
 Stable sort ensures reproducible routing (required by `AGENTS.md` §A.4).
 
-**Impact:** Default path for all training runs. Groups tokens so each expert GEMM
-has reasonable $M$ dimension. See [moe.md](../concepts/moe.md) for dispatch diagrams.
+**Impact:** Default path for all training runs. Groups tokens so each expert GEMM has reasonable $M$ dimension. See [moe.md](../concepts/moe.md) for dispatch diagrams.
 
 **Files:** `models/moe.py` (`_dispatch_vectorized`, `MoELayer.forward`)
 
@@ -1190,8 +1102,7 @@ has reasonable $M$ dimension. See [moe.md](../concepts/moe.md) for dispatch diag
 
 #### OPT-24 — Triton grouped GEMM (`moe_dispatch="triton_grouped"`)
 
-**Problem:** Even vectorized dispatch launches separate W1/W3/silu kernels per
-expert chunk. Fusing W1+W3+silu into one Triton kernel reduces launch overhead.
+**Problem:** Even vectorized dispatch launches separate W1/W3/silu kernels per expert chunk. Fusing W1+W3+silu into one Triton kernel reduces launch overhead.
 
 **Fix:** Opt-in via config — **not** enabled by default:
 
@@ -1200,12 +1111,9 @@ model:
   moe_dispatch: triton_grouped   # default is "stacked"
 ```
 
-`models/moe_triton.py` implements `triton_moe_w1w3_silu` with tile shape
-$(B_T=16) \times (B_M=32) \times (B_N=32)$. W2 stays PyTorch. Backward uses
-pure-PyTorch reference path.
+`models/moe_triton.py` implements `triton_moe_w1w3_silu` with tile shape $(B_T=16) \times (B_M=32) \times (B_N=32)$. W2 stays PyTorch. Backward uses pure-PyTorch reference path.
 
-**Impact:** Verified end-to-end on 4 GB GPU (sm_75) via `e2e_gpu_smoke.py`.
-Expected 5–15% MoE forward speedup on sm_80+ depending on batch/token count [INFERENCE] — .benchmarks/ empty.
+**Impact:** Verified end-to-end on 4 GB GPU (sm_75) via `e2e_gpu_smoke.py`. Expected 5–15% MoE forward speedup on sm_80+ depending on batch/token count [INFERENCE] — .benchmarks/ empty.
 
 **Contract:**
 
@@ -1233,8 +1141,7 @@ nn.utils.clip_grad_norm_(model.parameters(), grad_clip, foreach=True)
 
 Falls back to non-foreach on older PyTorch (`TypeError` catch).
 
-**Impact:** Modest CPU-side speedup on gradient norm computation; more noticeable
-with 500M+ parameters and `grad_clip=1.0` every step.
+**Impact:** Modest CPU-side speedup on gradient norm computation; more noticeable with 500M+ parameters and `grad_clip=1.0` every step.
 
 **Files:** `training/pretrain.py`
 
@@ -1254,8 +1161,7 @@ optim = AdamW(
 )
 ```
 
-**Impact:** 1.5–2× faster optimizer step vs default loop on A100/H100 (workspace
-rule of thumb) [INFERENCE] — .benchmarks/ empty. Pairs with FP32 master weights under BF16 autocast.
+**Impact:** 1.5–2× faster optimizer step vs default loop on A100/H100 (workspace rule of thumb) [INFERENCE] — .benchmarks/ empty. Pairs with FP32 master weights under BF16 autocast.
 
 **Files:** `training/pretrain.py`
 
@@ -1265,8 +1171,7 @@ rule of thumb) [INFERENCE] — .benchmarks/ empty. Pairs with FP32 master weight
 
 #### OPT-10 — Bisect shard lookup in `PretrainDataset`
 
-**Problem:** Multi-shard token datasets need $O(\log S)$ shard resolution vs linear
-scan over shard metadata for every `__getitem__` call.
+**Problem:** Multi-shard token datasets need $O(\log S)$ shard resolution vs linear scan over shard metadata for every `__getitem__` call.
 
 **Fix:** Precompute `shard_offsets` prefix array; lookup with:
 
@@ -1276,8 +1181,7 @@ shard_idx = self._bisect.bisect_right(self.shard_offsets, start) - 1
 
 Plus single-shard fast path when the entire window fits in one shard.
 
-**Impact:** Negligible at small $S$; essential at production shard counts (50M
-tokens per shard × hundreds of shards). See [training.md](../training.md).
+**Impact:** Negligible at small $S$; essential at production shard counts (50M tokens per shard × hundreds of shards). See [training.md](../training.md).
 
 **Files:** `training/pretrain.py` (`PretrainDataset._get_window_sharded`)
 
@@ -1285,13 +1189,11 @@ tokens per shard × hundreds of shards). See [training.md](../training.md).
 
 #### OPT-17 — AdamW `eps=1e-6` (not `1e-8`)
 
-**Problem:** BF16 has 7 mantissa bits. Adam's second moment with `eps=1e-8`
-underflows to denormal/zero, silently stalling late-stage convergence.
+**Problem:** BF16 has 7 mantissa bits. Adam's second moment with `eps=1e-8` underflows to denormal/zero, silently stalling late-stage convergence.
 
 **Fix:** `eps=1e-6` in production AdamW — matches DeepSeek-V3 and LLaMA-3 practice.
 
-**Impact:** Stability improvement, not throughput. Prevents loss plateau artifacts
-after ~30K steps on MoE models.
+**Impact:** Stability improvement, not throughput. Prevents loss plateau artifacts after ~30K steps on MoE models.
 
 **Files:** `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`
 
@@ -1299,8 +1201,7 @@ after ~30K steps on MoE models.
 
 #### OPT-18 — Warmup 3000 steps
 
-**Problem:** Top-2-of-8 MoE routing is sensitive to early high learning rates;
-insufficient warmup causes expert collapse.
+**Problem:** Top-2-of-8 MoE routing is sensitive to early high learning rates; insufficient warmup causes expert collapse.
 
 **Fix:**
 
@@ -1310,8 +1211,7 @@ warmup_steps: 3000   # 4.9% of 61000 total steps
 
 Linear warmup → cosine decay to `min_lr_ratio=0.05` via `make_warmup_cosine_lambda`.
 
-**Impact:** Routing entropy remains healthier in first 5% of training. Industry
-MoE standard is 2–5% warmup; 3000 steps replaces an earlier 2000-step default.
+**Impact:** Routing entropy remains healthier in first 5% of training. Industry MoE standard is 2–5% warmup; 3000 steps replaces an earlier 2000-step default.
 
 **Files:** `configs/pretrain_a100_502m.yaml`, `training/pretrain.py`
 
@@ -1321,8 +1221,7 @@ MoE standard is 2–5% warmup; 3000 steps replaces an earlier 2000-step default.
 
 #### OPT-19 — Aux load-balancing `alpha=0.01`
 
-**Problem:** Without aux loss, top-2 routing collapses to one expert — wasted
-capacity and training instability.
+**Problem:** Without aux loss, top-2 routing collapses to one expert — wasted capacity and training instability.
 
 **Fix:** Standard Switch Transformer aux loss (FP32 softmax internally — OPT-6):
 
@@ -1331,11 +1230,9 @@ aux_alpha = train_cfg.get("aux_loss_alpha", 0.01)
 loss = (ce + aux_alpha * aux_loss) / accum
 ```
 
-**Deliberate distinction:** DeepSeek-v3-Lite uses aux-loss-free gating; GPT-OSS-Lite
-does **not** (AGENTS.md rule 5).
+**Deliberate distinction:** DeepSeek-v3-Lite uses aux-loss-free gating; GPT-OSS-Lite does **not** (AGENTS.md rule 5).
 
-**Impact:** Keeps expert utilization near uniform; $\alpha=0.01$ is small enough
-not to dominate CE loss.
+**Impact:** Keeps expert utilization near uniform; $\alpha=0.01$ is small enough not to dominate CE loss.
 
 **Files:** `models/moe.py` (`aux_load_balancing_loss`), `training/pretrain.py`
 
@@ -1345,8 +1242,7 @@ not to dominate CE loss.
 
 #### OPT-20 — `cudnn.benchmark_limit=0` + `preferred_blas_library="cublaslt"`
 
-**Problem:** Default cuDNN autotune evaluates only 10 algorithms; BF16 matmul may
-not pick the fastest sm_80 kernel.
+**Problem:** Default cuDNN autotune evaluates only 10 algorithms; BF16 matmul may not pick the fastest sm_80 kernel.
 
 **Fix** in `_set_hardware_perf_knobs()`:
 
@@ -1358,8 +1254,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 ```
 
-**Impact:** ~3–5% end-to-end on A100 after first-step warmup [INFERENCE] — .benchmarks/ empty. Bit-exact numerics
-(same dtype, different kernel selection).
+**Impact:** ~3–5% end-to-end on A100 after first-step warmup [INFERENCE] — .benchmarks/ empty. Bit-exact numerics (same dtype, different kernel selection).
 
 **Files:** `training/pretrain.py` (`_set_hardware_perf_knobs`)
 
@@ -1369,9 +1264,7 @@ torch.backends.cudnn.allow_tf32 = True
 
 #### OPT-21 — Chunked cross-entropy `chunk_size=8192`
 
-**Problem:** Full-vocab CE at $|\mathcal{V}| = 128000$ materializes large
-log-softmax buffers. Smaller chunks reduce peak activation memory; larger chunks
-reduce kernel launch count.
+**Problem:** Full-vocab CE at $|\mathcal{V}| = 128000$ materializes large log-softmax buffers. Smaller chunks reduce peak activation memory; larger chunks reduce kernel launch count.
 
 **Fix:**
 
@@ -1381,8 +1274,7 @@ ce = chunked_cross_entropy(logits, target_ids, chunk_size=8192)
 
 Loops over flattened $(B \times T)$ positions in 8192-token chunks (was 4096).
 
-**Impact:** At $B=8$, $T=4096$: 4 CE kernel launches instead of 8 (~20 μs/step
-saved). Peak CE intermediate ~16 GB — well under A100 80 GB budget.
+**Impact:** At $B=8$, $T=4096$: 4 CE kernel launches instead of 8 (~20 μs/step saved). Peak CE intermediate ~16 GB — well under A100 80 GB budget.
 
 **Files:** `training/pretrain.py` (`chunked_cross_entropy`)
 
@@ -1394,16 +1286,13 @@ saved). Peak CE intermediate ~16 GB — well under A100 80 GB budget.
 
 **Problem:** Storing full $T$ KV for all 12 layers at 128K exceeds GPU memory.
 
-**Fix:** Windowed layers (even indices) use a fixed-size ring buffer of length
-$W = 128$:
+**Fix:** Windowed layers (even indices) use a fixed-size ring buffer of length $W = 128$:
 
 - Pre-allocate `(B, H, window, D)` tensors once.
 - Track `head` pointer and `count` for wrap-around.
 - On `get()`, reorder chronologically if `head != 0`.
 
-**Impact:** Windowed KV memory is $O(W)$ not $O(T)$ per layer — 6 layers × 128
-tokens vs 6 × 131072 at 128K. Headline **≥1.8×** total KV reduction with global
-layers (OPT-12). Verified analytically by `scripts/kv_cache_benchmark.py`.
+**Impact:** Windowed KV memory is $O(W)$ not $O(T)$ per layer — 6 layers × 128 tokens vs 6 × 131072 at 128K. Headline **≥1.8×** total KV reduction with global layers (OPT-12). Verified analytically by `scripts/kv_cache_benchmark.py`.
 
 **Related:** [kv cache engineering](../inference.md) — ring-buffer design and the bandwidth model behind the reduction.
 
@@ -1413,8 +1302,7 @@ layers (OPT-12). Verified analytically by `scripts/kv_cache_benchmark.py`.
 
 #### OPT-12 — `MixedKVCache` exponential growth (global layers)
 
-**Problem:** Global layers need full history; reallocating every decode step is
-$O(T^2)$ memcpy.
+**Problem:** Global layers need full history; reallocating every decode step is $O(T^2)$ memcpy.
 
 **Fix:** Global layer buffers grow by factor 1.5× when `needed > cur_cap`:
 
@@ -1425,8 +1313,7 @@ new_cap = min(new_cap, self._global_cap_tokens)  # default 4M token cap
 
 Append in-place when capacity suffices.
 
-**Impact:** Amortized $O(1)$ append per token after occasional growth events.
-Decode is $O(1)$ per step per layer (not $O(T)$ recompute).
+**Impact:** Amortized $O(1)$ append per token after occasional growth events. Decode is $O(1)$ per step per layer (not $O(T)$ recompute).
 
 **Related:** [kv cache engineering](../inference.md) — exponential-growth sizing for global layers.
 
@@ -1446,8 +1333,7 @@ output[:, :T_prompt] = input_ids
 # each step: output[:, T_prompt + step : T_prompt + step + 1] = next_id
 ```
 
-**Impact:** Removes $O(\text{new\_tokens})$ allocations during generation; improves
-decode latency stability in eval loops (`passkey_eval.py`).
+**Impact:** Removes $O(\text{new\_tokens})$ allocations during generation; improves decode latency stability in eval loops (`passkey_eval.py`).
 
 **Files:** `inference/generate.py` (`generate`)
 
@@ -1455,8 +1341,7 @@ decode latency stability in eval loops (`passkey_eval.py`).
 
 #### OPT-14 — Sink bias clamp cache in `generate()`
 
-**Problem:** `sink_bias.clamp(-10, 15)` every decode step × 12 layers adds
-redundant element-wise ops.
+**Problem:** `sink_bias.clamp(-10, 15)` every decode step × 12 layers adds redundant element-wise ops.
 
 **Fix:** Per-attention-module dict keyed by `id(attn)`:
 
@@ -1481,8 +1366,7 @@ Clamp runs once per generation, not once per token.
 
 #### OPT-15 — YaRN $T=1$ fast path
 
-**Problem:** `torch.outer(positions, inv_freq)` for single decode position builds
-unnecessary $(1, d/2)$ temporaries.
+**Problem:** `torch.outer(positions, inv_freq)` for single decode position builds unnecessary $(1, d/2)$ temporaries.
 
 **Fix:** In `YaRNRoPE.forward`:
 
@@ -1495,8 +1379,7 @@ if positions.numel() == 1:
     sin = freqs.sin().unsqueeze(0) * self.mscale
 ```
 
-**Impact:** Faster per-token RoPE during decode; full-sequence path unchanged for
-training prefill.
+**Impact:** Faster per-token RoPE during decode; full-sequence path unchanged for training prefill.
 
 **Files:** `models/yarn.py` (`YaRNRoPE.forward`)
 
@@ -1508,8 +1391,7 @@ training prefill.
 
 #### OPT-6 — FP32 softmax in MoE router and aux loss
 
-**Problem:** BF16 `softmax` on router logits underflows when one expert dominates;
-gradients to cold experts vanish.
+**Problem:** BF16 `softmax` on router logits underflows when one expert dominates; gradients to cold experts vanish.
 
 **Fix:**
 
@@ -1521,8 +1403,7 @@ probs_f32 = F.softmax(all_logits.float(), dim=-1)
 
 Top-k weights cast back to activation dtype after normalization.
 
-**Impact:** Prevents routing collapse in early training; required companion to
-OPT-19 ($\alpha = 0.01$). Documented in AGENTS.md §3.
+**Impact:** Prevents routing collapse in early training; required companion to OPT-19 ($\alpha = 0.01$). Documented in AGENTS.md §3.
 
 **Files:** `models/moe.py` (`MoERouter.forward`, `aux_load_balancing_loss`)
 
@@ -1530,8 +1411,7 @@ OPT-19 ($\alpha = 0.01$). Documented in AGENTS.md §3.
 
 #### OPT-7 — Gradient checkpointing every 3rd layer
 
-**Problem:** Full activation storage for 12 layers × $B=8$ × $T=4096$ × MoE
-width exceeds A100 budget.
+**Problem:** Full activation storage for 12 layers × $B=8$ × $T=4096$ × MoE width exceeds A100 budget.
 
 **Fix:**
 
@@ -1542,8 +1422,7 @@ if use_grad_ckpt and (layer_idx % grad_ckpt_every == 0):
     x, aux = torch.utils.checkpoint.checkpoint(block, x, positions, use_reentrant=False)
 ```
 
-**Impact:** ~30% extra compute, ~33% lower activation memory (see
-`utils/memory.py` `store_factor`). Enables production micro-batch without OOM.
+**Impact:** ~30% extra compute, ~33% lower activation memory (see `utils/memory.py` `store_factor`). Enables production micro-batch without OOM.
 
 **Files:** `models/transformer.py`, `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`
 
@@ -1555,8 +1434,7 @@ if use_grad_ckpt and (layer_idx % grad_ckpt_every == 0):
 
 #### OPT-16 — `torch.compile(max-autotune)` when `compile: true`
 
-**Problem:** Eager PyTorch leaves fusion opportunities on the table for the
-12-layer + MoE graph.
+**Problem:** Eager PyTorch leaves fusion opportunities on the table for the 12-layer + MoE graph.
 
 **Fix:** Production config:
 
@@ -1566,16 +1444,13 @@ training:
   compile_mode: "max-autotune"
 ```
 
-Applied in `pretrain.py` after model construction on CUDA. `step_time_a100.py`
-mirrors with `--compile` flag for MFU measurement.
+Applied in `pretrain.py` after model construction on CUDA. `step_time_a100.py` mirrors with `--compile` flag for MFU measurement.
 
-**Impact:** First-step compile latency (minutes); steady-state **10–25%** tokens/sec
-improvement on A100 depending on CUDA/PyTorch version [INFERENCE] — .benchmarks/ empty. Target MFU ≥35%.
+**Impact:** First-step compile latency (minutes); steady-state **10–25%** tokens/sec improvement on A100 depending on CUDA/PyTorch version [INFERENCE] — .benchmarks/ empty. Target MFU ≥35%.
 
 **Files:** `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`, `scripts/step_time_a100.py`
 
-**Caveat:** Interacts with gradient checkpointing — both enabled in production;
-debug compile issues by temporarily setting `compile: false`.
+**Caveat:** Interacts with gradient checkpointing — both enabled in production; debug compile issues by temporarily setting `compile: false`.
 
 ---
 

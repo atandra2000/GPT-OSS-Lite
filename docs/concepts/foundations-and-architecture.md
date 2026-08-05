@@ -22,17 +22,9 @@ A **decoder-only** transformer implements each conditional $P(x_t \mid x_{<t})$ 
 
 ### Why decoder-only for GPT-OSS-Lite?
 
-OpenAI's GPT-OSS family is decoder-only. GPT-OSS-Lite reproduces that choice
-because long-context **decode** is dominated by KV-cache bytes in attention, not
-by FFN matmuls. With 12 layers, GQA 4 KV heads, `head_dim=96`, and BF16, a pure
-full-attention cache at `T=131072` already costs ~2.25 GB before batching —
-the architectural win is shrinking that footprint via six windowed layers at
-`W=128`, not adding an encoder that would cache a second sequence.
+OpenAI's GPT-OSS family is decoder-only. GPT-OSS-Lite reproduces that choice because long-context **decode** is dominated by KV-cache bytes in attention, not by FFN matmuls. With 12 layers, GQA 4 KV heads, `head_dim=96`, and BF16, a pure full-attention cache at `T=131072` already costs ~2.25 GB before batching — the architectural win is shrinking that footprint via six windowed layers at `W=128`, not adding an encoder that would cache a second sequence.
 
-MoE feed-forward replaces dense FFNs per block; routing is per token position,
-which fits a decoder stack. Weight tying between embedding and LM head saves
-~98M parameters at `vocab_size=128000`, `d_model=768` — meaningful on a 502M
-budget where every million params trades against Chinchilla token count.
+MoE feed-forward replaces dense FFNs per block; routing is per token position, which fits a decoder stack. Weight tying between embedding and LM head saves ~98M parameters at `vocab_size=128000`, `d_model=768` — meaningful on a 502M budget where every million params trades against Chinchilla token count.
 
 The training objective is standard next-token cross-entropy. Given logits $\ell_t \in \mathbb{R}^{|\mathcal{V}|}$ at position $t$:
 
@@ -399,17 +391,9 @@ Dot products $q_m^\top k_n$ depend on **relative** offset $m - n$ after rotation
 
 On **full-attention (odd) layers**, GPT-OSS **prunes** the $D/4 = 24$ **fastest-rotating** pairs — the highest-frequency half-dims, $i = 0, \ldots, 23$ — by setting their rotation to identity ($\cos=1, \sin=0$). Only the **global** layers prune; windowed layers use full RoPE.
 
-Rationale: at 128K positions, the **fastest**-rotating components (the first
-$D/4 = 24$ pairs, `inv_freq[0] = 1.0` rad/token → ~20,861 full turns at position
-131072) wrap many times, and a rotation of $\phi$ is indistinguishable from
-$\phi + 2\pi k$ — **over-rotation** that aliases and hurts extrapolation.
-Neutralizing the fastest modes on layers that actually see the full sequence
-reduces that pathology. Only odd-indexed global layers prune (`head_dim=96` → 24
-of 48 half-dims); even windowed layers keep full RoPE because they never attend
-beyond `W=128` tokens.
+Rationale: at 128K positions, the **fastest**-rotating components (the first $D/4 = 24$ pairs, `inv_freq[0] = 1.0` rad/token → ~20,861 full turns at position 131072) wrap many times, and a rotation of $\phi$ is indistinguishable from $\phi + 2\pi k$ — **over-rotation** that aliases and hurts extrapolation. Neutralizing the fastest modes on layers that actually see the full sequence reduces that pathology. Only odd-indexed global layers prune (`head_dim=96` → 24 of 48 half-dims); even windowed layers keep full RoPE because they never attend beyond `W=128` tokens.
 
-In code: `_n_pruned_dims() = head_dim // 4` when `not is_windowed` and
-`yarn_prune_rope_global=True`.
+In code: `_n_pruned_dims() = head_dim // 4` when `not is_windowed` and `yarn_prune_rope_global=True`.
 
 The rotation geometry, the over-rotation argument, and the full YaRN ramp are derived in [positional encodings](attention-and-positional.md) §4.5–4.8.
 
@@ -463,13 +447,7 @@ If `beta_fast`/`beta_slow` misconfigure the ramp (low ≥ high), `compute_yarn_f
 
 ### Train and decode both use YaRN
 
-Unlike reproductions that apply YaRN only at decode, GPT-OSS-Lite trains with
-YaRN at `max_seq_len=4096` so gradients see the same frequency blend the model
-will use at `eval_max_seq_len=131072`. With `yarn_scale_factor=32`, mscale
-≈1.35 sharpens attention at long spans — if training stayed on plain RoPE, the
-model would optimize for 4K geometry then face a different temperature at 128K
-decode. Passkey retrieval (`inference/long_context.py`) is the canonical eval;
-target **≥85%** after the 8.0B-token schedule.
+Unlike reproductions that apply YaRN only at decode, GPT-OSS-Lite trains with YaRN at `max_seq_len=4096` so gradients see the same frequency blend the model will use at `eval_max_seq_len=131072`. With `yarn_scale_factor=32`, mscale ≈1.35 sharpens attention at long spans — if training stayed on plain RoPE, the model would optimize for 4K geometry then face a different temperature at 128K decode. Passkey retrieval (`inference/long_context.py`) is the canonical eval; target **≥85%** after the 8.0B-token schedule.
 
 ---
 
@@ -556,16 +534,9 @@ This $\alpha$ is deliberate portfolio distinction from DeepSeek-v3-Lite.
 | `"stacked"` (default) | PyTorch vectorized per-expert loop | CPU, default training |
 | `"triton_grouped"` | Fused W1/W3+silu Triton kernel | Opt-in GPU hot path |
 
-Set via `ModelConfig.moe_dispatch` or YAML `model.moe_dispatch`. Triton path
-**raises** if `triton` is unavailable — no silent fallback during a run configured
-for Triton.
+Set via `ModelConfig.moe_dispatch` or YAML `model.moe_dispatch`. Triton path **raises** if `triton` is unavailable — no silent fallback during a run configured for Triton.
 
-**Why two paths?** Default `"stacked"` keeps every training run on the pure-PyTorch
-oracle (`tests/test_moe.py`); Triton fuses W1/W3+silu for throughput on GPU but
-W2 stays in PyTorch and backward uses the reference path. Opt-in via YAML avoids
-silent kernel fallback when Triton fails to compile — a misconfigured
-`triton_grouped` run must error loudly, not drift onto stacked mid-epoch and
-invalidate throughput comparisons.
+**Why two paths?** Default `"stacked"` keeps every training run on the pure-PyTorch oracle (`tests/test_moe.py`); Triton fuses W1/W3+silu for throughput on GPU but W2 stays in PyTorch and backward uses the reference path. Opt-in via YAML avoids silent kernel fallback when Triton fails to compile — a misconfigured `triton_grouped` run must error loudly, not drift onto stacked mid-epoch and invalidate throughput comparisons.
 
 ### Active vs total parameters
 
@@ -703,9 +674,7 @@ No other project in the CoreProjects LLM portfolio combines all of the following
 | Scripts, checkpoints, OPT catalog | [operations.md](../guides/operations.md) |
 | Canonical YAML | `configs/pretrain_a100_502m.yaml` |
 
-Read [attention-sinks.md](attention-sinks.md) next — Part A theory plus Part B
-`models/attention.py` walkthrough before changing masks, sink clamp, or the
-even/odd `W=128` alternation.
+Read [attention-sinks.md](attention-sinks.md) next — Part A theory plus Part B `models/attention.py` walkthrough before changing masks, sink clamp, or the even/odd `W=128` alternation.
 
 ---
 
@@ -713,20 +682,11 @@ even/odd `W=128` alternation.
 
 ### Purpose
 
-This chapter is the single system map for GPT-OSS-Lite: the 502M-total /
-247M-active decoder, its module boundaries, config wiring, and the transformer
-stack in `models/transformer.py`. Read [foundations-and-architecture.md](foundations-and-architecture.md) first
-for the math behind each primitive; Part B below is the implementation guide
-for `models/transformer.py:ModelConfig`, `models/transformer.py:RMSNorm`, `models/transformer.py:GPTOSSBlock`, and `models/transformer.py:GPTOSS`.
+This chapter is the single system map for GPT-OSS-Lite: the 502M-total / 247M-active decoder, its module boundaries, config wiring, and the transformer stack in `models/transformer.py`. Read [foundations-and-architecture.md](foundations-and-architecture.md) first for the math behind each primitive; Part B below is the implementation guide for `models/transformer.py:ModelConfig`, `models/transformer.py:RMSNorm`, `models/transformer.py:GPTOSSBlock`, and `models/transformer.py:GPTOSS`.
 
 ### Mental model
 
-`models/transformer.py` is the **composition root** — it wires attention, MoE,
-and norms into a 12-layer pre-norm decoder. `ModelConfig` (YAML → dataclass) is
-the single source of truth for shapes and invariants. Even layers run
-sliding-window attention (cheap KV); odd layers run full attention (global
-context). Training returns `(logits, aux_loss)`; inference reuses block
-submodules with `MixedKVCache` (see §9).
+`models/transformer.py` is the **composition root** — it wires attention, MoE, and norms into a 12-layer pre-norm decoder. `ModelConfig` (YAML → dataclass) is the single source of truth for shapes and invariants. Even layers run sliding-window attention (cheap KV); odd layers run full attention (global context). Training returns `(logits, aux_loss)`; inference reuses block submodules with `MixedKVCache` (see §9).
 
 > **Chapter 2 of the GPT-OSS-Lite documentation.**
 
@@ -1030,28 +990,19 @@ $$
 
 #### Tied-embedding accounting
 
-The embedding table and the LM head are one tensor when `weight_tying=True`:
-`models/transformer.py:GPTOSS.__init__` assigns `self.head.weight = self.embed.weight`, so
-the head is a *view* of the embedding — one allocation, one gradient, one optimizer
-state. A naive count would charge the vocabulary matrix twice. Its size is
+The embedding table and the LM head are one tensor when `weight_tying=True`: `models/transformer.py:GPTOSS.__init__` assigns `self.head.weight = self.embed.weight`, so the head is a *view* of the embedding — one allocation, one gradient, one optimizer state. A naive count would charge the vocabulary matrix twice. Its size is
 
 $$
 V \cdot d_{\text{model}} = 128000 \times 768 = 98304000. \tag{1}
 $$
 
-Because the tied head contributes zero *new* parameters, the untied counterfactual adds
-one full matrix on top of the tied total:
+Because the tied head contributes zero *new* parameters, the untied counterfactual adds one full matrix on top of the tied total:
 
 $$
 N_{\text{untied}} = 501836640 + 98304000 = 600140640, \tag{2}
 $$
 
-so tying saves 98.3M parameters — 16.4% of the untied total. The active count inherits
-the same exclusion: `models/transformer.py:GPTOSS.num_active_parameters` walks
-`named_parameters()` and deduplicates by `id()`, so the head never appears in the 247M
-active figure. A plain sum over `nn.Module.parameters()` would not deduplicate — the
-shared tensor is registered under both `embed.weight` and `head.weight` — which is why
-`models/transformer.py:GPTOSS.num_parameters` tracks seen `id()`s (B.10).
+so tying saves 98.3M parameters — 16.4% of the untied total. The active count inherits the same exclusion: `models/transformer.py:GPTOSS.num_active_parameters` walks `named_parameters()` and deduplicates by `id()`, so the head never appears in the 247M active figure. A plain sum over `nn.Module.parameters()` would not deduplicate — the shared tensor is registered under both `embed.weight` and `head.weight` — which is why `models/transformer.py:GPTOSS.num_parameters` tracks seen `id()`s (B.10).
 
 ### Active parameters (`num_active_parameters`)
 
@@ -1074,26 +1025,19 @@ $$
 
 Inactive routed experts per layer: $6 \times 3 \times 768 \times 1536 = 21233664$ not executed.
 
-Expanding the formula with the production config ($d = 768$, $f = 1536$,
-$k_{\text{act}} = 2$, $k_{\text{shared}} = 1$, $n_{\text{exp}} = 8$, $L = 12$):
+Expanding the formula with the production config ($d = 768$, $f = 1536$, $k_{\text{act}} = 2$, $k_{\text{shared}} = 1$, $n_{\text{exp}} = 8$, $L = 12$):
 
 $$
 N_{\text{active}} = N_{\text{non-moe}} + L \left[ (k_{\text{act}} + k_{\text{shared}}) \cdot 3 d f + d \cdot n_{\text{exp}} \right], \tag{3}
 $$
 
-with $N_{\text{non-moe}} = 119556960$ (embed, attention, norms; router gates kept
-out of the sweep) and the per-layer MoE term $10622976$ from above:
+with $N_{\text{non-moe}} = 119556960$ (embed, attention, norms; router gates kept out of the sweep) and the per-layer MoE term $10622976$ from above:
 
 $$
 N_{\text{active}} = 119556960 + 12 \times 10622976 = 247032672. \tag{4}
 $$
 
-**247,032,672** is the active figure: 49.2% of the 501,836,640 total is exercised per
-token, i.e. 50.8% idle ($1 - 247032672 / 501836640 \approx 0.508$). The
-router gate is deliberately excluded from `non_moe` — the sweep skips names containing
-`"router"` as well as `"experts"` — and re-added exactly once via the
-$d \cdot n_{\text{exp}}$ term in (3), so `models/transformer.py:GPTOSS.num_active_parameters`
-and the derivation agree.
+**247,032,672** is the active figure: 49.2% of the 501,836,640 total is exercised per token, i.e. 50.8% idle ($1 - 247032672 / 501836640 \approx 0.508$). The router gate is deliberately excluded from `non_moe` — the sweep skips names containing `"router"` as well as `"experts"` — and re-added exactly once via the $d \cdot n_{\text{exp}}$ term in (3), so `models/transformer.py:GPTOSS.num_active_parameters` and the derivation agree.
 
 ### KV-cache memory formula (BF16, batch=1)
 
@@ -1426,8 +1370,7 @@ GPT-OSS-Lite is the portfolio's **long-context MoE + attention sink** reference 
 
 ### Part B — Transformer stack (`models/transformer.py`)
 
-Implementation-level detail for `models/transformer.py`. Part A above covers
-system dataflow and invariants; this part owns the composition root.
+Implementation-level detail for `models/transformer.py`. Part A above covers system dataflow and invariants; this part owns the composition root.
 
 ### B.1 Module overview
 
@@ -1446,13 +1389,11 @@ Lower-level primitives live in sibling modules:
 - `models/moe.py` — `MoELayer` (top-2 routed + shared, aux loss)
 - `models/yarn.py` — YaRN frequency scaling for RoPE
 
-The transformer file stays thin: it wires modules together and implements
-cross-cutting concerns (init, checkpointing, param math).
+The transformer file stays thin: it wires modules together and implements cross-cutting concerns (init, checkpointing, param math).
 
 ### B.2 `ModelConfig` fields and `__post_init__` validation
 
-`ModelConfig` is a `@dataclass` whose fields map 1:1 to the `model:` block in
-YAML configs. Defaults match `configs/pretrain_a100_502m.yaml`.
+`ModelConfig` is a `@dataclass` whose fields map 1:1 to the `model:` block in YAML configs. Defaults match `configs/pretrain_a100_502m.yaml`.
 
 ```python
 @dataclass
@@ -1497,17 +1438,13 @@ Warnings (non-fatal):
 
 ### B.3 `moe_dispatch` values (`stacked` | `triton_grouped`)
 
-Default `"stacked"` — pure PyTorch MoE loop. Opt-in `"triton_grouped"` enables
-the fused kernel in `models/moe_triton.py`.
+Default `"stacked"` — pure PyTorch MoE loop. Opt-in `"triton_grouped"` enables the fused kernel in `models/moe_triton.py`.
 
-**Dispatch semantics and Triton contract:** see [§8](#8-moe-dispatch-and-triton-opt-in)
-and [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
+**Dispatch semantics and Triton contract:** see [§8](#8-moe-dispatch-and-triton-opt-in) and [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
 
 ### B.4 `RMSNorm`
 
-Root Mean Square Layer Normalization replaces LayerNorm in GPT-OSS-Lite. Unlike
-LayerNorm, RMSNorm **does not subtract the mean** — only scales by the RMS of
-activations.
+Root Mean Square Layer Normalization replaces LayerNorm in GPT-OSS-Lite. Unlike LayerNorm, RMSNorm **does not subtract the mean** — only scales by the RMS of activations.
 
 For input vector $x \in \mathbb{R}^d$ and learned scale $\gamma$:
 
@@ -1536,9 +1473,7 @@ Design notes:
 3. **Learnable `weight`** initialized to ones in `_init_weights`.
 4. **`rms_norm_eps`** from config (default `1e-5`) matches LLaMA-family recipes.
 
-Each `GPTOSSBlock` has **two** RMSNorm layers (`norm1`, `norm2`) — one before
-attention, one before MoE. A third RMSNorm (`GPTOSS.norm`) sits after all
-blocks, before the LM head.
+Each `GPTOSSBlock` has **two** RMSNorm layers (`norm1`, `norm2`) — one before attention, one before MoE. A third RMSNorm (`GPTOSS.norm`) sits after all blocks, before the LM head.
 
 ### B.5 `GPTOSSBlock` construction and forward
 
@@ -1575,8 +1510,7 @@ def forward(self, x, positions) -> tuple[torch.Tensor, torch.Tensor]:
     return x, aux_loss
 ```
 
-Returns updated hidden states `(B, T, d_model)` and a per-layer `aux_loss`
-scalar. `models/transformer.py:GPTOSS.forward` takes the mean across layers.
+Returns updated hidden states `(B, T, d_model)` and a per-layer `aux_loss` scalar. `models/transformer.py:GPTOSS.forward` takes the mean across layers.
 
 ### B.6 `GPTOSS` construction and submodule roles
 
@@ -1603,11 +1537,7 @@ class GPTOSS(nn.Module):
 | `norm` | `d_model` | Final RMSNorm before logits |
 | `head` | `(d_model, vocab_size)` | LM projection (tied to embed) |
 
-`models/transformer.py:GPTOSS.extra_repr` prints a one-line summary of the active
-configuration — `d_model`, `n_layers`, `vocab`, expert pattern, `window`, and the
-tied-aware total from `models/transformer.py:GPTOSS.num_parameters` — for debugging
-in notebooks. `models/transformer.py:GPTOSS.num_active_parameters` computes the
-per-token active count with the tied head excluded ([§5](#5-parameter-accounting)).
+`models/transformer.py:GPTOSS.extra_repr` prints a one-line summary of the active configuration — `d_model`, `n_layers`, `vocab`, expert pattern, `window`, and the tied-aware total from `models/transformer.py:GPTOSS.num_parameters` — for debugging in notebooks. `models/transformer.py:GPTOSS.num_active_parameters` computes the per-token active count with the tied head excluded ([§5](#5-parameter-accounting)).
 
 ### B.7 Weight initialization policy
 
@@ -1635,25 +1565,19 @@ def _init_weights(self) -> None:
 | `RMSNorm.weight` | ones | Standard |
 | `sink_bias` | **zeros** | Model learns sink mass from scratch |
 
-Sink zero-init means early training behaves like standard causal attention;
-sink mass emerges during optimization. Theory:
+Sink zero-init means early training behaves like standard causal attention; sink mass emerges during optimization. Theory:
 [attention-sinks.md](attention-sinks.md).
 
 Attention and MoE linear layers use `bias=False` — no separate bias init rules.
 
-**Why `init_std = 0.02`.** `models/transformer.py:GPTOSS._init_weights` draws every
-`Linear` and `Embedding` weight from $\mathcal{N}(0, \sigma^2)$ with
-$\sigma = \text{init\_std} = 0.02$. The value is a variance-budget argument. For a
-layer $y = Wx$ with i.i.d. zero-mean weights of variance $\sigma^2$ and input
-components of variance $\text{Var}(x)$, the output components have
+**Why `init_std = 0.02`.** `models/transformer.py:GPTOSS._init_weights` draws every `Linear` and `Embedding` weight from $\mathcal{N}(0, \sigma^2)$ with $\sigma = \text{init\_std} = 0.02$. The value is a variance-budget argument. For a layer $y = Wx$ with i.i.d. zero-mean weights of variance $\sigma^2$ and input components of variance $\text{Var}(x)$, the output components have
 
 $$
 \text{Var}(y_j) = \sum_{i=1}^{F} \text{Var}(W_{ji} x_i) = F \sigma^2 \text{Var}(x),
 \qquad \text{std}(y_j) = \sigma \sqrt{F}, \tag{5}
 $$
 
-where $F$ is the fan-in — the number of inputs summed into one output unit. Per output
-unit, the projection layers give
+where $F$ is the fan-in — the number of inputs summed into one output unit. Per output unit, the projection layers give
 
 $$
 \sigma\sqrt{F} = 0.02 \sqrt{768} \approx 0.55
@@ -1662,29 +1586,16 @@ $$
 0.02 \sqrt{1536} \approx 0.78 \quad (\text{expert W2}). \tag{6}
 $$
 
-Std 0.5–0.8 per unit is the sweet spot: large enough to keep signals alive across
-BF16's $2^{-8}$ relative grid ([numerics](optimizers-and-numerics.md)), small enough that no
-sublayer output saturates a softmax or approaches FP32's exponential overflow at
-$z \approx 88.7$ (numerics.md §8.3). At $\sigma = 0.1$ the same layers would sit at
-std 2.8–3.9 and, via (7)–(8), head-vector norms near 27 and score std ≈ 7.7 —
-softmaxes pinned to a saturated corner and a residual stream swamping BF16's grid; at
-$\sigma = 0.01$ (std 0.28–0.39) the score std drops to ≈ 0.08, the softmax is nearly
-uniform, and the gradient signal through the score path is four times weaker
-([optimizers](optimizers-and-numerics.md)). `init_std = 0.02` is the middle of that range.
+Std 0.5–0.8 per unit is the sweet spot: large enough to keep signals alive across BF16's $2^{-8}$ relative grid ([numerics](optimizers-and-numerics.md)), small enough that no sublayer output saturates a softmax or approaches FP32's exponential overflow at $z \approx 88.7$ (numerics.md §8.3). At $\sigma = 0.1$ the same layers would sit at std 2.8–3.9 and, via (7)–(8), head-vector norms near 27 and score std ≈ 7.7 — softmaxes pinned to a saturated corner and a residual stream swamping BF16's grid; at $\sigma = 0.01$ (std 0.28–0.39) the score std drops to ≈ 0.08, the softmax is nearly uniform, and the gradient signal through the score path is four times weaker ([optimizers](optimizers-and-numerics.md)). `init_std = 0.02` is the middle of that range.
 
-The scale that actually enters attention is larger than the per-unit std. A query head
-vector $q^h \in \mathbb{R}^{96}$ is a slice of the q-projection output: 96 components,
-each of std $\sigma\sqrt{768}$ (fan-in of `q_proj`), so its typical L2 norm is
+The scale that actually enters attention is larger than the per-unit std. A query head vector $q^h \in \mathbb{R}^{96}$ is a slice of the q-projection output: 96 components, each of std $\sigma\sqrt{768}$ (fan-in of `q_proj`), so its typical L2 norm is
 
 $$
 \|q^h\| \approx \sigma \sqrt{d_{\text{model}} \cdot D}
 = 0.02 \sqrt{768 \times 96} = 0.02 \sqrt{73728} \approx 5.4. \tag{7}
 $$
 
-This is the "large but controlled" scale: controlled by pre-norm (every sublayer input
-is normalized to unit RMS, so $\text{Var}(x) = 1$ in (5)) and by the
-$\frac{1}{\sqrt{D}}$ attention scaling, which brings the pre-softmax score
-$s = q^h \cdot k^h / \sqrt{D}$ to
+This is the "large but controlled" scale: controlled by pre-norm (every sublayer input is normalized to unit RMS, so $\text{Var}(x) = 1$ in (5)) and by the $\frac{1}{\sqrt{D}}$ attention scaling, which brings the pre-softmax score $s = q^h \cdot k^h / \sqrt{D}$ to
 
 $$
 \text{Var}(s) = \frac{1}{D} \sum_{i=1}^{D} \text{Var}(q_i k_i)
@@ -1692,60 +1603,38 @@ $$
 \qquad \text{std}(s) \approx 0.31. \tag{8}
 $$
 
-Scores of std ≈ 0.3 sit far from both the flat tail and the saturated corner of the
-softmax — the regime where the learned sink bias, clamped to $[-10, 15]$ (roughly
-$-32\sigma$ to $+48\sigma$), can actually reshape the distribution
-([attention-sinks.md](attention-sinks.md)). Without the $1/\sqrt{D}$ factor the score
-std would be $\sqrt{96} \cdot 0.31 \approx 3.0$, and scores wandering over ±12 would
-force softmaxes toward saturation before the sink can act.
+Scores of std ≈ 0.3 sit far from both the flat tail and the saturated corner of the softmax — the regime where the learned sink bias, clamped to $[-10, 15]$ (roughly $-32\sigma$ to $+48\sigma$), can actually reshape the distribution ([attention-sinks.md](attention-sinks.md)). Without the $1/\sqrt{D}$ factor the score std would be $\sqrt{96} \cdot 0.31 \approx 3.0$, and scores wandering over ±12 would force softmaxes toward saturation before the sink can act.
 
-**Residual-stream variance across 12 layers.** Write the pre-norm block as
-$x_{l+1} = x_l + f^{\text{attn}}_l(\text{RMSNorm}(x_l)) + f^{\text{moe}}_l(\text{RMSNorm}(x_l))$.
-At initialization the sublayer outputs are zero-mean and uncorrelated with the stream,
-so variances add:
+**Residual-stream variance across 12 layers.** Write the pre-norm block as $x_{l+1} = x_l + f^{\text{attn}}_l(\text{RMSNorm}(x_l)) + f^{\text{moe}}_l(\text{RMSNorm}(x_l))$. At initialization the sublayer outputs are zero-mean and uncorrelated with the stream, so variances add:
 
 $$
 \text{Var}(x_{l+1}) = \text{Var}(x_l) + \text{Var}(f^{\text{attn}}_l)
 + \text{Var}(f^{\text{moe}}_l). \tag{9}
 $$
 
-**Worst case — no normalization.** Each sublayer is approximately scale-homogeneous
-(attention and experts are linear maps; SwiGLU is gated but bias-free), so its output
-std scales with the input std, $\text{std}(f_l) \approx \alpha_l\, \text{std}(x_l)$
-with gain $\alpha_l \approx \sigma\sqrt{F}$, and (9) becomes geometric:
+**Worst case — no normalization.** Each sublayer is approximately scale-homogeneous (attention and experts are linear maps; SwiGLU is gated but bias-free), so its output std scales with the input std, $\text{std}(f_l) \approx \alpha_l\, \text{std}(x_l)$ with gain $\alpha_l \approx \sigma\sqrt{F}$, and (9) becomes geometric:
 
 $$
 \text{Var}(x_L) = \text{Var}(x_0) \prod_{l=0}^{L-1} (1 + \alpha_l^2), \qquad
 \alpha_l \approx \sigma \sqrt{F}. \tag{10}
 $$
 
-The growth is exponentially sensitive to $\sigma$: at $\sigma = 0.1$ the per-block
-gain $\alpha \approx 3.8$ gives $(1 + 3.8^2)^{12} \approx 10^{14}$ — guaranteed
-overflow; at $\sigma = 0.02$ the per-block gain is $\alpha \approx 0.76$ and the
-stream *shrinks*, $\text{std}(x_{12}) = 0.02 \sqrt{(1.58)^{12}} \approx 0.31$ — the
-signal decays toward the BF16 noise floor by layer 12. Either way the depth
-dependence is exponential.
+The growth is exponentially sensitive to $\sigma$: at $\sigma = 0.1$ the per-block gain $\alpha \approx 3.8$ gives $(1 + 3.8^2)^{12} \approx 10^{14}$ — guaranteed overflow; at $\sigma = 0.02$ the per-block gain is $\alpha \approx 0.76$ and the stream *shrinks*, $\text{std}(x_{12}) = 0.02 \sqrt{(1.58)^{12}} \approx 0.31$ — the signal decays toward the BF16 noise floor by layer 12. Either way the depth dependence is exponential.
 
-**With pre-norm.** RMSNorm pins every sublayer input to unit variance, so the sublayer
-output variances $v^{\text{attn}}_l, v^{\text{moe}}_l$ are bounded by the fan-in gains
-of (6) and no longer compound with the stream magnitude. The recursion becomes
-arithmetic:
+**With pre-norm.** RMSNorm pins every sublayer input to unit variance, so the sublayer output variances $v^{\text{attn}}_l, v^{\text{moe}}_l$ are bounded by the fan-in gains of (6) and no longer compound with the stream magnitude. The recursion becomes arithmetic:
 
 $$
 \text{Var}(x_L) = \text{Var}(x_0) + \sum_{l=0}^{L-1} \left( v^{\text{attn}}_l
 + v^{\text{moe}}_l \right) = \text{Var}(x_0) + L\, v. \tag{11}
 $$
 
-Starting from the embedding rows ($\text{Var}(x_0) = \sigma^2 = 4\times10^{-4}$) with
-per-block contribution $v \approx 0.58$ (dominated by the expert W2 fan-in, (6)):
+Starting from the embedding rows ($\text{Var}(x_0) = \sigma^2 = 4\times10^{-4}$) with per-block contribution $v \approx 0.58$ (dominated by the expert W2 fan-in, (6)):
 
 $$
 \text{std}(x_{12}) = \sqrt{0.0004 + 12 \times 0.58} \approx 2.6. \tag{12}
 $$
 
-The stream stays O(1) whether the stack has 12, 24, or 48 layers, and the final
-`models/transformer.py:GPTOSS.norm` (RMSNorm) restores unit RMS before the tied head
-projects to logits — the head always sees an O(1) input.
+The stream stays O(1) whether the stack has 12, 24, or 48 layers, and the final `models/transformer.py:GPTOSS.norm` (RMSNorm) restores unit RMS before the tied head projects to logits — the head always sees an O(1) input.
 
 ### B.8 Forward pass, `positions`, return contract `(logits, aux_loss)`
 
@@ -1797,14 +1686,9 @@ RMSNorm ──► head ──► logits (B, T, vocab_size)
 aux_loss = mean(aux_0, ..., aux_11)
 ```
 
-**`positions`:** shape `(T,)` or broadcastable; passed to YaRN RoPE inside each
-attention layer. Default `torch.arange(T)` assumes contiguous positions starting
-at 0. For inference with KV cache, `inference/generate.py` passes per-step
-position indices — see [inference.md](../inference.md).
+**`positions`:** shape `(T,)` or broadcastable; passed to YaRN RoPE inside each attention layer. Default `torch.arange(T)` assumes contiguous positions starting at 0. For inference with KV cache, `inference/generate.py` passes per-step position indices — see [inference.md](../inference.md).
 
-**Return contract:** `logits` is `(B, T, vocab_size)` in model dtype (BF16 under
-autocast); `aux_loss` is a scalar mean MoE load-balancing loss. Loss
-composition lives in `training/pretrain.py` — not in the model class.
+**Return contract:** `logits` is `(B, T, vocab_size)` in model dtype (BF16 under autocast); `aux_loss` is a scalar mean MoE load-balancing loss. Loss composition lives in `training/pretrain.py` — not in the model class.
 
 ### B.9 Gradient checkpointing schedule (`grad_ckpt_every`)
 
@@ -1816,16 +1700,11 @@ def enable_gradient_checkpointing(self, every: int = 3) -> None:
     self.grad_ckpt_every = every
 ```
 
-When enabled, blocks where `layer_idx % every == 0` are wrapped in
-`torch.utils.checkpoint.checkpoint(..., use_reentrant=False)`.
+When enabled, blocks where `layer_idx % every == 0` are wrapped in `torch.utils.checkpoint.checkpoint(..., use_reentrant=False)`.
 
-With `every=3` (A100 config) and 12 layers, blocks **0, 3, 6, 9** are
-checkpointed — four of twelve blocks, ~33% recomputation overhead for
-materially lower activation memory.
+With `every=3` (A100 config) and 12 layers, blocks **0, 3, 6, 9** are checkpointed — four of twelve blocks, ~33% recomputation overhead for materially lower activation memory.
 
-`pretrain.py` calls `model.enable_gradient_checkpointing(every=...)` when
-`grad_checkpoint: true`. Checkpointing is **disabled** when
-`torch.is_grad_enabled()` is false (eval / `@torch.no_grad()` inference).
+`pretrain.py` calls `model.enable_gradient_checkpointing(every=...)` when `grad_checkpoint: true`. Checkpointing is **disabled** when `torch.is_grad_enabled()` is false (eval / `@torch.no_grad()` inference).
 
 Training integration: [§10](#10-training-pipeline-integration).
 
@@ -1847,11 +1726,9 @@ def num_parameters(self) -> int:
     return total
 ```
 
-Production config yields **501,836,640** total (~502M). The tied
-embedding/head weight is counted once.
+Production config yields **501,836,640** total (~502M). The tied embedding/head weight is counted once.
 
-`num_active_parameters()` estimates parameters used per forward under top-k MoE
-sparsity:
+`num_active_parameters()` estimates parameters used per forward under top-k MoE sparsity:
 
 ```python
 def num_active_parameters(self) -> int:
@@ -1862,14 +1739,9 @@ def num_active_parameters(self) -> int:
     return non_moe + (moe_active + router_params) * n_layers
 ```
 
-Production: **247,032,672** active (~247M), ~50.8% sparsity. This is an
-**analytical estimate** aligned with Chinchilla active-param reporting — not a
-runtime profiler. Always prefer `model.num_parameters()` over hand sums.
+Production: **247,032,672** active (~247M), ~50.8% sparsity. This is an **analytical estimate** aligned with Chinchilla active-param reporting — not a runtime profiler. Always prefer `model.num_parameters()` over hand sums.
 
-The `non_moe` sweep skips names containing `"router"` as well as `"experts"`, so the
-router gate is counted exactly once via `router_params`; the counter returns the
-derived figure directly. See [§5](#5-parameter-accounting) (eqs. 3–4) for the
-derivation.
+The `non_moe` sweep skips names containing `"router"` as well as `"experts"`, so the router gate is counted exactly once via `router_params`; the counter returns the derived figure directly. See [§5](#5-parameter-accounting) (eqs. 3–4) for the derivation.
 
 ### B.11 Weight tying
 
@@ -1882,8 +1754,7 @@ self.head.weight = self.embed.weight
 The LM head and token embedding share one `(vocab_size, d_model)` matrix.
 
 1. **98,304,000 parameter savings** — the head is a view of the embedding, so the
-   untied total of 600,140,640 drops to 501,836,640 (derived in [§5](#5-parameter-accounting),
-   eqs. 1–2)
+   untied total of 600,140,640 drops to 501,836,640 (derived in [§5](#5-parameter-accounting), eqs. 1–2)
 2. **Consistent input/output token geometry** — standard in GPT-2/LLaMA families
 
 Implications:
@@ -1900,19 +1771,13 @@ Set `weight_tying: false` only for ablation experiments.
 
 ### B.12 Config validation edge cases
 
-**`head_dim` must be even** — RoPE rotates pairs of dimensions. Odd `head_dim`
-raises `ValueError`.
+**`head_dim` must be even** — RoPE rotates pairs of dimensions. Odd `head_dim` raises `ValueError`.
 
-**YaRN with `scale_factor=1`** — degenerate case, plain RoPE without length
-extrapolation. Valid for smoke configs with small `eval_max_seq_len`.
+**YaRN with `scale_factor=1`** — degenerate case, plain RoPE without length extrapolation. Valid for smoke configs with small `eval_max_seq_len`.
 
-**`sink_bias: false`** — attention layers omit learnable sink parameters. Forward
-path skips clamp and sink-augmented softmax. Use only for ablations; production
-GPT-OSS uses sinks.
+**`sink_bias: false`** — attention layers omit learnable sink parameters. Forward path skips clamp and sink-augmented softmax. Use only for ablations; production GPT-OSS uses sinks.
 
-**Layer count and alternation** — with `n_layers=12`, you get exactly 6 windowed
-and 6 global layers. Changing `n_layers` without updating benchmarks invalidates
-the 2× KV-cache headline unless you re-derive `N_WINDOWED = n_layers // 2`.
+**Layer count and alternation** — with `n_layers=12`, you get exactly 6 windowed and 6 global layers. Changing `n_layers` without updating benchmarks invalidates the 2× KV-cache headline unless you re-derive `N_WINDOWED = n_layers // 2`.
 
 ### B.13 How to verify
 

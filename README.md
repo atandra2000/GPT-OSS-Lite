@@ -183,10 +183,7 @@ python3 training/pretrain.py \
 
 ## Documentation
 
-Full technical references live in [`docs/`](docs/README.md): consolidated concept
-chapters (theory + implementation), a config/API reference, operation guides, and
-dedicated training and inference chapters. Every code symbol is cited as a
-machine-verified `file.py:Symbol` anchor.
+Full technical references live in [`docs/`](docs/README.md): consolidated concept chapters (theory + implementation), a config/API reference, operation guides, and dedicated training and inference chapters. Every code symbol is cited as a machine-verified `file.py:Symbol` anchor.
 
 ### Concepts
 
@@ -210,8 +207,7 @@ machine-verified `file.py:Symbol` anchor.
 | [training.md](docs/training.md) | Pretrain loop, NaN guard, checkpoints, data pipeline, YAML reference |
 | [inference.md](docs/inference.md) | `MixedKVCache`, `generate()`, passkey eval, KV-cache engineering |
 
-Validate docs: `python3 scripts/check_docs.py` (links) + `python3 tests/test_doc_refs.py --strict-coverage`
-(symbol alignment)
+Validate docs: `python3 scripts/check_docs.py` (links) + `python3 tests/test_doc_refs.py --strict-coverage` (symbol alignment)
 
 ---
 
@@ -228,9 +224,7 @@ Validate docs: `python3 scripts/check_docs.py` (links) + `python3 tests/test_doc
 | 65,536 | 1.12 GB | 0.56 GB | 2.00× |
 | **131,072** | **2.25 GB** | **1.13 GB** | **2.00×** |
 
-Values are the exact output of `scripts/kv_cache_benchmark.py` (window=128,
-batch=1, BF16). The reduction is ≈1.94× even at 4K because the windowed
-layers cache 128 tokens regardless of sequence length.
+Values are the exact output of `scripts/kv_cache_benchmark.py` (window=128, batch=1, BF16). The reduction is ≈1.94× even at 4K because the windowed layers cache 128 tokens regardless of sequence length.
 
 ### Passkey retrieval at 128K (4K-trained model)
 
