@@ -1,4 +1,8 @@
-"""GPT-OSS-Lite pre-training script."""
+"""Single-device GPT-OSS-Lite pre-training loop.
+
+The entry point owns reproducibility, mixed-precision execution, gradient
+accumulation, checkpoint recovery, and the router auxiliary loss.
+"""
 import argparse
 import math
 import os
@@ -26,7 +30,7 @@ from utils.memory import assert_fits_in_available_gpu, estimate_model_memory_gb
 
 
 def seed_everything(seed: int) -> None:
-    """Seed all RNGs for reproducibility; call before model construction."""
+    """Seed Python, NumPy, and PyTorch generators before model construction."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -37,7 +41,7 @@ def seed_everything(seed: int) -> None:
 
 
 def make_warmup_cosine_lambda(warmup_steps: int, total_steps: int, min_lr_ratio: float = 0.05):
-    """Linear warmup → cosine decay → constant at min_lr_ratio."""
+    """Return a scheduler function with warmup, cosine decay, and a final floor."""
     def lr_lambda(step: int) -> float:
         if step < warmup_steps:
             return step / max(1, warmup_steps)
@@ -49,7 +53,7 @@ def make_warmup_cosine_lambda(warmup_steps: int, total_steps: int, min_lr_ratio:
 
 
 class PretrainDataset(Dataset):
-    """Packed-token dataset: returns ``(input_ids, target_ids)`` windows."""
+    """Read contiguous packed-token windows from one file or memory-mapped shards."""
 
     _TORCH_SAVE_MAGIC_LEN = 8
 
@@ -64,7 +68,7 @@ class PretrainDataset(Dataset):
             self._init_single(data_path)
 
     def _load_manifest(self, data_path: str) -> None:
-        """Read EOS id from ``manifest.json`` if present; fall back silently."""
+        """Load optional corpus metadata while keeping data loading usable without it."""
         manifest_path = Path(data_path) / "manifest.json"
         if manifest_path.exists():
             try:
@@ -85,7 +89,7 @@ class PretrainDataset(Dataset):
         self.dtype = None
 
     def _detect_format(self, path: str) -> str:
-        """Return ``"torch_save"`` or ``"raw_bytes"``."""
+        """Identify the shard encoding from its header and byte alignment."""
         with open(path, "rb") as f:
             magic = f.read(self._TORCH_SAVE_MAGIC_LEN)
         if magic[:2] == b"PK":
@@ -125,7 +129,7 @@ class PretrainDataset(Dataset):
         self._bisect = bisect
 
     def _size_in_tokens(self, path: str, fmt: str) -> int:
-        """Return the number of tokens in a shard file."""
+        """Return a shard's token count without retaining a second full copy."""
         size = os.path.getsize(path)
         if fmt == "torch_save":
             t = torch.load(path, weights_only=True, mmap=True)
@@ -135,7 +139,7 @@ class PretrainDataset(Dataset):
         return size // self.raw_dtype.itemsize
 
     def _load_shard(self, shard_idx: int):
-        """Load a shard (mmap'd torch tensor). Caches the last-loaded shard."""
+        """Memory-map one shard and reuse it for neighboring windows."""
         if self._cache_shard_idx == shard_idx and self._cache_shard is not None:
             return self._cache_shard
         path = self.shard_paths[shard_idx]
@@ -193,7 +197,7 @@ class PretrainDataset(Dataset):
 
 
 def chunked_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, chunk_size: int = 4096):
-    """Memory-efficient cross-entropy over chunks (avoids materialising O(B*S*V))."""
+    """Compute mean token loss in chunks to avoid materializing all CE work at once."""
     flat_logits = logits.view(-1, logits.size(-1))
     flat_targets = targets.view(-1)
     total_loss = torch.zeros((), device=flat_logits.device, dtype=flat_logits.dtype)
@@ -206,18 +210,15 @@ def chunked_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, chunk_siz
 
 
 def _set_hardware_perf_knobs() -> None:
-    """Enable A100-specific performance knobs (TF32, cuDNN benchmark, cuBLASLt)."""
+    """Enable CUDA math and library settings used by the training workload."""
     if torch.cuda.is_available():
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
-        # benchmark_limit=0 forces exhaustive cuDNN algo search (default 10).
-        # One-time cost at first step; converges to the fastest kernel for our
-        # (B=8, T=4096) shape. Saves ~3-5% on A100.
+        # Exhaustive search costs time once but avoids locking in a poor kernel
+        # for the long fixed-shape training batches.
         torch.backends.cudnn.benchmark_limit = 0
-        # Route BF16 matmul through cuBLASLt (A100-optimized) instead of cuBLAS.
-        # cuBLASLt has hand-tuned kernels for sm_80 that are 2-5% faster on
-        # production shapes. Bit-exact (same numerics, different kernel choice).
+        # cuBLASLt provides tuned BF16 kernels on the target Ampere workload.
         torch.backends.cuda.preferred_blas_library = "cublaslt"
     try:
         torch.set_float32_matmul_precision("high")
@@ -283,9 +284,7 @@ def main(
     no_decay = ["bias", "norm", "embed"]
     decay_params = [p for n, p in model.named_parameters() if not any(nd in n.lower() for nd in no_decay)]
     no_decay_params = [p for n, p in model.named_parameters() if any(nd in n.lower() for nd in no_decay)]
-    # eps=1e-6 (not 1e-8) for BF16 stability: BF16 has only 7 mantissa bits,
-    # so 1e-8 underflows to denormal/zero in the 2nd-moment, silently stalling
-    # late-stage convergence. DeepSeek-V3 and LLaMA-3 both use 1e-6.
+    # A larger epsilon keeps AdamW's second-moment denominator stable in BF16.
     optim = AdamW(
         [
             {"params": decay_params, "weight_decay": train_cfg["weight_decay"]},
@@ -373,9 +372,7 @@ def main(
 
             with autocast(device_type=dev.type, dtype=_amp_dtype, enabled=(dev.type == "cuda")):
                 logits, aux_loss = model(input_ids)
-                # chunk_size=8192 (was 4096): halves the number of CE kernel
-                # launches from 8 to 4 at (B=8, T=4096). Saves ~20μs/step
-                # at no cost (peak CE intermediate is 16GB, well under 80GB).
+                # Chunking bounds the temporary vocabulary-sized CE working set.
                 ce = chunked_cross_entropy(logits, target_ids, chunk_size=8192)
                 loss = (ce + aux_alpha * aux_loss) / accum
 

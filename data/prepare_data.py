@@ -1,8 +1,7 @@
-"""GPT-OSS-Lite data preparation: thin shim over the universal pipeline.
+"""GPT-OSS-Lite data-preparation entry point.
 
- ponytail: collapsed duplicated argparse — the shared shared_data.prepare_data.main
- already parses every flag (mixture/data-config/data-root/source/skip-*/--train-tokenizer).
- We only add a GPT-OSS info banner showing the universal tokenizer config, then delegate.
+The shared pipeline owns argument parsing and tokenization; this shim prints the
+GPT-OSS corpus settings before delegating to it.
 """
 import sys
 from pathlib import Path
@@ -17,7 +16,7 @@ for _p in (_PROJECT_ROOT, _LLM_ROOT):
 
 
 def main() -> int:
-    # Info banner only — GPT-OSS-Lite uses the universal tokenizer/mixture from shared_data.config.
+    # Report the shared tokenizer before handing control to the universal pipeline.
     from shared_data.config import UNIVERSAL_TOTAL_TOKENS, load_universal_data_config
     cfg = load_universal_data_config()
     tok = cfg["pipeline"]["tokenizer"]

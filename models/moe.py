@@ -1,11 +1,15 @@
-"""MoE FFN for GPT-OSS-Lite: top-2 of 8 routed experts + 1 shared expert."""
+"""Mixture-of-experts feed-forward layers for GPT-OSS-Lite.
+
+Tokens are routed to a small top-k subset of SwiGLU experts, then combined
+with the always-available shared expert path when configured.
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class SwiGLUExpert(nn.Module):
-    """Single SwiGLU expert: W2(silu(W1(x)) * W3(x))."""
+    """Apply the gated feed-forward transform ``W2(silu(W1(x)) * W3(x))``."""
 
     def __init__(self, dim: int, inter_dim: int):
         super().__init__()
@@ -18,7 +22,11 @@ class SwiGLUExpert(nn.Module):
 
 
 class MoERouter(nn.Module):
-    """Top-k gating network."""
+    """Select experts and renormalize their probabilities per token.
+
+    Softmax is computed in FP32 to keep routing stable when logits saturate;
+    returned weights are converted back to the input dtype.
+    """
 
     def __init__(self, d_model: int, n_experts: int, n_activated: int):
         super().__init__()
@@ -40,7 +48,11 @@ def aux_load_balancing_loss(
     n_experts: int,
     n_activated: int,
 ) -> torch.Tensor:
-    """Standard MoE load-balancing loss (Switch Transformer / GShard style)."""
+    """Penalize disagreement between routing frequency and mean gate probability.
+
+    ``all_logits`` is flattened to ``(tokens, experts)``; the FP32 calculation
+    avoids BF16 underflow while preserving the standard auxiliary objective.
+    """
     probs_f32 = F.softmax(all_logits.float(), dim=-1)
     N = probs_f32.size(0)
     topk_idx = probs_f32.topk(n_activated, dim=-1).indices.flatten()
@@ -50,7 +62,7 @@ def aux_load_balancing_loss(
 
 
 class MoELayer(nn.Module):
-    """GPT-OSS-Lite MoE layer: top-2 routed + 1 shared expert."""
+    """Route each token through top-k routed experts plus optional shared experts."""
 
     def __init__(self, cfg):
         super().__init__()
@@ -71,7 +83,11 @@ class MoELayer(nn.Module):
         else:
             self.shared_experts = None
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward returning ``(output (B,T,D), aux_loss scalar)``."""
+        """Return token outputs and the scalar router load-balancing loss.
+
+        Routing is performed on flattened ``(B*T, D)`` tokens and restored to
+        ``(B, T, D)`` before returning.
+        """
         B, T, D = x.shape
         flat = x.view(-1, D)
         N = flat.size(0)
@@ -94,7 +110,12 @@ class MoELayer(nn.Module):
         indices: torch.Tensor,
         weights: torch.Tensor,
     ) -> torch.Tensor:
-        """Triton-grouped MoE dispatch: one kernel for W1+W3+silu, then W2 in PyTorch."""
+        """Dispatch sorted tokens through the opt-in Triton W1/W3 fusion.
+
+        The Triton kernel produces gated activations; W2 remains in PyTorch so
+        the implementation has the same grouping and accumulation contract as
+        the reference dispatcher.
+        """
         from .moe_triton import triton_moe_w1w3_silu
 
         N = flat.size(0)
@@ -123,10 +144,8 @@ class MoELayer(nn.Module):
             W1_stack, W3_stack,
         )
 
-        # W2 stays in PyTorch. The gated activations are sorted by expert, so
-        # we can loop per expert — same pattern as the stacked reference path
-        # but operating on the Triton-produced gated tensor.
-        # Output width is d_model (W2's output dim), not d_ff.
+        # Gated activations are sorted by expert, so W2 can reuse the reference
+        # path's per-expert grouping. W2 maps back to d_model, not d_ff.
         out_sorted = torch.empty(
             gated_sorted.size(0), W2_stack.size(1),
             dtype=gated_sorted.dtype, device=gated_sorted.device,
@@ -152,7 +171,7 @@ class MoELayer(nn.Module):
         indices: torch.Tensor,
         weights: torch.Tensor,
     ) -> torch.Tensor:
-        """Vectorized expert dispatch using stacked-expert bmm."""
+        """Dispatch tokens in stable expert order through the PyTorch reference path."""
         N = flat.size(0)
         flat_idx = indices.reshape(-1)
         flat_w = weights.reshape(-1)

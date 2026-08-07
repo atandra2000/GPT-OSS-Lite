@@ -1,11 +1,11 @@
-"""Single-GPU training logger with optional WandB integration (enable with WANDB_PROJECT env var)."""
+"""Compact training metrics logger with optional Weights & Biases forwarding."""
 import json, os, time
 from typing import Dict, Optional
 import torch
 
 
 class TrainingLogger:
-    """Step-driven logger: prints a rolling-window summary every log_interval steps; optionally forwards to WandB."""
+    """Aggregate loss over a step window and report throughput, perplexity, and metrics."""
 
     def __init__(self, log_interval: int = 10, seq_len: int = 1024, batch_size: int = 1):
         self.log_interval = log_interval
@@ -46,5 +46,6 @@ class TrainingLogger:
         self._step_start = time.time()
 
     def finish(self) -> None:
+        """Flush and close the optional external tracking run."""
         if self._wandb is not None:
             self._wandb.finish()

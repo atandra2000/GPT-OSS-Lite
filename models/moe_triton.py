@@ -1,8 +1,8 @@
-"""Fused grouped-GEMM Triton kernel for GPT-OSS-Lite MoE dispatch.
+"""Opt-in Triton fusion for the routed MoE input projections.
 
-Fuses W1 / W3 projections + silu(g)*u for one expert into a single launch.
-W2 stays in PyTorch (no activation to fuse). Public entry point:
-`triton_moe_w1w3_silu(x_sorted, expert_ids_sorted, counts, offsets, W1_stack, W3_stack)`.
+The kernel computes ``silu(W1(x)) * W3(x)`` for expert-sorted tokens in one
+launch. W2 remains in PyTorch, and the reference implementation supplies the
+CPU-safe behaviour and autograd backward.
 """
 from typing import TYPE_CHECKING
 
@@ -31,7 +31,7 @@ def _moe_w1w3_silu_reference(
     W1_stack: torch.Tensor,
     W3_stack: torch.Tensor,
 ) -> torch.Tensor:
-    """Pure-PyTorch reference: `silu(W1[e] @ x_chunk) * (W3[e] @ x_chunk)`; W2 stays in the caller."""
+    """Compute the grouped gated projection in PyTorch for reference/backward."""
     n_experts = W1_stack.shape[0]
     out = torch.empty(
         x_sorted.shape[0], W1_stack.shape[1],
@@ -67,11 +67,10 @@ if HAS_TRITON:
         BLOCK_N: tl.constexpr,  # output (d_ff) block
         N_EXPERTS: tl.constexpr,
     ):
-        """One program per (expert, token-tile, n-tile) — fuses W1, W3, silu, mul.
+        """Fuse both input projections and the SwiGLU gate for one tile.
 
-        Standard grouped-GEMM tiling: accumulate over BLOCK_M (d_model chunks),
-        parallelize over (token, d_ff). The full W1 / W3 matrix is never
-        materialized in shared memory at once.
+        Programs are grouped by expert and tile tokens/output features while
+        accumulating the reduction dimension in FP32.
         """
         e = tl.program_id(0)
         t_blk = tl.program_id(1)
@@ -88,8 +87,7 @@ if HAS_TRITON:
         n_in_blk = n_blk * BLOCK_N + tl.arange(0, BLOCK_N)
         n_mask = n_in_blk < d_ff
 
-        # Pointers for the token / d_model / d_ff slices we will read.
-        # The loop below adds the d_model offset per K-tile.
+        # Base pointers stay fixed while the reduction loop advances through d_model.
         x_row_base = x_ptr + (off + tok_in_blk)[:, None] * stride_xt
         w1_row_base = (
             w1_ptr + e * stride_w1e
@@ -101,7 +99,7 @@ if HAS_TRITON:
         )
         out_row = out_ptr + (off + tok_in_blk)[:, None] * stride_ot + n_in_blk[None, :] * stride_of
 
-        # Accumulate g, u in fp32 over the d_model dim (one K-tile per program).
+        # FP32 accumulation limits error across the input-feature reduction.
         g_acc = tl.zeros((BLOCK_T, BLOCK_N), dtype=tl.float32)
         u_acc = tl.zeros((BLOCK_T, BLOCK_N), dtype=tl.float32)
         for k0 in range(0, d_model, BLOCK_M):
@@ -125,7 +123,7 @@ if HAS_TRITON:
             g_acc += tl.dot(x_tile, tl.trans(w1_tile), allow_tf32=False)
             u_acc += tl.dot(x_tile, tl.trans(w3_tile), allow_tf32=False)
 
-        # Cast to fp32 for the silu; sigmoid is fp32/fp64-only in Triton.
+        # Triton's sigmoid path is most portable in FP32.
         g32 = g_acc
         u32 = u_acc
         silu = g32 * tl.sigmoid(g32)
@@ -135,7 +133,7 @@ if HAS_TRITON:
 
 
 class _MoEW1W3SiluFunction(torch.autograd.Function):
-    """v1 reference-stub autograd: forward = Triton kernel, backward = ref."""
+    """Use Triton for forward and the differentiable PyTorch reference backward."""
 
     @staticmethod
     def forward(
@@ -158,8 +156,7 @@ class _MoEW1W3SiluFunction(torch.autograd.Function):
                 f"exceeds hard cap ({_MOE_FFN_HARD_CAP} / {_MOE_DMODEL_HARD_CAP})."
             )
 
-        # Tile sizes. Keep small enough to fit in 64 KB shared mem on sm_75
-        # (GTX 1650). Production on A100 can grow these via the launcher.
+        # These conservative tiles keep the sanctioned sm_75 path within shared memory.
         BLOCK_T = 16
         BLOCK_M = 32
         BLOCK_N = 32
@@ -179,8 +176,7 @@ class _MoEW1W3SiluFunction(torch.autograd.Function):
             out.stride(0), out.stride(1),
             BLOCK_T=BLOCK_T, BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N,
             N_EXPERTS=n_experts,
-            # num_stages=1: GTX 1650 (sm_75) has 64 KB shared; num_stages=2 spills.
-            # Production runs on A100 (164 KB) can re-enable num_stages=2 via env.
+            # A single stage avoids shared-memory spills on the minimum supported GPU.
             num_warps=4, num_stages=1,
         )
 
@@ -214,7 +210,7 @@ def triton_moe_w1w3_silu(
     W1_stack: torch.Tensor,
     W3_stack: torch.Tensor,
 ) -> torch.Tensor:
-    """Public entry point. Raises ImportError if Triton is unavailable."""
+    """Run the fused projection, failing clearly when Triton is unavailable."""
     if not HAS_TRITON:
         raise ImportError(
             "triton_moe_w1w3_silu requires the `triton` package. "

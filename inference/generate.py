@@ -1,4 +1,4 @@
-"""Mixed KV-cache generation for GPT-OSS-Lite."""
+"""Autoregressive decoding with separate local and global KV-cache policies."""
 from typing import List, Optional, Tuple
 
 import torch
@@ -15,7 +15,11 @@ from models.transformer import GPTOSS
 
 
 class MixedKVCache:
-    """Per-layer mixed KV cache (windowed + global). Stores *rotated* K."""
+    """Keep rotated keys and values per layer using a ring or growing buffer.
+
+    Windowed layers retain only their most recent tokens; global layers retain
+    the complete prefix so incremental attention matches full-sequence decoding.
+    """
 
     _GLOBAL_CAP_TOKENS = 4_000_000
 
@@ -27,7 +31,7 @@ class MixedKVCache:
         self._global_cap_tokens = self._GLOBAL_CAP_TOKENS
 
     def reset(self) -> None:
-        """Empty the cache (call between independent generations)."""
+        """Release all layer buffers so the cache cannot leak a prior prompt."""
         self.windowed_kv = []
         self.global_kv = []
         self.global_lengths = []
@@ -44,7 +48,7 @@ class MixedKVCache:
         is_windowed: bool,
         window: int,
     ) -> None:
-        """Append a new *rotated* K and the corresponding V for layer ``layer_idx``."""
+        """Append a decoding chunk, overwriting old tokens only for windowed layers."""
         if is_windowed:
             target = self.windowed_kv
             while len(target) <= layer_idx:
@@ -127,7 +131,7 @@ class MixedKVCache:
                 self.global_lengths[layer_idx] = needed
 
     def get(self, layer_idx: int, is_windowed: bool) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
-        """Return ``(K, V)`` for a given layer; ``(None, None)`` if empty."""
+        """Return chronological cached ``(K, V)``, or ``(None, None)`` if empty."""
         if is_windowed:
             target = self.windowed_kv
             if layer_idx >= len(target) or target[layer_idx][0] is None:
@@ -157,7 +161,7 @@ class MixedKVCache:
             return k[:, :, :cur_len, :], v[:, :, :cur_len, :]
 
     def seq_len(self, layer_idx: int, is_windowed: bool) -> int:
-        """Return the current sequence length cached at ``layer_idx``."""
+        """Return the number of valid tokens currently available at a layer."""
         if is_windowed:
             target = self.windowed_kv
             if layer_idx >= len(target) or target[layer_idx][0] is None:
@@ -176,7 +180,11 @@ def _attn_forward_layer(
     cache: Optional[MixedKVCache],
     sink_bias_cache: Optional[dict] = None,
 ) -> torch.Tensor:
-    """Run one GPTOSSBlock; if cache is provided, append rotated K/V to it."""
+    """Run one block and optionally update its incremental attention cache.
+
+    Keys are rotated before caching, which lets later decode steps reuse them
+    without recomputing position embeddings for the prefix.
+    """
     attn = block.attn
     B, T, _ = x.shape
     x_norm = block.norm1(x)
@@ -234,13 +242,16 @@ def generate(
     top_p: float = 0.9,
     use_cache: bool = True,
 ) -> torch.Tensor:
-    """Token-by-token generation with mixed KV cache; returns ``(B, T + max_new_tokens)``."""
+    """Generate up to ``max_new_tokens`` and return prompt plus generated IDs.
+
+    Greedy decoding is selected with ``temperature <= 0``; otherwise nucleus
+    sampling uses ``temperature`` and ``top_p``. Disabling the cache recomputes
+    the prefix each step and is useful as a correctness reference.
+    """
     model.eval()
     dev = input_ids.device
-    # Enforce the model↔input device contract: keep the model on the input's
-    # device so embed/head/matmuls never cross devices. ``.to(dev)`` is a no-op
-    # (no copy) when the model is already on ``dev``, so this is cheap to call
-    # per-generation inside an eval loop (e.g. passkey retrieval).
+    # Keep embeddings, projections, and the LM head on the input device; `.to`
+    # is a no-op when callers already placed the model correctly.
     model.to(dev)
     B, T_prompt = input_ids.shape
     cache = MixedKVCache() if use_cache else None

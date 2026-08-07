@@ -1,4 +1,8 @@
-"""Sliding-window + full attention alternation with learned attention-sink bias."""
+"""Causal attention primitives used by the alternating GPT-OSS blocks.
+
+The module combines GQA, YaRN RoPE, optional sliding windows, and a learned
+sink logit while keeping an SDPA-compatible fast path.
+"""
 import math
 import functools
 import torch
@@ -21,7 +25,11 @@ def manual_causal_attention(
     sink_bias: torch.Tensor | None = None,
     window: int | None = None,
 ) -> torch.Tensor:
-    """Naive O(T²) causal attention (reference path for tests only)."""
+    """Compute causal attention with explicit FP32 score accumulation.
+
+    This deliberately simple implementation is a correctness reference for
+    the SDPA path; it accepts ``(B, H, T, D)`` tensors and is O(T²).
+    """
     B, H, T, D = query_states.shape
     scores = (query_states.float() @ key_states.float().transpose(-2, -1)) / math.sqrt(D)
 
@@ -46,7 +54,11 @@ def manual_causal_attention(
 
 @functools.lru_cache(maxsize=None)
 def _causal_mask(T_q: int, T_k: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-    """Causal mask of shape ``(T_q, T_k)``: True where attention is allowed."""
+    """Build a boolean causal mask for query and cached-key lengths.
+
+    A query block at the end of a sequence is aligned with the final
+    ``T_q`` positions in the ``T_k``-token key sequence.
+    """
     if T_q == T_k:
         idx = torch.arange(T_q, device=device)
         return idx.unsqueeze(1) >= idx.unsqueeze(0)
@@ -57,7 +69,7 @@ def _causal_mask(T_q: int, T_k: int, device: torch.device, dtype: torch.dtype) -
 
 @functools.lru_cache(maxsize=None)
 def _window_mask(T_q: int, T_k: int, window: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-    """Sliding-window mask of shape ``(T_q, T_k)``: True where attention is allowed."""
+    """Build a causal mask restricted to the most recent ``window`` keys."""
     idx_q = torch.arange(T_q, device=device) + (T_k - T_q)
     idx_k = torch.arange(T_k, device=device)
     return (idx_q.unsqueeze(1) - idx_k.unsqueeze(0) < window) & _causal_mask(T_q, T_k, device, dtype)
@@ -70,11 +82,11 @@ def causal_attention(
     window: int | None = None,
     sink_bias: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Causal attention via SDPA. ``window=None`` is full causal; else sliding window.
+    """Run causal attention through PyTorch's scaled dot-product attention.
 
-    When ``sink_bias`` is provided, an extra "sink" key with value 0 is added
-    so the learned bias contributes to the softmax denominator. The output
-    dimension is unchanged (sink is appended, then stripped).
+    ``window=None`` selects full causal attention. A sink bias is represented
+    by an extra zero-valued key/value: it can absorb probability mass without
+    changing the output, but still participates in the softmax denominator.
     """
     T_q = query_states.shape[2]
     T_k = key_states.shape[2]
@@ -92,8 +104,7 @@ def causal_attention(
         attn_mask = torch.where(mask, 0.0, float("-inf")).to(dtype).unsqueeze(0).unsqueeze(0)
         return F.scaled_dot_product_attention(query_states, key_states, value_states, attn_mask=attn_mask)
 
-    # sink path: extend K with a sink column (zero K, zero V) and let the bias
-    # ride on the mask's last column.
+    # Append a zero-valued sink so its learned logit affects normalization only.
     sink_k = torch.zeros(B, H, 1, query_states.shape[-1], device=device, dtype=dtype)
     sink_v = torch.zeros(B, H, 1, value_states.shape[-1], device=device, dtype=value_states.dtype)
     k_ext = torch.cat([key_states, sink_k], dim=2)
@@ -105,8 +116,7 @@ def causal_attention(
         causal = _window_mask(T_q, T_k, window, device, dtype)
 
     mask = torch.zeros(H, T_q, T_k + 1, device=device, dtype=dtype)
-    # SDPA float masks are ADDITIVE: 0.0 = allowed, -inf = blocked. A bool->float
-    # cast (1.0/0.0) would leave "blocked" positions unmasked, leaking future tokens.
+    # Float SDPA masks are additive; using 1/0 here would fail to block futures.
     mask[:, :, :T_k] = torch.where(causal, 0.0, float("-inf")).to(dtype)
     mask[:, :, T_k] = sink_bias.to(dtype).unsqueeze(1).expand(H, T_q)
     return F.scaled_dot_product_attention(query_states, k_ext, v_ext, attn_mask=mask.unsqueeze(0))
@@ -122,7 +132,11 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 
 class GPTOSSAttention(nn.Module):
-    """GPT-OSS attention layer: GQA + YaRN RoPE + learned sink bias + alternating SWA/full."""
+    """One attention block with GQA, YaRN RoPE, and alternating local/global context.
+
+    Even-indexed layers use the configured sliding window; odd-indexed layers
+    retain full history so information can propagate beyond the local window.
+    """
 
     def __init__(self, cfg, layer_idx: int):
         super().__init__()
@@ -167,7 +181,7 @@ class GPTOSSAttention(nn.Module):
         x: torch.Tensor,
         positions: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """Forward pass returning ``(B, T, d_model)`` attended output."""
+        """Project, position-encode, and attend to ``x`` of shape ``(B, T, d_model)``."""
         B, T, _ = x.shape
         if positions is None:
             positions = torch.arange(T, device=x.device)

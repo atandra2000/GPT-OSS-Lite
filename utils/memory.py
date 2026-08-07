@@ -1,4 +1,4 @@
-"""VRAM budgeting for GPT-OSS-Lite (mixed windowed/global KV cache)."""
+"""Conservative GPU-memory estimates for training and mixed KV caching."""
 import torch
 import torch.nn as nn
 
@@ -12,16 +12,20 @@ def estimate_model_memory_gb(
     steady_state: bool = False,
     grad_ckpt_every: int = 3,
 ) -> float:
-    """Estimate peak VRAM (GB) for forward + backward at the given batch/seq."""
+    """Estimate peak GB from parameters, optimizer state, activations, KV, and overhead.
+
+    The estimate is a planning guard rather than an allocator measurement;
+    ``steady_state`` models decode after windowed caches have filled.
+    """
     cfg = getattr(model, "cfg", None)
     if cfg is None:
         return 0.0
 
-    # Parameters + optimizer state
+    # AdamW keeps two moments plus an FP32 master copy.
     param_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
     optim_bytes = sum(p.numel() for p in model.parameters()) * 12  # 4 (m) + 4 (v) + 4 (master)
 
-    # Mixed KV cache: windowed layers hold last `window` tokens; global hold `seq_len`
+    # Local layers retain a window; global layers retain the full context.
     n_kv_heads, head_dim, window = cfg.n_kv_heads, cfg.head_dim, cfg.window_size
     dtype_bytes = 2  # BF16
     per_token = 2 * n_kv_heads * head_dim * dtype_bytes  # K + V
@@ -31,7 +35,7 @@ def estimate_model_memory_gb(
     win_len = window if steady_state else max(window, seq_len)
     kv_bytes = (n_windowed * win_len + n_global * seq_len) * batch_size * per_token
 
-    # Activations
+    # Approximate saved activations; checkpointing reduces the retained fraction.
     ckpt_factor = 1.0 / max(1, grad_ckpt_every) if grad_checkpoint else 0.0
     store_factor = (ckpt_factor + (1.0 - ckpt_factor) * 0.5) if grad_checkpoint else 1.0
     act_bytes = n_layers * seq_len * batch_size * cfg.d_model * dtype_bytes * store_factor
@@ -39,7 +43,7 @@ def estimate_model_memory_gb(
         n_active_per_layer = 3
         act_bytes += n_layers * n_active_per_layer * 3 * seq_len * batch_size * cfg.ffn_dim * dtype_bytes * store_factor
 
-    # GPU overhead estimate
+    # Reserve allocator and framework overhead not represented above.
     if overhead_gb is None:
         if torch.cuda.is_available():
             total_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
@@ -52,6 +56,7 @@ def estimate_model_memory_gb(
 
 
 def assert_fits_in_available_gpu(estimate_gb: float, safety_margin_gb: float = 2.0) -> None:
+    """Raise when the estimate leaves less than ``safety_margin_gb`` available."""
     if not torch.cuda.is_available():
         return
     try:

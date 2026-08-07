@@ -1,11 +1,11 @@
-"""Long-context evaluation: passkey retrieval at increasing context lengths."""
+"""Passkey-retrieval evaluation across progressively longer prompts."""
 import random
 import re
 from typing import Optional
 
 
 def make_filler_text(target_tokens: int, seed: int = 0) -> str:
-    """Generate ~target_tokens of filler text (deterministic)."""
+    """Generate deterministic word-level filler of approximately ``target_tokens`` words."""
     rng = random.Random(seed)
     vocab = ["the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "and",
              "runs", "through", "forest", "while", "watching", "birds", "in", "sky"]
@@ -23,7 +23,7 @@ PASSKEY_PROMPT_TEMPLATE = (
 
 
 class PasskeyEvaluator:
-    """Evaluates passkey retrieval at varying context lengths."""
+    """Measure whether a model can recover a short key embedded in long context."""
 
     def __init__(self, model, tokenizer, device: Optional[str] = None):
         self.model = model
@@ -31,7 +31,7 @@ class PasskeyEvaluator:
         self.device = device or ("cuda" if __import__("torch").cuda.is_available() else "cpu")
 
     def build_prompt(self, passkey: str, context_length: int, passkey_position: str, seed: int = 0) -> str:
-        """Build a (context, question) prompt with the passkey at the given position."""
+        """Build a prompt with the key inserted at the start, middle, or end."""
         filler = make_filler_text(target_tokens=context_length, seed=context_length)
         words = filler.split()
         if passkey_position == "start":
@@ -46,7 +46,7 @@ class PasskeyEvaluator:
         return prompt
 
     def extract_passkey_from_output(self, output: str) -> Optional[str]:
-        """Extract a 5-digit passkey from the model output."""
+        """Return the first standalone five-digit key in generated text, if any."""
         m = re.search(r"\b(\d{5})\b", output)
         return m.group(1) if m else None
 
@@ -57,7 +57,7 @@ class PasskeyEvaluator:
         passkey_position: str = "middle",
         base_seed: int = 42,
     ) -> dict[int, float]:
-        """Evaluate passkey retrieval; returns ``{ctx_len: accuracy}``."""
+        """Run trials at each context length and return ``{context: accuracy}``."""
         import torch
         from inference.generate import generate
 

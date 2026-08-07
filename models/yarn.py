@@ -1,4 +1,4 @@
-"""YaRN RoPE scaling module."""
+"""YaRN rotary position embeddings for long-context extrapolation."""
 import torch
 import torch.nn as nn
 
@@ -6,7 +6,7 @@ from models.rotary import compute_yarn_freqs, compute_yarn_mscale
 
 
 class YaRNRoPE(nn.Module):
-    """YaRN-scaled RoPE: trains at ``original_max_seq_len``, extrapolates to ``target_seq_len``."""
+    """Generate YaRN frequencies trained for one context length and scaled for another."""
 
     def __init__(
         self,
@@ -50,7 +50,11 @@ class YaRNRoPE(nn.Module):
         positions: torch.Tensor,
         n_pruned_dims: int = 0,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Compute ``(cos, sin)`` for the given positions; each ``(T, head_dim // 2)``."""
+        """Return cosine and sine tables for ``positions``.
+
+        Each table has shape ``(T, head_dim // 2)``; ``n_pruned_dims`` turns
+        selected leading pairs into identity rotations for global layers.
+        """
         if positions.numel() == 1:
             inv_freq = self.inv_freq.to(positions.device)
             pos = positions.item() if positions.dim() == 0 else positions[0].item()

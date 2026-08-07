@@ -1,4 +1,8 @@
-"""GPT-OSS-Lite top-level model: embedding + 12 alternating-attention/MoE blocks + head."""
+"""Core GPT-OSS-Lite transformer components and configuration.
+
+The stack pairs alternating local/global attention with MoE feed-forward
+blocks and exposes the router auxiliary loss alongside language-model logits.
+"""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -11,7 +15,11 @@ from models.moe import MoELayer
 
 @dataclass
 class ModelConfig:
-    """Dataclass mirror of the model.* fields in the YAML config."""
+    """Typed model settings shared by YAML loading, construction, and validation.
+
+    Defaults describe the compact GPT-OSS-Lite architecture; callers can
+    override any field when constructing an experiment configuration.
+    """
     vocab_size: int = 128000
     d_model: int = 768
     n_layers: int = 12
@@ -115,7 +123,7 @@ class ModelConfig:
 
 
 class RMSNorm(nn.Module):
-    """Root Mean Square LayerNorm (no bias, no mean subtraction)."""
+    """Normalize by per-token RMS without subtracting a mean or using a bias."""
 
     def __init__(self, dim: int, eps: float = 1e-5):
         super().__init__()
@@ -128,7 +136,7 @@ class RMSNorm(nn.Module):
 
 
 class GPTOSSBlock(nn.Module):
-    """One GPT-OSS block: pre-norm attention + residual, pre-norm MoE + residual."""
+    """Apply pre-norm attention and MoE sublayers, each followed by a residual."""
 
     def __init__(self, cfg: ModelConfig, layer_idx: int):
         super().__init__()
@@ -146,7 +154,7 @@ class GPTOSSBlock(nn.Module):
 
 
 class GPTOSS(nn.Module):
-    """GPT-OSS-Lite: top-level model returning ``(logits, aux_loss)``."""
+    """Language model that returns vocabulary logits and the mean router loss."""
 
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -162,7 +170,7 @@ class GPTOSS(nn.Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
-        """Standard small-init scheme (DeepSeek-V3 style: std=0.02 for most params)."""
+        """Initialize learned projections and embeddings with the configured normal scale."""
         std = self.cfg.init_std
         for module in self.modules():
             if isinstance(module, nn.Linear):
@@ -180,7 +188,11 @@ class GPTOSS(nn.Module):
         idx: torch.Tensor,
         positions: Optional[torch.Tensor] = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward returning ``(logits (B,T,vocab), aux_loss scalar)``."""
+        """Return next-token logits of shape ``(B, T, vocab)`` and mean aux loss.
+
+        ``positions`` may identify an offset or cached decoding positions;
+        when omitted, positions are the contiguous range ``0 .. T-1``.
+        """
         B, T = idx.shape
         if positions is None:
             positions = torch.arange(T, device=idx.device)
@@ -215,7 +227,7 @@ class GPTOSS(nn.Module):
         return logits, aux_loss
 
     def num_parameters(self) -> int:
-        """Count parameters (excludes duplicates from weight tying)."""
+        """Count unique parameter objects, avoiding double-counting tied weights."""
         seen_ids = set()
         total = 0
         for p in self.parameters():
@@ -226,10 +238,10 @@ class GPTOSS(nn.Module):
         return total
 
     def num_active_parameters(self) -> int:
-        """Estimate active parameters per token (top-2 routed + 1 shared).
+        """Estimate parameters evaluated for one token under the configured routing.
 
-        The router gate is always active (one small Linear per layer): it is
-        excluded from `non_moe` and re-added once via `router_params * n_layers`.
+        Shared model parameters, the selected routed experts, shared experts,
+        and one router per layer are counted; inactive experts are omitted.
         """
         seen_ids: set[int] = set()
         non_moe = 0
@@ -249,7 +261,7 @@ class GPTOSS(nn.Module):
         return non_moe + (moe_active + router_params) * n_layers
 
     def enable_gradient_checkpointing(self, every: int = 3) -> None:
-        """Enable gradient checkpointing on every Nth block to save memory."""
+        """Checkpoint every ``every``-th block to trade extra compute for memory."""
         self.gradient_checkpointing = True
         self.grad_ckpt_every = every
 

@@ -1,4 +1,8 @@
-"""Atomic safetensors checkpoint manager with shared-tensor dedup and step discovery."""
+"""Checkpoint persistence with atomic writes and tied-weight deduplication.
+
+Model weights use safetensors; optimizer, scheduler, and metadata retain their
+native formats so training can resume without reconstructing state manually.
+"""
 import json, logging, os, tempfile
 from pathlib import Path
 from typing import Optional
@@ -9,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class CheckpointManager:
-    """Save/load model checkpoints. Files: model_step_N.safetensors, optim_step_N.pt, meta_step_N.json."""
+    """Manage the model, optimizer, scheduler, and metadata files for each step."""
     def __init__(self, save_dir: str):
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
@@ -83,7 +87,8 @@ class CheckpointManager:
             self.delete_checkpoint(step)
 
     def _atomic_save_safetensors(self, state: dict, path: Path) -> None:
-        # dedup shared-storage tensors so safetensors doesn't error on duplicate data_ptr
+        # Weight tying gives multiple state-dict names the same storage; safetensors
+        # requires one physical tensor for each storage pointer.
         seen_ptrs: set = set()
         deduped: dict = {}
         for k, v in state.items():
@@ -98,11 +103,11 @@ class CheckpointManager:
         self._atomic_write(path, lambda tmp: torch.save(obj, tmp), suffix=".pt.tmp")
 
     def _atomic_save_json(self, obj: dict, path: Path) -> None:
-        # ponytail: meta is plain JSON types (int/float/bool/str) — no custom default needed
+        # Training metadata is intentionally restricted to JSON-native values.
         self._atomic_write(path, lambda tmp: json.dump(obj, open(tmp, "w"), indent=2), suffix=".json.tmp")
 
     def _atomic_write(self, path: Path, writer, *, suffix: str) -> None:
-        """Atomic write: tempfile in save_dir → os.replace; unlink tmp on any failure."""
+        """Write through a sibling temporary file, then atomically replace the target."""
         fd, tmp = tempfile.mkstemp(dir=self.save_dir, suffix=suffix)
         os.close(fd)
         try:

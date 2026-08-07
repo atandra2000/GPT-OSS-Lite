@@ -1,15 +1,13 @@
-"""RoPE helpers: standard apply_rope, YaRN frequency computation."""
+"""Rotary-position helpers shared by training and cached decoding."""
 import math
 import torch
 
 
 def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
-    """Apply rotary position embeddings to ``x``.
+    """Apply rotary position embeddings while preserving ``x``'s dtype.
 
-    Preserves the input dtype — if ``x`` is bf16, the result is bf16. We cast
-    ``cos``/``sin`` to ``x.dtype`` before the multiply to avoid type-promotion
-    that would otherwise push activations to fp32 and break SDPA's mixed-dtype
-    requirement (q/k/v must share a dtype).
+    The tables are cast before multiplication so BF16 query/key tensors remain
+    compatible with SDPA's requirement that Q, K, and V share a dtype.
     """
     T = x.size(-2)
     half = x.size(-1) // 2
@@ -38,7 +36,7 @@ def compute_yarn_freqs(
     beta_fast: float = 32.0,
     beta_slow: float = 1.0,
 ) -> torch.Tensor:
-    """Compute YaRN-scaled inverse frequencies for RoPE."""
+    """Build inverse frequencies and the interpolation ramp used by YaRN."""
     if head_dim % 2 != 0:
         raise ValueError(f"head_dim must be even, got {head_dim}")
     if original_max_seq_len <= 0 or target_seq_len <= 0:
@@ -73,7 +71,7 @@ def compute_yarn_freqs(
 
 
 def compute_yarn_mscale(scale_factor: float) -> float:
-    """YaRN attention scaling factor (the mscale term)."""
+    """Return YaRN's attention-magnitude correction for ``scale_factor``."""
     if scale_factor <= 1.0:
         return 1.0
     return 0.1 * math.log(scale_factor) + 1.0
