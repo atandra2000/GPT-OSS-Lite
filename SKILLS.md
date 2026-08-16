@@ -292,10 +292,10 @@ adding more complex optimisations (e.g. CUDA graphs, custom Triton kernels).
 - **Fused QKV**: combine `q_proj` and `kv_proj` into one matmul of
   `d_model → (n_heads + 2 * n_kv_heads) * head_dim`. Saves one kernel
   launch per layer (small, ~1-2% at production scale).
-- **Channels-last memory format**: per the workspace AGENTS.md rule 13,
-  `model.to(memory_format=torch.channels_last)` is mandatory on RTX 5090
-  (Blackwell). For A100/Ampere, the speedup is small (~3%) but memory
-  layout is more friendly to cuDNN.
+- **Channels-last memory format**: per the parent `CoreProjects/AGENTS.md`
+  channels-last rule, `model.to(memory_format=torch.channels_last)` is
+  mandatory on RTX 5090 (Blackwell). For A100/Ampere, the speedup is
+  small (~3%) but memory layout is more friendly to cuDNN.
 - **CUDA Graphs**: capture the entire prefill + decode step as a CUDA
   graph for fixed-shape batches. Saves 5-10% on small batch/seq where
   kernel launch overhead dominates. Skipped here because production batch

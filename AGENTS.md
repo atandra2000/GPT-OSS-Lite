@@ -1,7 +1,18 @@
 # AGENTS.md — GPT-OSS-Lite
 
-> Read root `AGENTS.md` and `self.md` first. Workspace rules are
-> authoritative; this file adds project-specific rules only.
+> Read the workspace `LLM/AGENTS.md` and the parent `CoreProjects/AGENTS.md`
+> (+ `self.md`) first. Higher-level rules are authoritative; this file adds
+> project-specific rules only (and wins on GPT-OSS-Lite-specific conflicts).
+
+## Quick checks (run before claiming work is done)
+
+```bash
+cd LLM/GPT-OSS-Lite
+python3 -m pytest tests/ -q                    # 190 passed / 2 skipped, ~40 s
+python3 scripts/kv_cache_benchmark.py          # headline: ≥ 1.8× KV-cache cut
+python3 tests/test_doc_refs.py --strict-coverage
+python3 scripts/check_docs.py
+```
 
 > **Project:** `LLM/GPT-OSS-Lite/` · **Type:** faithful GPT-OSS reproduction
 > **Scale:** ~502M total / ~247M active · 8.0B tokens planned · 16–20h on A100 80GB
