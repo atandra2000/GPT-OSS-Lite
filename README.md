@@ -183,6 +183,8 @@ python3 training/pretrain.py \
 
 ## Documentation
 
+**[Hosted docs site](https://atandra2000.github.io/GPT-OSS-Lite/)** — auto-deployed on every push to `main`.
+
 Full technical references live in [`docs/`](docs/README.md): consolidated concept chapters (theory + implementation), a config/API reference, operation guides, and dedicated training and inference chapters. Every code symbol is cited as a machine-verified `file.py:Symbol` anchor.
 
 ### Concepts
@@ -262,6 +264,8 @@ Values are the exact output of `scripts/kv_cache_benchmark.py` (window=128, batc
 
 ```
 GPT-OSS-Lite/
+├── .github/workflows/
+│   └── deploy-docs.yml                 # GitHub Pages auto-deploy
 ├── configs/
 │   └── pretrain_a100_502m.yaml        # canonical training config
 ├── models/
@@ -283,7 +287,11 @@ GPT-OSS-Lite/
 ├── data/
 │   ├── prepare_data.py                 # shim → LLM/shared_data universal pipeline
 │   └── shared_data/                    # vendored universal 8.0B-token pipeline
+├── assets/
+│   ├── style.css                       # documentation design system
+│   └── portal.js                       # portal interactivity
 ├── scripts/
+│   ├── build_docs_html.py              # Markdown → HTML renderer (stdlib only)
 │   ├── kv_cache_benchmark.py           # headline metric
 │   ├── passkey_eval.py                 # headline metric
 │   ├── microbench_a100.py
@@ -346,6 +354,10 @@ python3 tests/test_doc_refs.py --strict-coverage
 # Doc link/stale-pattern lint
 python3 scripts/check_docs.py
 # check_docs: OK (N files)
+
+# Build the HTML docs portal locally
+python3 scripts/build_docs_html.py
+# Output: docs_html/
 
 # Headline benchmark
 python3 scripts/kv_cache_benchmark.py
