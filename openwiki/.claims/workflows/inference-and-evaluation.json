@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:aa147241c00d16a97d692148561401915a68b7826a3272e360a7f4dd5171732f",
+  "claims": [
+    {
+      "id": "claim_def575ae51244ddcb2bba4ff919158f2",
+      "statement": "The production generation path performs one full prompt prefill, then decodes one token at a time with a per-layer MixedKVCache; the canonical 12-layer model alternates 128-token windowed attention on even layers with full-history attention on odd layers, using 8 query heads and 4 KV heads.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L17-L39",
+          "version": "repo-lines-v1:sha256:28bcb0d97f714d2b4a517612ee891fc2372e2c4aec9dd6114403ae09d0e79d0d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhOGU2YWU0MTRhNDM3ZDM5NjBiNjA3MTM5M2JmMjNmYjg3NDkxMGY3MTBkMjljOGExYzYxNmI0MDczZTNkYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlODZjNzM3ODEzOGIzMTlmYzVkOTJhMTgyMmFlNTZlNGQzMGRhNmQyNmEwMWExM2Y5ZmMxZjRmOGZjNzdmNzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEyZGE5MmNjMjMxYWE4ZGQ0ZDI1ZWYwZjdjNTY3YTNkM2NjZTQ4NjlhNzAwNzUxYWJiMDhkODU0ZTkyNzc1ZjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVkMTQ3ZmJjZjM2NmVkNjZmYjQxZTJiMzVkZTQwMDZlNDE0N2Q2N2E4NzJhNmRmODM5NGJkZjZmZDA3YmUyNWMifQ"
+        },
+        {
+          "resource": "repo://inference/generate.py#L17-L22",
+          "version": "repo-lines-v1:sha256:582a82149b521ada2d95189ec3fbb74165a688ef931e2217c38a314625fc3a29:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzI5YTdmMDIxMGM5NzAwZDA4YjIzOTk4ZTRhYWNjNTI5M2E2M2RmZWRmMDllNmMwYWYxNmI0ZjIyNGQ0YTU4YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTZhNzE1MjU3MmVlODRmMTA5MDZjNzRiOWYyYTkyNDM0ZGRhYjBlM2M0MjgxM2IwNGU1OTdlZmNlYzk1MWIyNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWVkNDI1YmI4YzBhZjM0NmFiNjk0ZDdjN2NjMGJkY2MzM2QxMTdjMDA2MDQ2MmI0NDA4NDY2ZTA5MjlmNTQ2MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjJmZDFiZjE2ZDIwZTA4ODU3ZTFhZTlmODgwY2E5ZTFjMjJkY2ZhY2YxODYwYTFjNmViMDg5MjgyMmM3ODVkNiJ9"
+        },
+        {
+          "resource": "repo://inference/generate.py#L236-L302",
+          "version": "repo-lines-v1:sha256:9b966de058ea309715610ec494a805f037c10d85d072c63fda83ca972ad1daef:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjYmRiYTIxNWQyMjJlZDIxOGNkNTZlZjFiNWEwYmRlMThlNDk0YjBiNDdmNWQzY2M0OTg0MWNhOGE5MTkwNGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyOGNmYjk5MDQxN2MzODc2NzA2MzFjYTk5NWUyMjdjMzYyZGIwMDE3ZmMzODdlOWM5M2JjYmEyY2JjZDEyODMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU3NDc2NjQ3OTYxYjRlMzU3ODg4Njg2M2RmNDViMjc0ZWQzZGQ2YThmOTk2Nzg1NjUzYzkxNmM4Yjg1NTlmNjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY1NTRiZGI1ZTJlZjlkMTIwMjYxYWQ0NzQwMjkyMTU2ZmU5YmIwY2UzNWQ5NGJjNDVhZjNiNjczN2U0MGQzYWQifQ"
+        },
+        {
+          "resource": "repo://models/attention.py#L134-L152",
+          "version": "repo-lines-v1:sha256:33b8f60ebc56ede7ceee1942e4980ede67a1225eeca5ac9ec56a5703991a86b2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYxMzc4MDVjMzBmYWMyOTcyOGNmMTBiNTcyNTU1NDBiMDI5ODhkODkzMzAwMThhNGRkY2YxMzMxNzU0MTYyNmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4N2YzYWVlNWI3ZGRhNDQ1ODJmNzE1M2I3MTAwNWNlZmE0NzI2ZGM3ODhhNjU1MDhhNjBjNjY4OWYxNGRhYWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI4Y2NmYjkzYzllMzI0OTkwZmEzMmI3YWVkZjZlMDUzMmY2ODk3OTAyNDA0YmZhYWVkMTU0OGRlZDAxN2I2NTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3NDhlNDExMGU4ZmUxZTZhM2IyYTA5OTYxM2JlMGI4N2IwYmQ2NDA5MjU0ZTExZWU2MDI2NjNmYzc4MGY3Y2IifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_99bb8bef27b54d91a8324b0719e6b7be",
+      "statement": "Generation uses absolute token positions: prefill uses positions 0 through T_prompt minus 1, and each decoded token is encoded at its absolute position via cur_pos - 1 rather than a position relative to the decode window.",
+      "evidence": [
+        {
+          "resource": "repo://inference/generate.py#L264-L302",
+          "version": "repo-lines-v1:sha256:875ff349aeff95b2622b82dbde7b2f3aec1a7b9af02f8c9e0d4f6ba8a0461a4b:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5NGYxOGU5MzNkYzJmNjU4ZWZkNzQ0N2QwZDY2ZDY1YjBlMzczYzdiMTA4Y2IxZTgwOGFlMTY3OTljNTdiOTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyOGNmYjk5MDQxN2MzODc2NzA2MzFjYTk5NWUyMjdjMzYyZGIwMDE3ZmMzODdlOWM5M2JjYmEyY2JjZDEyODMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmMGJkNzcwYjk4MDE4ZjcxZWNlMjQxM2ExMDYzODIwNWE2OTAyOWIyOTE5MDE1NTFlMjEwOTI3MGFhNWFkNGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY1NTRiZGI1ZTJlZjlkMTIwMjYxYWQ0NzQwMjkyMTU2ZmU5YmIwY2UzNWQ5NGJjNDVhZjNiNjczN2U0MGQzYWQifQ"
+        },
+        {
+          "resource": "repo://models/attention.py#L179-L199",
+          "version": "repo-lines-v1:sha256:821a3e515061a1dedf47c771298cec97eabdbfcfcea2b74afdd0b19b8b9e6d6d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkZDE1NDg4Yzg3MjRhOTEyOGZhZjBkMTBjMDJlYWI4YjMxYzYwMDA1OWEwY2JjMmNiOTg3ZDkzMGMzOWNlOGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJkYzljYTgwN2RmOGM3ZWZjODMwYjNiYThmN2VmOWI5NWNlYzZiNjJmMzhjZmFhODcyOWYyMzRjNmQ2NmY5OWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRhYmVkYmQ3ZjViZTc0M2NlZTRkZmMwNzM1OTQ5MmUyOTQ2OTcyZWQ1MDUyMmJmNmFhMWFkMTg3MmJjZGQ4ODQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU0N2Q5NWNjNzQ4M2Y3NGY4YWExNmQyYjg5MzZlYzk1YmUxMmQ3YjhmYWE0MjMxNWYzOGRmNmIxMTU3ZDJkMjQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_72a565091a8c462f8777576360146a9f",
+      "statement": "_attn_forward_layer applies RoPE to keys before caching them, caches unexpanded KV heads, expands cached K/V with repeat_kv for attention, and runs the attention and MoE residual sublayers for each layer.",
+      "evidence": [
+        {
+          "resource": "repo://inference/generate.py#L175-L233",
+          "version": "repo-lines-v1:sha256:37d25766382f84d9c26a4e23dcadae28b6717f56e0d15870f0e7e7efc99f8f0f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI4ZWVlYWQ3YmViYmU1ZWRhMTI0MDMyMjdmZjlmMzJlODk3MTZmZjZlNDJiZTEwMzM5NGUzMTU1OTAyMGQ5MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NWM4NzgyZDkwNmVkMmNiZTBiZDFjMzUxYWIxMTcyODdiNTY5MWQ1NDY4OTFkZTdmNTliNjI1MzdlYTZiNjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBlNGMzODg2YjIyNThiZWEwMzVmNzM5ZDZkZjVhZTM2ZjU1ODY2NjJlMTk1MDRhZTY5ODBiZDNkZGI2MGFjODYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5YjJhNzFjMGVjOWQ4YzA5ZDA4MWE3OWEyM2I5ZTg3YjY1ZjQ2NmE0Y2E3N2I3ZTM3MTMzMjg4YjMwODQ2NmQifQ"
+        },
+        {
+          "resource": "repo://models/attention.py#L124-L131",
+          "version": "repo-lines-v1:sha256:61c13ac85743f057e0b6f1186e691da9b876dace67dfa7c2ee79bd88eb2b95e7:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTI0NzFhZTFkN2VjYmQyZTkzZDlhMmVhODg1N2FkZTI5OTZkNWJiN2QwODVjY2ViYjc0NWU4N2JlNDA5MDcyOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjg5NmQwMjcwMjEwZDVhNDc2ZjAxYmM2MGY0ZTA1YzY4NjdlZDY3ODRlZTU4NzAxNWMwNzFkZDkxYTBkZGQwNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODg3NDVhYTUzYjM0ZTEyMTYxNzRkZWY4OTBlZmVlZTMyNTY3N2U3NTVkNDI4ZjgwMzY5MzA3ZTQ1YzEzMjMwMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTc5ZjZjOGIwNmY4ZDQ0YWE1MGE5ZjQ5NDgwMDRhMzdiZTgyODVmZmIwZjUzMDNiN2RkMWQ3Njk4MDNlODJlMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_a0e24f258d9a4bc7ae811febcef54179",
+      "statement": "MixedKVCache windowed layers use fixed-capacity ring buffers and chronological reads: appends overwrite the oldest entries after rollover, and get() reorders the physical ring so attention receives at most window valid tokens in temporal order.",
+      "evidence": [
+        {
+          "resource": "repo://inference/generate.py#L133-L152",
+          "version": "repo-lines-v1:sha256:1043e3685f290776e6d7d25d76659af35caf011fe59514e70b57dcf576c5a753:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjliZTIxYmE0ZThkY2QxMmRiMTM3YTIwNzBlNzJiMDI4ZjVkNTAxOTUyNzczYmZmY2M4MTViMDk2NjI1MmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxNDJjODgxNzFjN2RlNjI3ODIwNzc0N2MwZjExYmZkZDhmYmJiMDdmZjJmZjJkYzlkMTBjMDAzYjI5YzE4NDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhNDMzZjFkYmQ5MTNlYjBmZWU0ZGY1N2Y5OTcyYjMxYjUxZTkxYTg3MWM3MGRjMzc4YjA2ODg4ZmRhZTdhZTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdmN2ZjY2Y2Nzg0NmM5NjkxOTNjOWU0NjA5N2U5OTQwMTk5OTM2YTJjZWQwN2JjYjFkZjVhZGIwMmUwZjBhYTAifQ"
+        },
+        {
+          "resource": "repo://inference/generate.py#L43-L93",
+          "version": "repo-lines-v1:sha256:112284d0428b86d38be84b68338e5cde327486b676f10e46869881eee52e98d4:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdiYzQxOWQzYmQ0YTQyMjY4YTdlNDU5NDg2MWUyMWEwYTZmZWY1ZWJmZTQ0NzJkZDRhNDM5ZDE4ZmRmN2NhZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5ODllNTU4MDZhN2EwZjNjNDQxNzNjN2ZkZmZjYWM2Yzg2NTc1Njk5MTQ0OGU4Nzk1NzQ3Zjc3Y2M3ZTY1MDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEwOGM3ZTY1OWQwYmI4ZDc4Y2JmNDM3ZDc1MjY4M2FhMjBlODk5MzYyNzhkMzYzOTc4M2JmZTRjYTZhOGZhODkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzZWRhNDU5NjdkNjllMzg4ZjJhNDUwYmQ5Nzk0YWU2ZTcwMTZlMjY4MGRkMzJkZDEzMjhlZDQwNzQxODlkM2YifQ"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L22-L31",
+          "version": "repo-lines-v1:sha256:e8a0f5676d471906a6e6da96e8c5b05835064d9ac83f50b0c0f152e2984e0f07:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVjYmFmOWI4ZjllNWQwZDRkNzY1MWExY2Q3MGRhNmVkMGYzZDA4M2M5OTdkYjMyNTc1OTQ5MDM3NjAxNjlkZTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1NDNlMzE3ZDc5Y2RlZWI3MGI4ZDZiZDI4NzQ0MmE0ZWE5YzEyMjE5ZmE3NjgyODdhYWQ1ZDc5YTU1ZjFjYzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBmN2NkNGM3MmU0YWVlY2UyOTBhY2E1NmU0YTY1ZTJiMTJiYTZmMjRhZTFjZjM5ODk1Zjg2Yzg3OTkzNjkxZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI1OTQzYWZlMGQ1Y2Q1ZjNjNGQxNGIyZjhhYWQ4MzFhNDVhNTk2YWVmODJmMTFkNWY0YmQ5NjQ1YmFhNjllN2EifQ"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L57-L67",
+          "version": "repo-lines-v1:sha256:b9a9ea900a1604987562e2520ba2856e0b4424676d44ace0b34bea4a1b397354:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyZTlkMzBmMDNiYzQ4NWRlMWFjYjkwOWVhMjRjMTEwNTQ3MjVjYzliODY5ZmExYjM2YTU4NDFlZGE3YmJlNjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1OTdiMTk5NGU5ZTNkNjk4YmU3NTVlYWM0OWU3NGZhYTcyNTZhZDQ4MzU2MTM3NTBiYTRjZTMzZWExMTU5MzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBmN2NkNGM3MmU0YWVlY2UyOTBhY2E1NmU0YTY1ZTJiMTJiYTZmMjRhZTFjZjM5ODk1Zjg2Yzg3OTkzNjkxZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYzZjEzMGU3NjIyZWI2ZGE3MDkxYmY1ZGNjMDc2MDA0OGFlYjYzMmMzMTc2MmU1MDlkOWZkOWQ3NDJjMjAwMjYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2984740d337d41dc93433b43d957375f",
+      "statement": "MixedKVCache global layers retain the complete prefix in dynamically grown arrays, track valid lengths separately from capacities, grow by roughly 1.5 times when needed, and enforce a 4,000,000-token safety cap.",
+      "evidence": [
+        {
+          "resource": "repo://inference/generate.py#L153-L172",
+          "version": "repo-lines-v1:sha256:8052d44d5e456532c2dc391c4e46663503149e6a69c7164307fd77c37e980ce3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE5N2I0N2JiODFjZTkzY2JhNjdhZmMwODY5OGE4MGNmYTA5M2E4NjY3ZTljOWY5NjUzMzc4MThkNjU3OGQxODUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjN2FhMjQ0MjRlMTJiY2VhMDk0YzAzOTBiMDllMzA1NmNiYWJhNGVlNGRiYjg1ODNiMDZiNzMxNjRmZWRmYzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA0MDdiZDA0ZTQzNDE1MWMzYTdhMGIzMmUwMjQwY2NhMjZkNTRlNzlkZmJiYWNiYmY0YmE2NGM4ODFiY2NhY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2NWM1MDE5NTczYzYyZTA5OWIwYzg1MTAzYTcxMGI4MjRlMGZhZjY5ZTk1ODgyOGM3OGJlZjJmODY0MDZkZDEifQ"
+        },
+        {
+          "resource": "repo://inference/generate.py#L24-L31",
+          "version": "repo-lines-v1:sha256:00c20ec0a128c9fffa58f72e481dc1c974aa7b05ca9964ebeabdf85cb6bad248:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzY2NDgwNzY4NzJjNzA1YmZmMzkyNmFhMzdkZjA1MjViYWNmYTllM2JiZTU0NWQxODNlN2Y5NDI5ZGM1OTdhNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGQyMWNjNDRkNDk3ODc2YTBkOWEwNWYzNDY2MmEzYjQzZDcwM2ZhODE4ODgyOTgyNTNkZDYxM2EyNzQxODg0ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWIyNmY4MjBiYWZlZGJiYWEyNzQ3ZTY4Y2I1MDM0MWRjNTc2MWU1YzAxNGFlNTVkNzJlNDc1OTYwYjc0ZmRmNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjFlNTcwOWQ2NDFmM2Q1M2QxNTk3YjU0MzZkZDQ0NjA1MmM4MjA1ZTJiZWFlZWE0NWZkYzY4ZWM1N2Y3ZTZkMyJ9"
+        },
+        {
+          "resource": "repo://inference/generate.py#L94-L131",
+          "version": "repo-lines-v1:sha256:638d199b2626d584cda8134d7d5f8800a127db20cc01d960faf30c060b700ab6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE5N2I0N2JiODFjZTkzY2JhNjdhZmMwODY5OGE4MGNmYTA5M2E4NjY3ZTljOWY5NjUzMzc4MThkNjU3OGQxODUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiMTU0ZGQ5ZDEzNzI5YWYyNmMyNTgxZTcyMDhlZDBkYmNmNzVjNTczNWI2MGVjNDJjYTg3NzQ2NjU5Mzk1ZWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI2NTE1ODk2NzA4NDk5Y2Q1YjQxMmY0NjU3NDhkNTgxZTVlN2RlMmY4NjgwZmQ5MGU4ODI4NTc0YTI2NzEzNDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZjN2Y4ZmU4MTlhZTQ2Y2YzMWNjMjBjOTk4ZjQ5M2M4ZDQ2YjEzMzlmMTdkYTNlNWM5NzExYzYzOTY4MjM2NzEifQ"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L34-L44",
+          "version": "repo-lines-v1:sha256:bcca40de0e56cbe75b1cb1a06e33322cba9b379e192a903c0f9b853093688dd1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkYWFiNDhmNjJhZTQwY2I1Yzc4YTRhMDQ2OWNhYzlmYTEyMTIyY2NmMzM3Mjg5ZDM1MDU3MGM3NjJhZmVjZmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg1ZjVkMDlkMmNiZTAzNTE5MDY1ZjIwOTI2OWUyZTlkZTcwODlmNzA5OGI3YzVmZTdiNDRmZjJiMGI3NWE4MGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA4NmYwZWM5OGZhY2FkODVhYzUyYTRlZjcyMThhOWYyYzM5ODQyMDVhZjg2OGVmMDEzYzdjNTY5ODZkYjBkZDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcwMjQ1OTg2YTViNDE2N2YwYTA3ZDdjYWFiZDVkYzUzOGI4NGVjNTEwYjliMGY0N2NmMTNhNDFjOTNjZGU1MjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a440f52c52ef4ec084cdd5977c1d95ba",
+      "statement": "Independent prompts must have independent cache state: generate creates a fresh MixedKVCache and sink-bias memoization dictionary per call, while MixedKVCache.reset replaces both layer stores and their global length/capacity metadata.",
+      "evidence": [
+        {
+          "resource": "repo://inference/generate.py#L251-L258",
+          "version": "repo-lines-v1:sha256:b5a00cea546caba1fa63a700d5fca0875395880c8de97951d6121fa802691c84:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGMwMmMzMGE1NTNkYmE4OWIzNjNjNjdkZDU1MmU4NTRlZGU1ZjUzMmEyMzdmZmNkNjBjOTBiOGI4N2ViZmZhYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2M1MzdhYWJiYTRjZmJmNjdlMmY5ZGE3Yjg4YzNlYWE0YTVlYWU0MzhiNTAwYmUyNjhlNDA5ODgzYjY3YWQzMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGY3ZTNmZjk2ZjEyMmI2ZDcxNDczMjAyZmU4ODhmZTNhMDI3MTJjYmE1M2JlNTg0YzU5MzExZGEzOWMwMTQ5NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzkxZjc3YTdhM2JlMWM2OWNkOWU2Nzg1YjIxZDMzNWEyODExNzdkYTMwZTU1ODBhNWQyMmRiZjg4Zjk1ZTFiNyJ9"
+        },
+        {
+          "resource": "repo://inference/generate.py#L33-L38",
+          "version": "repo-lines-v1:sha256:abcdefaa84715d25e396a92cb0e6dad1898b65f75dec1ece80b2f311288ca71f:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDcxNDMzNzY3NjA2NmQzNTEyMDE3MDYxM2MyMmEwNDkxM2RiM2MwNjUwMzZkZDBmNDg5YWQ0YWVmNTg4Yzc1OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWI0MzEyMzgyZDNlMGMxYzI4YmE5NjBmYWZjZThkNDg2Y2EyYzNhNjFhMDk5M2E3YWYzNmU5MjAyNmJkOWE0NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmYxOTNiYzgyZTJlOWQzZmVlNGIyNmI1YzQ4MGEyOGY0ODFkZjFmNzdkNWY1MzE4YWY5YmNmNzE1OWJiMDBlYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjlhMTVhOTg0M2RkMzc5MzQ4MDA5ZDlkZTU1NTk4Zjk0YzU2MDU5Y2M4NzNjNjI0Yzc3NTg5YjFmZmEzY2E3YyJ9"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L47-L54",
+          "version": "repo-lines-v1:sha256:69c6e76584bb1a6fd73593760c7c4736b7fecf230c636edbf1be0c4cacb30764:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTVjNWYwNjcxYzc0ZThmZjJkNjM3M2FhNGM1MjcxNWI5NzRkZDJhYzNlMmNkNTIyMTY5MGZkY2VmYWY3ZmY2YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjdlM2Q1NDBiOTc5ZGNhMzEwNjBjM2Q5MDA5ZGIwODU1OTk5NTgzMTRhMjBkMTFkY2VlMDE4MThmODA5MDc3NiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmE0Mjc0MWFlMzVhM2E2NWM3OGY2NDk0MzI0NDA1ZDM4OWQ4OWM1ZTU0ZDViY2U1ZDY3ZGUyNjAwODMwM2VjNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzU4ODNhOTI1M2NmMjExMmI3MjA0OGMzMzFkYjQxMzAzYzgwOTNlNTg4NjJjZTFkMWY1OWQ4NDNmYTA3YmEzMCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_45a697d05b84493ba0ebf22987ead4a3",
+      "statement": "The use_cache=False generation mode deliberately replays the entire prefix after each generated token and is an O(T²) correctness reference, not the production long-context path; the focused test requires its one-token greedy result to equal the cache-enabled result.",
+      "evidence": [
+        {
+          "resource": "repo://inference/generate.py#L287-L302",
+          "version": "repo-lines-v1:sha256:d4673f113e8babf73c85607149710d500e8d01f80d664f171cadaa87e86d4dc9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlMjI4M2NiZDU2YjlhYmYwMTcyYzAyZjg2M2NkYzQ0M2JkMTI3ZjJlMDI3MWNhOTc2ZTUwYmJiODRlYmJmODAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyOGNmYjk5MDQxN2MzODc2NzA2MzFjYTk5NWUyMjdjMzYyZGIwMDE3ZmMzODdlOWM5M2JjYmEyY2JjZDEyODMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlYTc5NTE4YTM3YzQ5YjY3ZTk4Y2M0NmZlYzdhMDA4NmE1NWM4YzI3Y2ExNjA1NThkYjE2NDFmM2Q1NjFmOGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY1NTRiZGI1ZTJlZjlkMTIwMjYxYWQ0NzQwMjkyMTU2ZmU5YmIwY2UzNWQ5NGJjNDVhZjNiNjczN2U0MGQzYWQifQ"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L157-L190",
+          "version": "repo-lines-v1:sha256:1404634a90bd0c2f2fee3e6d7e890812614e22535562cd613453ca8064fdca0c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI4MDI4ZmEzNTc2ZTEzZjM1MTc1YmI5M2Y1YWU5MmU5YjQ3NDEyNTlkZDQ2N2Y5MzZkNDI0NzhlMjYyODE5MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM5ZGY2YjEwY2ExOTllYTM0NjQ2N2MyMDc2Mjc1NmViMzQ3YjBiNjE0MmE3MjYwZDY3NjE4NTA0NDI2MDU2MDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ3Y2Y1YWRhN2RkM2YzNDZiNjU4ODY3ZTMzNGRhM2M5NjMyYzQwOWVjZWZmN2FkM2MyNzhhNzliZGMyOTA5ZjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2cf78cf09f9f474a912bd67618e2c2e2",
+      "statement": "Sampling uses greedy argmax when temperature is at most zero; otherwise it temperature-scales logits, applies nucleus top-p truncation, renormalizes, and samples with torch.multinomial, with top_p inert in the greedy branch.",
+      "evidence": [
+        {
+          "resource": "repo://inference/generate.py#L236-L249",
+          "version": "repo-lines-v1:sha256:3ed523757140f49e9e826caff501751ce7f42189e48ac1da1073b4ec49e9a389:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjYmRiYTIxNWQyMjJlZDIxOGNkNTZlZjFiNWEwYmRlMThlNDk0YjBiNDdmNWQzY2M0OTg0MWNhOGE5MTkwNGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmNDJkN2FhMmM4MDdkNDI3M2JiZTNlNmU4Y2NkOGQ4MjgxMWI3MDA4MThiMzBlMzRkZTY5ODIxMzY2NTJmMzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU3NDc2NjQ3OTYxYjRlMzU3ODg4Njg2M2RmNDViMjc0ZWQzZGQ2YThmOTk2Nzg1NjUzYzkxNmM4Yjg1NTlmNjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg4MzgwODZkZmY3MDExY2I0NWY1YmM3M2Q0MWNlMGExNjNlOTE5ZTMzZjYxOWQwMzg1ZWQxYjNhNDQzNDAwNjIifQ"
+        },
+        {
+          "resource": "repo://inference/generate.py#L271-L283",
+          "version": "repo-lines-v1:sha256:46f4a1771303715a8a3e9e8b52aebf69d0014e229082cce3b65033eaaf4a59c5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmYjBjYjJhMGRlOWZlZDZlMzIyNzAzMDczMjk2ZWMxNWI4OTk4NDU4MDgxYzhiNjM3ODM4NTc3MjMxMTliNjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3YWRiY2Y4Njc2NThiMjRlYmUxODRiYjA0YmYzOGU5ODU2ZjRmMzU3ZTM4NjBmOGRjODA3ZTYxZTVmMGYyNjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgwYzdmYjE3ZjY1YjNjNmExYjZkYWNiZjJhODk0ZTJhZjVmYzUyNzY4NmQ0MjczMDgxOTA0NzhkZGNhZTA1MDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZlYTc5NTE4YTM3YzQ5YjY3ZTk4Y2M0NmZlYzdhMDA4NmE1NWM4YzI3Y2ExNjA1NThkYjE2NDFmM2Q1NjFmOGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_72ce4d96abc34c13b8d3717e5f492181",
+      "statement": "Generation calls model.eval(), so dropout is disabled; greedy decoding consumes no sampling RNG, while stochastic decoding's multinomial draw can be made reproducible with a seeded torch RNG.",
+      "evidence": [
+        {
+          "resource": "repo://inference/generate.py#L251-L258",
+          "version": "repo-lines-v1:sha256:b5a00cea546caba1fa63a700d5fca0875395880c8de97951d6121fa802691c84:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGMwMmMzMGE1NTNkYmE4OWIzNjNjNjdkZDU1MmU4NTRlZGU1ZjUzMmEyMzdmZmNkNjBjOTBiOGI4N2ViZmZhYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2M1MzdhYWJiYTRjZmJmNjdlMmY5ZGE3Yjg4YzNlYWE0YTVlYWU0MzhiNTAwYmUyNjhlNDA5ODgzYjY3YWQzMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGY3ZTNmZjk2ZjEyMmI2ZDcxNDczMjAyZmU4ODhmZTNhMDI3MTJjYmE1M2JlNTg0YzU5MzExZGEzOWMwMTQ5NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzkxZjc3YTdhM2JlMWM2OWNkOWU2Nzg1YjIxZDMzNWEyODExNzdkYTMwZTU1ODBhNWQyMmRiZjg4Zjk1ZTFiNyJ9"
+        },
+        {
+          "resource": "repo://inference/generate.py#L271-L283",
+          "version": "repo-lines-v1:sha256:46f4a1771303715a8a3e9e8b52aebf69d0014e229082cce3b65033eaaf4a59c5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmYjBjYjJhMGRlOWZlZDZlMzIyNzAzMDczMjk2ZWMxNWI4OTk4NDU4MDgxYzhiNjM3ODM4NTc3MjMxMTliNjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3YWRiY2Y4Njc2NThiMjRlYmUxODRiYjA0YmYzOGU5ODU2ZjRmMzU3ZTM4NjBmOGRjODA3ZTYxZTVmMGYyNjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgwYzdmYjE3ZjY1YjNjNmExYjZkYWNiZjJhODk0ZTJhZjVmYzUyNzY4NmQ0MjczMDgxOTA0NzhkZGNhZTA1MDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZlYTc5NTE4YTM3YzQ5YjY3ZTk4Y2M0NmZlYzdhMDA4NmE1NWM4YzI3Y2ExNjA1NThkYjE2NDFmM2Q1NjFmOGYifQ"
+        },
+        {
+          "resource": "repo://inference/long_context.py#L64-L85",
+          "version": "repo-lines-v1:sha256:3d1d1ad01d40121a5a0c68fdcd334a997155a93769496ba31db16189fd0e84d4:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhNDk0MWI5M2RjNzc1NTY2NzlkZDE1Y2U2M2NkZjdjMmI1NjFjYWIzMTE4NmQ4NzIxODg0ZjIwOTgzM2UzZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUxMDM0ODFjNTdkMGYwZGMwZjc2Y2QyY2M4YjM2MDRjNGU4Mjk2ZGE0MTIyYWRkMTllODE3NDVkYzdlMzMxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJmMWQ1MTMzMjdkMmIyY2U5NGRhZDdhOGUxZTI3MTQ3YWE1Y2QzYjBkMzU0M2RkNzMwMzIzZGFhZGU2YTk1ZTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzN2UyZDJkNDA2OTc1NjRlYzk2ZTc0ZTVmMTA5ZDZlN2M5ODhiYTA1YTg4ZDgwYTkwNDNmODgwY2UzNjhkZWYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dbf602e5c22f42dbac60f1db4becdf38",
+      "statement": "PasskeyEvaluator builds deterministic filler for each context length, inserts a formatted five-digit passkey at start, middle, or end, generates 16 new tokens greedily with use_cache=True, decodes only new tokens, and scores an exact match on the first standalone five-digit number.",
+      "evidence": [
+        {
+          "resource": "repo://inference/long_context.py#L33-L51",
+          "version": "repo-lines-v1:sha256:7b292e44e0933ff93da8d36cb56ab39a63ee636ff6fa8dd4de29551e44675c0a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3OTk0YjkxNGRjYjExZTI0OWQ4NjRhOTUzM2E3N2E3NzQ3Y2IyNGUwMTNiOWU4ZDIwMmFhOGM3M2I4M2NhZDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlYTA2YzczNWNhMDZlMWE2NThhMzIyODY5ZWYzZTViZGYzZGU2MzQ1ZGEwMTFjOTIyZGJmZWMxY2E4ZDlmZTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc1NzYxODg3OTMxOTY1NWU5ZGE5NjQ2NGU3OWExMGQyZmZiZThjNzg4M2RlYmU3OTQyNzcyMjhkMTMyZmI1ZWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2MmE2MWJiNWMwNmJlNzk3MGM2NTI5MWZlZDUxNGUyMzg5MmY2NWQyYjA0M2Y2ZDY3YjIwNDliYjNhZjFlNmYifQ"
+        },
+        {
+          "resource": "repo://inference/long_context.py#L66-L92",
+          "version": "repo-lines-v1:sha256:61ba5634d1577ebbc43bf8cc7c7560eb0a67062cbdbc5c93bc4c186b1e271fa0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc5MDZhMzA4OTIzNDk2ZTAwYmVjZjE1ZWJmODEzODY5NzRhZDdkYzZlNTQ2MjQwMGQwNzgwOTU3ZTE3MjAwYzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZlNjA0ZWNmNzIyYWU1YmI2ZDNmYmZkNTNlYzViOGVlYjRiNWUyNTI2MzcxMTliZGZlZWU3ZDVhYTA0YjUyZjgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyMGYxOWI5OWFlMjU1ZGNmNTdkZTRiZTk3OWRmMTQyOTg2MjMxNWFiMjg1YmM1ODIxZmMwOTMwYTU0MDRjYmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://inference/long_context.py#L7-L22",
+          "version": "repo-lines-v1:sha256:cbeac1fdf5f64a4373b3b140ab27459c5314100f3142df30c7b0a73d11bf2dbe:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4YThmYzE5NjQyNDFhNWU2NTkxOTI5YmFhMGVmYzg5ZmU5NjRjNzQ4MTE1ZWJkYjE0NzA1YWJiMGI4MWNkNTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMwNTA1NGE5MDI5YjA2MGQxNTE2OGM1MzI5YWE2N2NkOGI1MGZhZjhiOGExNzlmNGRlYmJlNDM2NGM3ZjE3NTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJiNDA1YzcyNWQxYjJkODNkNTZmMzJiY2U2ZWM3NGZmYWVhZmNkYWNmZTc1MzNlZDQ5ZTkwMmExYmMxZDc0ZjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c436bfa01e6a4ab087acf684350177d3",
+      "statement": "Passkey trials use a fresh random.Random(base_seed + context_length) and sample distinct zero-padded keys from the 100,000 five-digit values; evaluator defaults are context lengths 4096, 8192, 32768, 65536, and 131072, 100 trials, and middle placement.",
+      "evidence": [
+        {
+          "resource": "repo://inference/long_context.py#L53-L69",
+          "version": "repo-lines-v1:sha256:20c20f6c10e07735a9d4d7e02d636feb400097c1be2f2a848183d4a32737174d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5MzNmZDc3YzkyNjk1NWQ4ZTQ0ZGJiN2EwZDk4Yjc0YzI2NzAyNDVmMWJjYTc3YmY0ZGIzMTgwMmNmMTlkZmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVjMGNmMDU0NDE0NWMxYzFhN2ZjMzk0MzI4MjAyYTU0M2UwOTE2YmMyYTMwMzU1NWUwM2I1ZTQ5MDE1OWQ0MGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJkZDZhMmVmOWQ3Y2U4ODJiOWYwNGFjYjIzNTI0NGM4Y2NkNjVhYTM5MmQwZjAzZWM1Y2Q1Y2UwY2VkMzJkYzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE2ODUzZTJmMWZiYTNkOTBiM2E4NmNhZGRiYWE3ODI0YjAwNDlkY2YxYWJhZTA3ODhmZGZkMDQ1ZGRlOTQzMTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c8b751f24df2468db752e13a57a414a2",
+      "statement": "The passkey CLI requires a safetensors checkpoint, builds ModelConfig from configs/pretrain_a100_502m.yaml, loads weights with strict=False, exposes configurable trial counts, context lengths, positions, and seed, and uses a portable _CharTokenizer adapter that is not the LLaMA-3 training tokenizer.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L17-L43",
+          "version": "repo-lines-v1:sha256:7366d1428a8c68a7d2a9fda8350f1f403457c130f80a3fdcf133f5379f169f6b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhOGU2YWU0MTRhNDM3ZDM5NjBiNjA3MTM5M2JmMjNmYjg3NDkxMGY3MTBkMjljOGExYzYxNmI0MDczZTNkYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUwODQxOTk1ZjJiMzRjOWIzYzNlNWFjZTg5YzljMGVmNjQ3NTk1OTY4ZmU5Yzc5NDhmZjQ1NDkxNWZjNzgwNzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEyZGE5MmNjMjMxYWE4ZGQ0ZDI1ZWYwZjdjNTY3YTNkM2NjZTQ4NjlhNzAwNzUxYWJiMDhkODU0ZTkyNzc1ZjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBjYWI5NGMzZTM3NmYzZGU1MzYzZTFiZGI0ODE2YTNhNWNmYjgyNzFlOGM3Njg4ZTc0Njc4NDllM2ZjNjU3NGEifQ"
+        },
+        {
+          "resource": "repo://scripts/passkey_eval.py#L14-L25",
+          "version": "repo-lines-v1:sha256:7f6b0cc8c1b07dedf8056086d8ff3ad6f8406e7fc9328224bec5ccba3a4ab746:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiMzk3OTMzYTI0YTgwMWVlOTIzMzI3YmQ2OWEwMTA0OWMwNzc5MTUwMjFjZjJlYzM5ZGRhNGY4MWFhODM3ZTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkZjkwMzM5NjQ3NjYzZjQ5YzkwZDEwOTg0YTY3MDJjMTlmYWEyNWI4YTY1ZTY2MjI0OGEzZGYxNDNkZDhhYmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUwODAxN2QxZDU5YTUxNWQ3NGE2OTE4OGJlN2UyMzY4Y2M4MzkxYzFjYzU2MTI4ZTNmMzM2MDAyZjg4ZGI5M2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxNDhjZmMzNDhhODRlMmYzYmJkNTU3ZjliMjcxNmIzMzFkOWEzMzg1MjgwOTg2MTcyOTI0ZDNkZDlmZjUzYTMifQ"
+        },
+        {
+          "resource": "repo://scripts/passkey_eval.py#L28-L56",
+          "version": "repo-lines-v1:sha256:eadccc0578a4035255ec465640c826c0be977b9d4bf5afbde09906d3c26416b1:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0YjJmNWIyZWJlZDJlZWZjNjhhOTM1N2E2N2QwMDU5YjEzMzk1NzYwNjA2ZjJlNzE3MzY1MjFhNWQ2YWZhMGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZkNDAwZjI0ODUzOWRmYmFjNWQxYjE2OWQ0YWJjNjNhOTgyMWMyZjU4OTRlZDU3MDVmZWZjMDhkNzVjZGU0MjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE2NTExZDNhNjkzMzNiMGEwNTA1ZDVjMGI3ZTk0ZjUzZDJmNmRjYjRmMzIwYzZkMDg4NDA2NGFjNDQ1YWZlNGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhlNzQ1ZjQ3ZGQ1YmU0ZGUzYzk2MGNkNGM1NDE0NmNhYTE1NGJiYjljYjE0ZTRlYzhkODQzNzM3Zjg1YTUzZTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5fd7491cfe1c4e43aa9e017f2e2ad2df",
+      "statement": "The repository currently treats at least 85 percent passkey accuracy at 128K as a target pending the first full trained-checkpoint run; the CLI checks the maximum requested context length, reports pass at accuracy at least 0.85, and otherwise warns while returning success.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L231-L239",
+          "version": "repo-lines-v1:sha256:f1dcc982db601e6da5a650bd927b0645852b46147c4e5efa1f1da64fbb5b6071:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWI0YTg4NDk0ZTExOTFjNmI0ZDY1YzA4NDFjYmI5YmJjMDA0Yjg4YWNkYzgxM2FkM2Y5ZGQ5ZmJiOTBjYWVjZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWI1YzhhZWYzYjI2NzBmNmRmOWEyZDRjMzJjZGI1ZWQzNGJmMTQ4MGMyNDNjNzUzODhkYTIxMWZiM2NkMmE4ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTE4OGY3NzYyOGVlMmRhMzgxZjAyZGYxNDkyYzlkMDkyMzQ3YTQwMmVlM2YzOTY5MjI4NmRlOTQxOTY2OGYxZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDAxZjJlYzE3NTkzYzEwNTRlYjQ2MzY3ZDg0NTNlZjI0YTE3M2NlOTZiNzExN2Q5MWY5YTY4ZDQ0ZmVmOGIwMSJ9"
+        },
+        {
+          "resource": "repo://docs/inference.md#L309-L319",
+          "version": "repo-lines-v1:sha256:aabcf5b27a4aa8cae2550962d1dfd520ac7dcb7758bcdb3bff05da6f6419266c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViNTI5ODExOTkyNTA5YzVjNTVkMjI2ODcxZDA1NTgyYTJkZThjNjQ3NGM2MWUzODRlNzBkYjRiNDA3NDJiNzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxNjNkZjhhZDc0MzE5ZTRjYjQ2ZmQxM2EzZGVjOTU1NDk1M2YyN2I0NjA4ZDllMzNjNzUzOTlhNDUxYWFlNGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdlMGNhMDg4NzY5YmU4ZmNlMzEyNThmYjhiN2Y2ODk2NDgzZmFhODBiNTNmNGE3ZjdlMmI3YjVhY2E5NTk2Y2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdlMjg0OThiYjMxOTVlZTYxZmY4YzdmODE0MzcwZmQ2YTIwZjU4NzcxODY1YjIzYjYyYjBkNjhjZTA2ZjMzZTQifQ"
+        },
+        {
+          "resource": "repo://scripts/passkey_eval.py#L66-L77",
+          "version": "repo-lines-v1:sha256:21c632dda05009323bbf1b1de3232f9c1a7b85479e67e1fa3e477a441c3dd155:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIwZjA4NjAzNjcyMWFjMDg3MjZiZmZhYjk2NTA2NzFlOTVkMDU4NjA1MzZmZWU3Y2FkYzRhN2M1YmE3NDUzNzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2MjMzYjNmZmVhMzJhMjNkZjUzMDY1MzQzNDhmMmRlZTc3NmE1YTZmNzRmYjUzMzE3NWRkYzUzOWE4ZmU0NjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEwMjVkNDMyNWE5NDUyODA4YjRhOWU2MWJkMTM1NjI0OGEwNmVkZDE4NDRmNzEzYTY0ZTYwYjU1ODZhOGExMmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNDEzNDBjYzIzOWExNTljZTliNjAyMmU5ZjYzMjI4MzJlMmVhZDc2Y2FlOWU0NzU0ZDIxMGViOGZiNmQ1ZTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7a2aa6e41ceb462bb9db979cf8f6e01e",
+      "statement": "The focused inference test suite covers cache initialization, window truncation, ring chronological order, global full-prefix order, reset, generation shape and greedy behavior, one-token cache equivalence, and passkey prompt and extraction behavior.",
+      "evidence": [
+        {
+          "resource": "repo://tests/test_inference.py#L14-L94",
+          "version": "repo-lines-v1:sha256:8d6fc92a5d04fb65ab66ff69d47232b0d31a515e2aada8f5513ab32faade3cfd:eyJzZWxlY3RlZExpbmVDb3VudCI6ODEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJiNmI0OGM5MWQ5ZDIxOTNkNjQ0ZTQzM2E0MzJhNTAzNjU5Yjk5OThiZTc2MTczNDFmYmYzNzdlM2M0ZDc2N2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVmODJmYmU1YzA4NjI5MzVhOGYwYmFhOGMyNDYwMjQzNTc2MTgzZGE0MTg3Njc0OTI2NjUzNDRhMDY0NmQ3ODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQzMTQwMWEwZWFiYjllMmU3MDRlZTc2NTkwNTc0MGQ1MTAxNzVmYTFjMTAzYmVjZTM4M2E4ODkxZjhmMzIxYjYifQ"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L193-L307",
+          "version": "repo-lines-v1:sha256:79d1529c31ec4e6ff5e5f8df69c57ec98f5572b7b6dd732440695bdbf4b2529b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI2ZjZiYmRkMjc2OWFkMGYyZWQxN2Q1NmE5ODAwYTBjOThmNTk1N2NlM2U2ZmMxMWI1OTE0MzYwZjlkMmI0NWZmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIyM2Y1MTcwYmI5YmNhZjM0N2JlOGNlYmEwNDI4N2U0NmUyNDQzNzY1MmRhZThlOTI4MmY2YTU1NDk4ZGRkOGJlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI4Y2M0YTdkMWNjNzk2YWJhM2U0NjcyMzMyN2Y1MTdlOWY4MTE5ODJkMjUwZjA3MDI5ODZlNGI1NzY0YWQ5NTg5IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L95-L190",
+          "version": "repo-lines-v1:sha256:16c4a53356883fa09338bc2e99df1bf935d0dd93124dfa1d5edf9faba5be9f8d:eyJzZWxlY3RlZExpbmVDb3VudCI6OTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlOGZiMjliNTc2YTQzNWY3ZTk3NzExZTFhYzcxMjIyNjMxNWZiNmVkZmJkZTRkODlmODdhZTk4NWE3NTMxYzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAwNDc5MDkyYjM2OTc5ZGYxM2JjNWU2ZmNmMjAzMjcxMTQ0M2FlYjRkMDEyZDczYzgyZTM1ZDFlOTg2MGYyZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ3Y2Y1YWRhN2RkM2YzNDZiNjU4ODY3ZTMzNGRhM2M5NjMyYzQwOWVjZWZmN2FkM2MyNzhhNzliZGMyOTA5ZjUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.4.3",
+    "at": "2026-08-28T16:02:00.548Z"
+  }
+}

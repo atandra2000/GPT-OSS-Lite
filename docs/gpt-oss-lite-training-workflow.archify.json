@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "GPT-OSS-Lite Pretraining Workflow",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "optimizer_step", "label": "Optimizer step", "focus": ["load_config", "build_runtime", "next_batch", "forward", "finite_gate", "optimizer"], "note": "Follow one effective optimizer step, including BF16 forward, two-part loss, accumulation, clipping, and scheduling." },
+      { "id": "nan_recovery", "label": "Non-finite recovery", "focus": ["finite_gate", "reset_grads", "next_batch"], "note": "See how non-finite losses clear partial gradients and eventually restore the latest complete checkpoint." },
+      { "id": "durability", "label": "Durability and exit", "focus": ["optimizer", "checkpoint"], "note": "Isolate periodic logging, atomic checkpoint writes, final state, and the 61,000-step terminal condition." }
+    ]
+  },
+  "lanes": [
+    { "id": "orchestration", "label": "Orchestration + Data" },
+    { "id": "compute", "label": "GPU Compute" },
+    { "id": "recovery", "label": "Numerical Guard", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "initialize", "label": "Prepare", "fromCol": 0, "toCol": 1 },
+    { "id": "train_step", "label": "Forward + guard", "fromCol": 2, "toCol": 2, "variant": "emphasis" },
+    { "id": "commit", "label": "Commit step", "fromCol": 3, "toCol": 3, "variant": "dashed" }
+  ],
+  "mainPath": ["load_config", "build_runtime", "next_batch", "forward", "finite_gate", "optimizer", "checkpoint"],
+  "nodes": [
+    { "id": "load_config", "lane": "orchestration", "col": 0, "type": "database", "label": "Load + Validate YAML", "sublabel": "ModelConfig + training/data maps", "width": 150 },
+    { "id": "build_runtime", "lane": "orchestration", "col": 1, "type": "backend", "label": "Build Runtime", "sublabel": "model · AdamW · LR · logger", "tag": "seed + hardware knobs", "width": 150 },
+    { "id": "next_batch", "lane": "orchestration", "col": 2, "type": "messagebus", "label": "Load Micro-batch", "sublabel": "8 × 4096 shifted windows", "tag": "non-blocking H2D", "width": 150 },
+    { "id": "checkpoint", "lane": "orchestration", "col": 3, "type": "database", "label": "Atomic Checkpoint", "sublabel": "full training state", "tag": "every 2,000 + final", "width": 150 },
+    { "id": "forward", "lane": "compute", "col": 2, "type": "backend", "label": "BF16 Forward", "sublabel": "12 blocks → logits + mean aux", "tag": "autocast", "width": 150 },
+    { "id": "optimizer", "lane": "compute", "col": 3, "type": "backend", "label": "Backward + Commit", "sublabel": "chunked CE · clip 1.0 · AdamW", "tag": "accumulate 4 · LR step", "width": 150 },
+    { "id": "finite_gate", "lane": "recovery", "col": 2, "type": "security", "label": "Finite-loss Gate", "sublabel": "torch.isfinite(loss)", "tag": "guard always on", "width": 150 },
+    { "id": "reset_grads", "lane": "recovery", "col": 1, "type": "security", "label": "Discard / Roll Back", "sublabel": "zero grads · restore after 5", "tag": "count consecutive failures", "width": 150 }
+  ],
+  "edges": [
+    { "id": "config_to_runtime", "from": "load_config", "to": "build_runtime", "label": "validated settings", "variant": "emphasis", "role": "main" },
+    { "id": "runtime_to_batch", "from": "build_runtime", "to": "next_batch", "variant": "emphasis", "role": "main", "route": "straight" },
+    { "id": "batch_to_forward", "from": "next_batch", "to": "forward", "label": "input_ids", "variant": "emphasis", "role": "main" },
+    { "id": "forward_to_gate", "from": "forward", "to": "finite_gate", "label": "scaled loss", "variant": "security", "role": "main" },
+    { "id": "gate_to_optimizer", "from": "finite_gate", "to": "optimizer", "label": "finite · accumulate", "variant": "emphasis", "role": "main" },
+    { "id": "gate_to_reset", "from": "finite_gate", "to": "reset_grads", "label": "non-finite", "variant": "security", "role": "error" },
+    { "id": "reset_to_batch", "from": "reset_grads", "to": "next_batch", "label": "retry or resume restored step", "variant": "security", "role": "return" },
+    { "id": "optimizer_to_checkpoint", "from": "optimizer", "to": "checkpoint", "variant": "emphasis", "role": "main", "route": "straight" },
+    { "id": "optimizer_to_batch", "from": "optimizer", "to": "next_batch", "label": "next step until 61K", "variant": "dashed", "role": "return" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "One optimizer step", "items": ["4 micro-batches × 8 sequences × 4,096 tokens = 131,072 tokens", "The model returns logits and mean router auxiliary loss", "CE is computed in 8,192-token chunks to bound the vocabulary-sized working set"] },
+    { "dot": "violet", "title": "Optimizer + schedule", "items": ["AdamW: lr 4e-4 · β=(0.9, 0.95) · eps 1e-6 · decay 0.1", "Bias, norm, and embedding parameters use a no-decay group", "3,000-step linear warmup then cosine decay to 5% of peak LR"] },
+    { "dot": "rose", "title": "Recoverability", "items": ["Any non-finite loss discards accumulated gradients before they reach AdamW", "Five consecutive failures restore model, optimizer, scheduler, and step", "Atomic files prevent partial checkpoints from becoming resume candidates"] }
+  ]
+}

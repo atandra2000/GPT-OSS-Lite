@@ -56,3 +56,8 @@ docs_html/
 # Environment
 .env
 .env.local
+
+# Agent & tooling artifacts
+.codebase-memory/
+.remember/
+.superpowers/

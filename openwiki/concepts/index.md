@@ -1,0 +1,4 @@
+# Files
+
+- [Long-Context Attention, Sinks, and YaRN](long-context-attention.md) - Documents GPT-OSS-Lite’s GQA attention path, alternating sliding-window and full layers, learned sink logits, causal masking, and YaRN RoPE extension. Explains the prefill and decode contracts, mixed KV-cache lifecycle, numerical safeguards, and the limits of mask-based FLOP reduction.
+- [MoE Routing and Optional Triton Execution](moe-and-kernel-execution.md) - Explains GPT-OSS-Lite top-k MoE routing, normalized gate weights, shared and routed SwiGLU experts, auxiliary load balancing, stable grouped dispatch, and model-level loss aggregation. Documents the PyTorch reference path and the explicitly opt-in Triton W1/W3 plus SiLU fusion, including its PyTorch W2 boundary, reference backward, verification scope, and hard failures.

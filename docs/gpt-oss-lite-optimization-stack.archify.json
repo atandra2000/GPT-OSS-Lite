@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "GPT-OSS-Lite Optimization Stack",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/atandra2000/GPT-OSS-Lite.git",
+      "revision": "8e29cb0ffd034d521115489a3565516fd30d1571"
+    },
+    "views": [
+      { "id": "memory_budget", "label": "Memory budget", "focus": ["workload", "data_io", "model_efficiency", "activation_memory", "precision"], "note": "See how mmap I/O, sparse activation, hybrid KV, BF16, checkpointing, and chunked CE fit the workload." },
+      { "id": "throughput_path", "label": "Throughput path", "focus": ["kernel_path", "model_efficiency", "activation_memory", "precision", "target"], "note": "Trace SDPA, compile, TF32/cuBLASLt, fused AdamW, and optional Triton toward the single-A100 target." },
+      { "id": "trust_controls", "label": "Stability and trust", "focus": ["precision", "stability", "recovery", "reproducibility"], "note": "Isolate FP32 numerical islands, clipping, warmup, sink clamps, rollback, atomic writes, and seeded resume state." }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [40, 24],
+    "cols": 4,
+    "gapX": 72,
+    "gapY": 16,
+    "cellW": 150,
+    "cellH": 76
+  },
+  "components": [
+    { "id": "workload", "type": "external", "label": "8B-token Workload", "sublabel": "61K steps · 131,072 tokens/step", "row": 1, "col": 0 },
+    { "id": "data_io", "type": "database", "label": "Data + I/O", "sublabel": "mmap · workers · pinned H2D", "tag": "persistent workers", "row": 1, "col": 1, "sources": [{ "path": "training/pretrain.py", "line": 60, "end_line": 196, "label": "PretrainDataset" }] },
+    { "id": "model_efficiency", "type": "backend", "label": "Model Efficiency", "sublabel": "GQA · MoE · SWA/full · tying", "tag": "~247M active", "row": 1, "col": 2, "sources": [{ "path": "models/transformer.py", "line": 156, "end_line": 276, "label": "GPTOSS" }] },
+    { "id": "activation_memory", "type": "backend", "label": "Activation Memory", "sublabel": "checkpointing · chunked CE", "tag": "recompute for memory", "row": 1, "col": 3, "sources": [{ "path": "models/transformer.py", "line": 186, "end_line": 227, "label": "GPTOSS.forward" }, { "path": "training/pretrain.py", "line": 199, "end_line": 209, "label": "chunked_cross_entropy" }] },
+    { "id": "precision", "type": "backend", "label": "Precision + AdamW", "sublabel": "BF16 · TF32 · fused CUDA", "tag": "FP32 optimizer state", "row": 2, "col": 3, "sources": [{ "path": "training/pretrain.py", "line": 229, "end_line": 441, "label": "pretrain.main" }] },
+    { "id": "recovery", "type": "security", "label": "Recovery", "sublabel": "rollback · atomic save", "tag": "fail visibly", "row": 2, "col": 2, "sources": [{ "path": "utils/checkpoint.py", "line": 21, "end_line": 32, "label": "CheckpointManager.save" }] },
+    { "id": "target", "type": "external", "label": "Single-A100 Run", "sublabel": "16–20 h target [unverified]", "tag": "A100 80GB", "row": 2, "col": 1 },
+    { "id": "kernel_path", "type": "cloud", "label": "Kernel Selection", "sublabel": "SDPA · compile · Triton opt-in", "tag": "W1/W3+silu", "row": 0, "col": 2, "sources": [{ "path": "models/moe_triton.py", "line": 205, "end_line": 222, "label": "triton_moe_w1w3_silu" }] },
+    { "id": "long_context", "type": "database", "label": "KV-cache Economy", "sublabel": "4 KV · 6 ring / 6 global", "tag": "~2.00× at 128K", "row": 0, "col": 3, "sources": [{ "path": "inference/generate.py", "label": "MixedKVCache" }] },
+    { "id": "stability", "type": "security", "label": "Numerical Islands", "sublabel": "FP32 islands · clip 1.0", "tag": "sink clamp [-10,15]", "row": 0, "col": 1, "sources": [{ "path": "models/attention.py", "line": 21, "end_line": 52, "label": "manual_causal_attention" }, { "path": "models/moe.py", "line": 46, "end_line": 61, "label": "aux_load_balancing_loss" }] },
+    { "id": "reproducibility", "type": "database", "label": "Reproducibility", "sublabel": "seeds · stable sort · RNG state", "tag": "CUBLAS workspace config", "row": 0, "col": 0, "sources": [{ "path": "training/pretrain.py", "line": 32, "end_line": 40, "label": "seed_everything" }] }
+  ],
+  "connections": [
+    { "id": "workload_to_io", "from": "workload", "to": "data_io", "label": "stream windows", "variant": "emphasis" },
+    { "id": "io_to_model", "from": "data_io", "to": "model_efficiency", "label": "non-blocking batches", "variant": "emphasis" },
+    { "id": "model_to_memory", "from": "model_efficiency", "to": "activation_memory", "label": "activations", "variant": "emphasis" },
+    { "id": "memory_to_precision", "from": "activation_memory", "to": "precision", "label": "bounded working set", "variant": "emphasis", "labelAt": [766, 192] },
+    { "id": "precision_to_recovery", "from": "precision", "to": "recovery", "label": "optimizer state", "variant": "security" },
+    { "id": "recovery_to_target", "from": "recovery", "to": "target", "label": "resumable progress", "variant": "emphasis" },
+    { "id": "kernel_to_model", "from": "kernel_path", "to": "model_efficiency", "label": "compiled hot paths", "variant": "dashed", "labelAt": [544, 98] },
+    { "id": "model_to_kv", "from": "model_efficiency", "to": "long_context", "label": "alternating attention", "variant": "dashed", "route": "orthogonal-v", "labelAt": [655, 98] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Memory savings", "items": ["GQA halves KV-head storage versus 8-head MHA", "Six SWA ring buffers cap local-layer KV at 128 tokens", "Gradient checkpointing and chunked CE trade extra compute for lower peak activation memory"] },
+    { "dot": "violet", "title": "Throughput levers", "items": ["CUDA uses TF32, cuDNN benchmark search, cuBLASLt, and high matmul precision", "torch.compile(max-autotune) is enabled on CUDA; SDPA selects Flash Attention when its mask path permits", "Triton grouped MoE is explicit opt-in and must hard-fail instead of silently falling back"] },
+    { "dot": "rose", "title": "Stability before speed", "items": ["BF16 forward keeps FP32 optimizer state and selected FP32 softmax/score calculations", "Warmup, global-norm clipping, aux balancing, and the sink clamp protect distinct failure modes", "The full 8B-token run and 16–20 hour wall time remain planned hardware validation, not completed evidence"] }
+  ]
+}

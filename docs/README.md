@@ -4,6 +4,10 @@
 
 The documentation is organized into four layers: **concept chapters** (`docs/concepts/`) that consolidate theory + implementation per topic, a **reference** (`docs/references/`) for config tables and API signatures, **guides** (`docs/guides/`) for onboarding and operations, and two top-level chapters for training and inference. Every code symbol is cited as a machine-verified `file.py:Symbol` anchor (see `tests/test_doc_refs.py`).
 
+## Visual systems atlas
+
+Explore the [Interactive Visual Systems Guide](gpt_oss_visual_guide.html): four verified Archify showcase maps ([Model Architecture](gpt-oss-lite-model-architecture.html), [Data Pipeline](gpt-oss-lite-data-pipeline.html), [Training Workflow](gpt-oss-lite-training-workflow.html), [Optimization Stack](gpt-oss-lite-optimization-stack.html)), interactive KV-cache memory calculator, MoE router inspector, and [verification receipts](RECEIPTS.md).
+
 ---
 
 ## Headline metrics
