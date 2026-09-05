@@ -1,0 +1,306 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:3d2fffd40d32916231e772b0ffe980d9dfe920b002aada6eb11cbde24df397c3",
+  "claims": [
+    {
+      "id": "claim_a4f4f61f5df046d8856064bc86e5699a",
+      "statement": "GPT-OSS-Lite supports Python 3.10+ and PyTorch 2.1+; `requirements.txt` installs PyTorch, safetensors, PyYAML, tqdm, and WandB, while CPU-only environments can run architecture tests and the analytical KV benchmark but not the CUDA-dependent production and GPU smoke paths.",
+      "evidence": [
+        {
+          "resource": "repo://docs/guides/getting-started.md#L51-L63",
+          "version": "repo-lines-v1:sha256:f0247581b519ca2849a8261759e1972c8cc36ae822ebc30d7dabf3ceea14fe08:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyOGQ1ZTFiMGRjOTUyZmJiZWVjZWFkMzFmZWJkNDZhOTZjYmRlYmFjZjU3NGNlZTYzYTRjZWQzMTRlYjcwMzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0NDU1NTdmMjNiYjAzMGQxN2JjYzg4ZDMxMzJkODliMGJhOGZhN2ViMjdkZTM5YTUxY2U4NjI2ZjllZDJjZGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEifQ"
+        },
+        {
+          "resource": "repo://docs/guides/getting-started.md#L67-L81",
+          "version": "repo-lines-v1:sha256:1fd2a3bab617db77f60d8704765a8729637d95d8f6a7b4d05067bebefbbffb37:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJkZjg1ZTFkYjZkMTAwYTE0MDFkZTdmY2E1ZDM0NDk0M2Q2OGE4MjY4ZGY0OTU3OGVhYmU1Y2YyN2E5YjkwMDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmNGFkOGVhYjNhMmU4ZmRiYjI1NjZjYjdjM2VkYTVlNjg0NThiMzVjODNmMmExM2UzY2I1ZmU3OGRiNTQ4YTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEifQ"
+        },
+        {
+          "resource": "repo://requirements.txt#L1-L5",
+          "version": "repo-lines-v1:sha256:4a4be4a7478b3b3c3fd7e67c353c71e12f3ebba8e51adc4ddcae158240e577d4:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWIwYjY5YWE4MjJjMDMyYjU3NmNjMjM1OTk4YTVhYzE0ZTQyNmI0ZTAzMWRiNjk3MmQ2NDk3NzIwNWYxNDI3MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjMyNWI0YmJiM2U1YmU0M2MwNzZiNDUwYmYxMDc1ZDM1Yzc4OTBjNzAyMjhlOTg1YTE0ZDUxODYwNDYyY2FiMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_8c98eecf12ff417daaef66b89cda9c76",
+      "statement": "The canonical production configuration is a roughly 502M-total, 247M-active model with 12 layers, 8 query heads and 4 KV heads, top-2 routing over 8 routed experts plus one shared expert, BF16, 4096-token training sequences, a 131072-token evaluation target, and a 2000-step checkpoint interval.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L1-L15",
+          "version": "repo-lines-v1:sha256:896be5c09b1374cc1e6f1da638383f15b597017cf7895b21cb54d448aa365d1d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0NTQzMGRmOTU3MTNjZGNiOWIwYTkyMGU2ZWQ4YjdjM2M5NmUzN2RhY2MwN2VhZjIzYzBkNzA5Y2UwMWM4ODUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFhM2RlN2RkYTMzNTI2ZTAzNjhhMGE4ODY3MjM1MGQ5MDI3NzJhYWY1NDZhZmNjNGQ0Zjk4NTdhOGRhMTNiNWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3M2I3MDZhNDdlOTgzZjBhMTY1NjVkMTEyYTllOTJlMWZjY2I4ZTliN2QzM2E4N2RjNWE3NjgyNTc4MTUwZTkifQ"
+        },
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L17-L43",
+          "version": "repo-lines-v1:sha256:7366d1428a8c68a7d2a9fda8350f1f403457c130f80a3fdcf133f5379f169f6b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhOGU2YWU0MTRhNDM3ZDM5NjBiNjA3MTM5M2JmMjNmYjg3NDkxMGY3MTBkMjljOGExYzYxNmI0MDczZTNkYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUwODQxOTk1ZjJiMzRjOWIzYzNlNWFjZTg5YzljMGVmNjQ3NTk1OTY4ZmU5Yzc5NDhmZjQ1NDkxNWZjNzgwNzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEyZGE5MmNjMjMxYWE4ZGQ0ZDI1ZWYwZjdjNTY3YTNkM2NjZTQ4NjlhNzAwNzUxYWJiMDhkODU0ZTkyNzc1ZjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBjYWI5NGMzZTM3NmYzZGU1MzYzZTFiZGI0ODE2YTNhNWNmYjgyNzFlOGM3Njg4ZTc0Njc4NDllM2ZjNjU3NGEifQ"
+        },
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L45-L75",
+          "version": "repo-lines-v1:sha256:4ec9233e905079d768aef8473144c5ec5a22b4a811fbaa9d5be46bfd961631af:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFhZTM2NzU2ZTVjYTQ1Zjc4ZjI5NDRiODU4ZGRmODFkMGFkMjBlMjgyNWM0ZTBjMDZkZGUzZWUzMWU2MWM1NjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQyYjBlNjlkN2E5Mjc4ODI2ODJlNWM5OTQwYmUwMzgwMTZiY2M4YTgyZTQxNTg3ZDE2YmE4OWE2NDhkNDRkZDMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJmM2RiY2U1YzExMDZmMTY5MGQzOGUxOGRiNGI3YmFkNGU5M2EyZGQxYjViYjRkMTAxZDNiNTQyZmFiNWM4YTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_01eb7405dfdf4374968b5a0e1e8baeef",
+      "statement": "The GPU smoke configuration preserves the model's structural path at tiny scale: four layers, `d_model=128`, sequence length 64, micro-batch 2, five steps, compilation disabled, stacked MoE dispatch, checkpoint saving at step 5, and the NaN guard enabled.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_gpu_smoke.yaml#L1-L3",
+          "version": "repo-lines-v1:sha256:71f1743206ea85dff72a088cf15687a707287a727ab11a9f381dea9eedc876d3:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDhlNmM4OGU1NzFjY2YxMzExZmU4N2I1YTk5NTUzN2IzYWNjMDQ1NDVhZTVmY2U5MjgwODIxMzY1MzNlYzRjZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmFjM2QxYWFhMTQzMmQzNDg4Y2Q1MjkyMDU1M2FkMWJiZTQxMzkxZThmYjUwOWJlMDJmOTFiZWU0NzFjMmYyMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjhjMWQ3OWI3ZmI3ZTFlZDk2MWYzZDg4NTAzOGEzMDI0ZGM4ZTk4NzQ4N2FhOTgyMzk5NmFkNzcyMTJjNWJhNiJ9"
+        },
+        {
+          "resource": "repo://configs/pretrain_gpu_smoke.yaml#L34-L56",
+          "version": "repo-lines-v1:sha256:a040bcde1bb420fe8daf9b8a2b7d66d5928de9679f00ef628a0b88fec0922f20:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFhZTM2NzU2ZTVjYTQ1Zjc4ZjI5NDRiODU4ZGRmODFkMGFkMjBlMjgyNWM0ZTBjMDZkZGUzZWUzMWU2MWM1NjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxNTVlYjY4M2Y4ZDFhMmRlMTU3NmE3MmE5NDZiNmQ5NzIxMzNiMmQ5MGM2OGZiMzQ0MDA4OTgzY2IwYjBhZGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIzYjQxNDBmOTVhMTdiOWNiOWUxN2EwZTk4OTljZDQ4OThjNTg1ZmMwNWQyNjZhMDIzMGVhYTRmM2UxNDU5NTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://configs/pretrain_gpu_smoke.yaml#L5-L32",
+          "version": "repo-lines-v1:sha256:21a356228caa31e6207e8f46e8c2033005bb2aaa4659929788ec6f8f6346fceb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhOGU2YWU0MTRhNDM3ZDM5NjBiNjA3MTM5M2JmMjNmYjg3NDkxMGY3MTBkMjljOGExYzYxNmI0MDczZTNkYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk0ZmEyMGEzMjllNzdjYWI0YjFlYmQwZGQ0ZmU3NmZkOTA4NmRhYWEzOGIzNjQyYWM4ODI3NjUzMGJkNDU4N2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAyNzgzYzNkZWRlZGU3MzJhZTdiMjM2ZWRmYjU4ZDYxY2M4YjA2NDM3NDhjZjFkMjkwNDZkZDUyNTEzYWIxMTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEzY2MxNzllZDk5NTI4NzRhZGY4OGNiYTA1MTM2NmFlZDk4YTkzMjY1ZDgwMDI3YTk4YzY3ODUwYmZjOGMzMTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c5d1cc4a5e05438a8e9d075e932e17dd",
+      "statement": "The repository's CPU-focused tests exercise model forward/backward and finite outputs, configuration invariants, attention masking and sink causality, MoE routing and auxiliary loss, generation and cache lifecycle, training dataset windows, checkpoint round trips, and NaN detection; GPU/Triton and sibling-data boundaries may be skipped when their dependencies are unavailable.",
+      "evidence": [
+        {
+          "resource": "repo://tests/conftest.py#L12-L15",
+          "version": "repo-lines-v1:sha256:fa631e75ba85950a60146dbbc5bc1438944a06a6c61073f1b6302da8699d7b78:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTMwMzY1ZDE0YzdkYWIzZDY1YjIwZWViM2FmZTdlNWQ0ZTMwZThmNzk4ZTc5YWQwNmU1OTQyMjg3NzRhNzQ4NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWRiY2NhYjJjYmE1YjNiY2I4Yjc0MjVkMGFjZDI2ZjU3ZGYyYjEyYmMwNjFjYzI4MTY2NTU1ZjZlNmFhZjVmZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjg2OTYyMTk5ZjY3YjRlOTVmODNmZGFkZDI2ZmVkYzEzYmFmMmFmMDI2OWZkMGZlZmQ1MzYyMTM4MjY1ZGI5YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzIzNzVmN2NkNWQxYzNhYjVjMWUyMTU3ZWI2MWE2NGEwNGU5NmJkMDVhODU1OGRiZjQxZGZlZTExMThiNzEwNyJ9"
+        },
+        {
+          "resource": "repo://tests/conftest.py#L24-L41",
+          "version": "repo-lines-v1:sha256:be0c7c3eb304d88e922ba797f87f1b8ebcb95d53291d0737b70f16114a8c60b4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUzMDM2NWQxNGM3ZGFiM2Q2NWIyMGVlYjNhZmU3ZTVkNGUzMGU4Zjc5OGU3OWFkMDZlNTk0MjI4Nzc0YTc0ODYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY1YTY1MzIyM2U5ZTg5ZTY5MDI5OTIxNzkxMTRhYmVmZGNhZGJkNGJjODIyOTg0YjA2OGUyNDU4NjI3YWE5YmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcyMzc1ZjdjZDVkMWMzYWI1YzFlMjE1N2ViNjFhNjRhMDRlOTZiZDA1YTg1NThkYmY0MWRmZWUxMTE4YjcxMDcifQ"
+        },
+        {
+          "resource": "repo://tests/test_attention.py#L74-L130",
+          "version": "repo-lines-v1:sha256:72a4937ad05539775bf1a5dbe10ee17e8aa181b8e1f90c0c5fff92bc61edb7ed:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiZDhlM2FhYzg3ZWNkNWQwMzA4YmRiMDViNjRjODFjYTc5YWMxZGYxMTQzM2JhMmRjMGYxYzEwMGE0YTZhYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhM2E4OWQ0M2JiMDU5N2Y0ZDU3NTY5YjMwNmU1MTc1N2EyMWY4Yjk0NmJjNzM4OGE2ZjVkN2IzYzBkOGE1MjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU3ZmFjYWE4MDk1MjM4N2U4NzQzNWQ3NDU1MTc1MWNiMTk1Y2Y0Yzk0MWQ1OGU3YjlmZDJiMWNkZGE0ODE1NWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI5YmMxZDYwOGFjY2M3ZDE5NDZhNjJiYzljYzg2YmMzM2E4ZjQxYjlkOTc3Y2ExODgyNzFmMTEwOWI1NmIxZDgifQ"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L14-L190",
+          "version": "repo-lines-v1:sha256:6d6f7a409591b686261917927af5c1565d2e95be7e012bf987a83e419d78e63e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTc3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiYjZiNDhjOTFkOWQyMTkzZDY0NGU0MzNhNDMyYTUwMzY1OWI5OTk4YmU3NjE3MzQxZmJmMzc3ZTNjNGQ3NjdjIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIzMGMxZjE4OGYxNDJlZDdhODI0NjgwYjIwNzE3MmM1NTE5YmM2MTRhNDhmZGE3Y2YxNjdlZGI4ZGRmNzk5NTZjIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI1ZjgyZmJlNWMwODYyOTM1YThmMGJhYThjMjQ2MDI0MzU3NjE4M2RhNDE4NzY3NDkyNjY1MzQ0YTA2NDZkNzg4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJkN2NmNWFkYTdkZDNmMzQ2YjY1ODg2N2UzMzRkYTNjOTYzMmM0MDllY2VmZjdhZDNjMjc4YTc5YmRjMjkwOWY1In0"
+        },
+        {
+          "resource": "repo://tests/test_smoke.py#L8-L38",
+          "version": "repo-lines-v1:sha256:cf1aa7cf3ed2125bd7da961e89f97fb078d47a44380cb2d666c6ca2636be4efc:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyMGJkZDk4YzY3OWUwYjE1YjFhMzQxOGY0MGNmOGE5NDlhYzY5MWJmYjJkY2VlYTQzOTFlZGU1NGM3OTIzMTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3NTA1ZDdkMzk3Y2M0Y2VjOTI1NTVjNTIwNGU1NmI4ZWY4ZGFkNzQxOGQzNzQwNTg4YTQ4NGVmNjIzZWY4ZDAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVmODJmYmU1YzA4NjI5MzVhOGYwYmFhOGMyNDYwMjQzNTc2MTgzZGE0MTg3Njc0OTI2NjUzNDRhMDY0NmQ3ODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMyZjRmMmMyNjNiYjMzYmZiOWFjOGZjM2YzZDk5NDdlOGY1OTQ2NmEzYjNmMzhmMDc3OGVlNjYwMmJkZDliNWQifQ"
+        },
+        {
+          "resource": "repo://tests/test_training.py#L44-L190",
+          "version": "repo-lines-v1:sha256:5491abfeb448aa83720d3436c63846e226de92cf83cf8eafc506f55dd7808f94:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQ3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJjYWQ0N2ZlNWM3ZDEzNTgyMGVkNGU3ZDQ3MmE5ZTk1MjUyM2E0N2M5Y2U0MmQ1YmIxZjczNTIzMzExMjIxZjExIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJiOTMwMzdmMTQ5ZmQ4YjZiMTNjYzJiNDE0ZWIyYmJlMmExN2E4ZGZmNGZjNjQxMzY4ZDc2Mzk4ZTUxZTE1OTI5IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI4YTY4NTY5ZWI5NzM4MWJkNTE3N2Q5ODgyNTM5ZTRlMzY3NTE0NGFlNTQ3NDdlNmY1OTA4YjM4MzU1OTVkYTM4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_9085a242a7054d05bb6cc0cb0b85f9af",
+      "statement": "`scripts/kv_cache_benchmark.py` is a deterministic analytical check that compares an all-full 12-layer GQA cache with six windowed layers capped at 128 tokens and six global layers, using four KV heads, head dimension 96, and BF16; it succeeds only when the 131072-token reduction reaches the configured 1.8x threshold.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/kv_cache_benchmark.py#L18-L29",
+          "version": "repo-lines-v1:sha256:fd55cae48b9271c36a3163ab976d2146fb46e43a774374589572e8bb0ade9513:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJkMDIxYTgyYTdhZGNmNTBmNWI5OTFhZjMzYWVmMGU5NGRkNjA1NWVlZTM2NGY3YWU1NzBmNzYxZTc1Yjg0YjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQwZTJlODI3Y2RkOGRhNjhiY2Q1MjQ2ZTY4ZDY4MGJhYTVlNTQxNWQzMTRlNzAzNDc2ZWFmZTEyNDc3YWU4OGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwYzE3NjIxM2UxYWE0ZjFlMzA5YTY2NDgzMzBlN2JjMzRkOWFkYTA4NDFjYjg5NTA1NjQ3NGVjMWNhNjkxY2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4ZGVlNmYyY2FjOGQzOWVlOWIwMDUyNDEzMjFiMmUyZGZiNmVjM2Y4MmQ4MTQ5NmM2NDgzOWMyZmY1ZmJmNTYifQ"
+        },
+        {
+          "resource": "repo://scripts/kv_cache_benchmark.py#L36-L58",
+          "version": "repo-lines-v1:sha256:4e9a2c954a1c6014e93fddc6650874641ebd767178d095b541ffd0d94b097ade:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiMzk3OTMzYTI0YTgwMWVlOTIzMzI3YmQ2OWEwMTA0OWMwNzc5MTUwMjFjZjJlYzM5ZGRhNGY4MWFhODM3ZTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3NWVmYTBmMDQxYTc3MmMxMThiZWM0NDllNWUzNzExMTc5NTMwMGNkZmZhNTA3OTU1YzE4YTNlMjk4ZDU1YjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRkZDg2YjlhNWIxZTY3NjI2ZTg2ZWEzNGVlYjZiOThlYTMzNjU0NzBlZmVlOTcwNjVkNjVlM2FhYTcwMGM1OWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNDEzNDBjYzIzOWExNTljZTliNjAyMmU5ZjYzMjI4MzJlMmVhZDc2Y2FlOWU0NzU0ZDIxMGViOGZiNmQ1ZTgifQ"
+        },
+        {
+          "resource": "repo://scripts/kv_cache_benchmark.py#L6-L15",
+          "version": "repo-lines-v1:sha256:aa8a5613c993ac712fc4d396afd2ce9fb8dd7a3a69d80d4bd21883788c084c04:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3Y2JkMTdmNDBkNjE5NTUzMmFlODRkMGU0NjZmNWU2MGRkNDdlMTAwNTMwZmM3Y2I4ZDM1YzAyY2JiZmI2ZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3MTNkOWU0MzQwNTU4NzlkN2Y5NTJiY2YwZjc0MzZjNDhmOTljMmM5ZTRlYjBlNmRlNzM1MDU1MTg3OWJjZTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1YjZlODcwNmI0MzA0N2YyYTZkYjY3ZjEzMjYzODU5NTYwNGU2N2YzNjk2Njg3NmNlMDE1OGYwMDUzZTZiZDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFmODc2MzQ5MzNkNjU5ODIzYTA3MjVhNDkxN2Y0OTRmYTU2NGRlMmYxYmE4OWRmZDgyNzE5NzRjMzg2OTNlMDIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9efe9006f77e455896dd26ab8df56edb",
+      "statement": "`scripts/e2e_gpu_smoke.py` requires CUDA and runs an eight-stage tiny-model integration path covering BF16 forward/backward gradient coverage, stacked versus Triton grouped MoE equivalence, a five-step optimizer loop, checkpoint round-trip, cached greedy generation, and YaRN extrapolation beyond the training length.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/e2e_gpu_smoke.py#L1-L16",
+          "version": "repo-lines-v1:sha256:ebca19798766c5668ffc8be08236f2481f084aea297901fb54e6865a51ede2c5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwYmM2ZGMxYzQwNmQzNDU3ZGU5ZjVjYWU5OGRiYzRiN2IxMjg3YjJlNmFhMjVmZjE0ZDhkYjI2M2Y1ODYyZjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkwMTZiZmU4NDFmMmQ5NmU0ZDdmYmI2MzJmM2I3OTY4MjViODQ1MWFhMzk4NmUzYzNjOTU3Y2RmNzIzZDdmN2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlY2U3ZjEzYjdiNmEzNTE2ZmNkNGI1NDMyZDg1OGU1ZjVhMjUyMDRlNjY3OGQ5MzEwZjA1MzNlOTU0NzlmNDUifQ"
+        },
+        {
+          "resource": "repo://scripts/e2e_gpu_smoke.py#L108-L160",
+          "version": "repo-lines-v1:sha256:2d55a2abc6b8d1bb5cf106de634ce75db64aeaad2074d85d653baa8fecb71b48:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhYmJjZTFiOWFkODA3NDVmNjQzMjdlNzRmYWIxZjdhZjBiZjcyNWI2MjVmYjgxOWZjMjI3ZTc2YTNkYzU1M2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlNjIyYWQ2NjM0ZmY0MjZhNjA3YzU0MzYwMjIwYTAwMzQ0MzIwZWRmMWI1YTUwNjI0YzFhNWRhYWJiZTNhODAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0N2E1YzIyMGU4NWY3NjNlZmE2NzJkZGI4NzJhZjg0Nzg0NGZhNzZjZDRiNjdjMjQ5NDUzMDM5NDExMzY5NGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIxOGJjZmQ2ODlkYTk4Mzc2MDFmOTA0ZmRhZDkxNjFlYTlkZGY5YTQyZGUxYjBiNzE5NjQ3NGU4MjU1YmY2ZDcifQ"
+        },
+        {
+          "resource": "repo://scripts/e2e_gpu_smoke.py#L163-L236",
+          "version": "repo-lines-v1:sha256:924ef3e7df4a02d7b463aeb068e0d99c4286d1799b7c6dbbef2192858d873a09:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3YWE3NjNhMjFlMjMwZGI1OGU3ZmJkYzMzMWQyYThlMmM2OGEyZWQ5OGRmMWYxNjk2YTk4YTFmYThlMDc0YWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjExN2VlZWVmYzY4YTI2YmI4YzRjNzQ0ZWI0NTRjMjg1MjRkZjMwNzg1MTMzMjA0NDYyZDkyYjJkNTFkYThjZDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhMmYxYTk4MzBiMGI3OTgwZDIwODBmODQzZTA2MDcxZDkyZTgyMWQ2NDc5OWY5YTRmMGNjNTliMWEyNzNkYzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVjZDM0MTU4Y2U0NGE2OTBhMjkzOGU4NGFjMDQ1NzE2YTk2OTEwNWM4ZmQwYTljYjk5ZGMyYzg4ZWJkYzgyNGQifQ"
+        },
+        {
+          "resource": "repo://scripts/e2e_gpu_smoke.py#L239-L305",
+          "version": "repo-lines-v1:sha256:d9641e4acf29427b6bb548333c7cf473f1e1ca756fa1620b339682b9db69a28b:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyZWYzNzVlZjQ1M2U4NWNiNDNhMTcyYTc0M2M5MDUxMWZkMjA5Yjk2M2IxNzYzZTEwMTA0MTExMDQ0OTdkMTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1MmVlOGRkYjdhMWQ2YTQ0ZTU2NDE1ZTAyMzAwNTFhYTY1YmI1NWYzYmIxNTU5NjFlYTU0M2Q5NTIyNWRiZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ2ZGYwMzI2MTQ4MzhkYzU1NDFjZDBiY2NlOWJiZGJiYmY0YjIwZDU5YzgxNTE3ZDQ4M2ViN2YyZDU2YzVjZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNDEzNDBjYzIzOWExNTljZTliNjAyMmU5ZjYzMjI4MzJlMmVhZDc2Y2FlOWU0NzU0ZDIxMGViOGZiNmQ1ZTgifQ"
+        },
+        {
+          "resource": "repo://scripts/e2e_gpu_smoke.py#L54-L105",
+          "version": "repo-lines-v1:sha256:b9bcaf80d3068e377e12d1eeeb5895c9a8d60aac09e9cb309462d6a4aa11031c:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljODA4ZjI4M2RhOGM4OTEzZDhmMWJjZjMyYjdiODdkMWY1YjE2NGNiZjUxOTRjMDM4NDVhOWMzNTA4NzdmYjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJjMzU5ZTdjN2ZmMzVmMGI5NjYxMWQ3Y2M5MTI4NjRjOWMzZTZhNmJjYjRlMzg1MWRiNWUwM2NhNzkxZDMxNGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFjYmM3MGFiZGRjMjQ0MTk2MTlkMzIwYTI5MjNjOThlM2ZiZTgwNmUzMTRkNGM0MTNjN2VkMWMyZmVkM2M2NmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkwMjA3OTkzMjk3ZmUxZGM3Y2E0YWFhOTU1N2I0YjM5OWQzMjg3NGY3ZDk2ZjgxZTQ5Njc5YWZiYWIyNjNiMzMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bd51d794f69f480aa7ed23e2fcc00347",
+      "statement": "`data/prepare_data.py` delegates corpus preparation to the sibling `shared_data` pipeline and reports the universal token count, tokenizer metadata, and shard size before delegation; `PretrainDataset` accepts a single file or sharded directory, reads contiguous next-token windows, and raises an explicit preparation hint when data is missing.",
+      "evidence": [
+        {
+          "resource": "repo://data/prepare_data.py#L18-L30",
+          "version": "repo-lines-v1:sha256:e7a7f9153957e8b0f8d6c9ed6e44c35dcdab537d2f0a1c97565b88893fe29c3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiMzk3OTMzYTI0YTgwMWVlOTIzMzI3YmQ2OWEwMTA0OWMwNzc5MTUwMjFjZjJlYzM5ZGRhNGY4MWFhODM3ZTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlMWMyZTdjYTQyZDUyMmNmMDAwYWYwOTlmZGUwZTc5Zjk0MzA0NDEyYmJiYzVmODNkZTA2YzFmZGFmNTRlMTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc1ODM4ODJiNmMxOTJjM2ZhNGQ5MTBlZjljODg3ZGIyYTg1MWM0ZjMyYTI2ZjkzYWJmNWIwM2JjMmMyODAzYTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNDEzNDBjYzIzOWExNTljZTliNjAyMmU5ZjYzMjI4MzJlMmVhZDc2Y2FlOWU0NzU0ZDIxMGViOGZiNmQ1ZTgifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L102-L125",
+          "version": "repo-lines-v1:sha256:817575f37209ab89c113c56f7ec8ec46cd4850ebfae002299df7a9751e414458:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwZTdhYTI1YWEwYjVhN2FkZTVmMjA3YjRiMTQzMWU0NWUzNjI0MGRmZDAwM2Q4ZTk3ZTJhZTIwMDRmZTkxYTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIwZDdhOGFjMmY3Nzg5M2JlOTIyNGNhZjc3ODBkZWY0NmI1NWVhOThjMmZkNGQ5OTVlY2EzMWJjODQxMzkwZDkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2NzMxNTkyOTU2MTViYWMwMjFmOWNkM2VkNjcxY2NlZWRlY2JhYTEzYTMzM2ZjMjI2NDI3ZDJkYjhmNjJhZDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBmMGM3YjViZGM4NTg3MDQzMTJhMDE4MjdkOTM0NGVhMTRlOThjNzAyOTdhZDA3NjQ1MTczMjk0NWNhZWZiZjkifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L193-L196",
+          "version": "repo-lines-v1:sha256:cb3d1ada7caf0b1f1cd5f0c8f81bab668d0f0f1068f68df3dab66d9882e45eed:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWNjNWVlZjFjM2ZjZGNmYjA4YjBmMDJlZTY4OTBkYTUxNTA1MWU0MzY1MDE5YzIyZmU3ZDVjNTQyOWFlNGM3ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOGU3YWFkNWZiMTU5NDA2NTAxMjY0NTJkNWQ1MDQ3YzM0Njg0Mzg0NjkyY2Q0OTZlMjNkZTQ4ODkyMGZhYTJiNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODQ5M2NjODdlZjM0OGQ0ZWNiNGJjNjdlOTc5MjI3Mjk0ZDE1Njk3MDJiNWUyNjZjOGYyNzNkMGU0MTcxODYwZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjZlZjIyZGM0ODU3MjgxNDdhNzhlZjJlN2I5NTMxOGYxNjNkMTJiZGI4NjlkOWM4M2MxZDZkNDBmYzU5NzBmZCJ9"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L305-L322",
+          "version": "repo-lines-v1:sha256:31debcede2df9857cde9d45edf76b16a38301e48e09989dcb401edf6ddb07949:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkYTNjZGFlYTczM2ExYzE3ZTQ2NDZmNDdjOWJhODI2ZTE5MjkzY2RhNGViOTdlMWIyMDVlZTcxYjI2NTJkOWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkYjQxMGU3MzZlYmJmNDE5MWRiN2M4MjU2MjgwZDkyNDEwNWY3MmJhZTRjMjI1NmE1OTIzMDYzZDVkNzU0YWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjViMWM5MTQyMmE2OTkwN2NkMGJhZWJlODgwMWRkZjM1Y2QyOWY2OGYxNmM4YmU3MjViOTFiMjBkNmY5MmNjYTUifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L55-L68",
+          "version": "repo-lines-v1:sha256:fc56ed88bc67bed396183485130447920749c0d63890638b298c9c11809627f6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzZWYxMjQ2OTMyMGM5OTI5ZWY4NjEzNTRkZjBmZWM1MTI4MjRkNDI3MzBmOWUwNmRhZjUxOThhZGRkODc5NGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIwOTMyMWJjZTdiMjk1NTQwNTY2ZjA4OGY3MDc1MzJiZjJiNjliYjFmZWRmNjc0YWMzOGUzNmI2NWYxYjYzNGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdlNzE4YjNlYzk4ZmUxYjJlNTRkY2U3NTYxNmRmMjlhMmRkMTA3NzRlMWIwZTJmNGRlOWU3M2ExYjQ1ZmEwY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEzOTE2YThlMmIxODIyZDZmNWU3YmUxOWNiYjljM2E3OGE4ZWFlMWM2NmYzMGFiOWZiZjI1ZDYyOTA3MzUxZGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_035a86dba6b44e0d9d871360d0b0a8c5",
+      "statement": "`training/pretrain.py` owns the single-device training lifecycle: it loads YAML into `ModelConfig`, constructs and places `GPTOSS`, applies CUDA performance settings and optional compilation, performs an advisory memory check, creates AdamW and a warmup/cosine scheduler, loads packed-token batches, and performs mixed-precision forward, chunked cross-entropy plus auxiliary loss, backward, accumulation-boundary clipping and optimizer/scheduler steps, logging, interval saves, and final persistence.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L229-L322",
+          "version": "repo-lines-v1:sha256:0d3f8a42806f90211e17e69a69cdf1f8c5eff21e9cadb752684030e2a68827e5:eyJzZWxlY3RlZExpbmVDb3VudCI6OTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2MzUxNGNmNzY1YmRlMmU5NzZkZjFlMzEzYjAzMDQwYzg3MWEyYTBhNWY5NmMwNzY1NjI4M2ZkNWU5YTg0ZDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZhMjhmMzA0MGRmYmViNjhjYzk0NjA4NDdiODVkYjU5ZDNlMGFkNzA5Nzk5NzFhNzM0YzQ5NWEyMTBiOWViN2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjViMWM5MTQyMmE2OTkwN2NkMGJhZWJlODgwMWRkZjM1Y2QyOWY2OGYxNmM4YmU3MjViOTFiMjBkNmY5MmNjYTUifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L350-L431",
+          "version": "repo-lines-v1:sha256:93f0578bd0ace7dabb0cbfee3b1085a43f2dfe207e58d77025272ea1f6de6de6:eyJzZWxlY3RlZExpbmVDb3VudCI6ODIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4MDRjZTRhMTZiNzJiZTI4ODZjODNkMjhlZDY4ZDA2YWM5N2U4NzI1NzY2ZjQ1MzZjODkwYTM5NDljOWRmZTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI4ZDY3ZTJjNWM3M2NiMDQ3NGQyNDA0OWRlMGU4MDE2NDAwYzQ0NjZjNTUzMTIxNmZlN2Q2ZjVlOTdmNTNhNzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJlYjIyNmQyZDFjMTQ5ODEwNDIyNWRlM2I4ZDFiMTI5Yzc5NmVmZmRiNmUwZTdmZmVmZTExOTQwYjBlODk1NjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdkYzY3MzY1ZGNhZmE4ZDIzYmNkMzQyZTY5MGIyMGJmMGMyZjk5NDg2MTFiZTIyODU0YjE1ZDdmYTE0ZTE0N2YifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ec02a4dc25be4d128d52064c69e5af49",
+      "statement": "The training NaN guard checks finiteness before backward; with the guard enabled it clears gradients and retries non-finite losses, rolls back to the latest complete checkpoint after the configured consecutive-failure limit, and raises when no rollback checkpoint exists.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L91-L101",
+          "version": "repo-lines-v1:sha256:214f69be2ecde9e1c8d235c08e647b6b9e72a7c55fa4731ba8c68a7f26bab201:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxODYzODYxYmZlNGI2OWIwNWFkOTdlNjJjNmY2ZjYzNTA0OThhYTg3OTQxYThhYjE3ZGE4YTRhZWVhMzIwODQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUxMDNkNTkwYTQ3ZGFjYzIzODlkZWUxMmE3MTVlY2E4OGRlZTQzODgyNzFkYjM5NGEyOWNjZDRiNjU1YjkzZjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjODNiMmU5OGE4NTYzMzU4MjI4NmVlNWZlYzZiODMwZjQ0MWIxOGQ1N2E1NWNhNjAwNGE3YTlhNmMzYTRmMzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg4M2Q0ODA5NDQ5N2QxZTkzZDI5NjQ5ZjQyODNjZThmODMwNWViYjM3Yjc0NjE0MTJkYWJhZjAwYmE4NTIwOTAifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L331-L333",
+          "version": "repo-lines-v1:sha256:ed464b498468b17ebd4055de77ace99ab1ce3329f77de3ed801ca05a2f82ba65:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjY5ZjJjMWUzNThhMDI4MjZlNTJjZjdjODRjMzQ2Nzc3NTJmZGJlNTIwMThkMTNjMzM3NDUyYmE5YjhmZThmMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMGY4NWYyODNmNWU2M2U5NmJmNTU4NWNlYTc2YmJiNzUzOTJlODE5YzIyYmRiYzI1MGMxYjYxYTdkMTBkYzNmYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODBjMDg1MGViNzQwYTlmYThmMjBlYTI2YjAwNDM4YTBiNDBjOTVmNzI0ZTA1ZGI5YzIxZDFlYmFmZmQzN2FmZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTJiZTE2ZWY5ZmRkMjRiMTdiYWMyNDMyNWFjNzVjZGQzODE5NTNlMDI1ZmU2MDZkZjM1YmViNDZlMWFkODJhNiJ9"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L368-L396",
+          "version": "repo-lines-v1:sha256:785ce2d47425f7491e90cd635bf387e8712326ae4362594cf9406765771b9087:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5OWIyZmNmNmM0NmRkODRhOGMwZmJjNjlkMDdmOGU1ZDRmNjI1MjE0YmNlODVlYmI1YmU0Nzc1ZmNjMWU2MDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkNzUyM2UyYmY3NGVjOGU4NjhmMDBjN2ZkMzhmOGZlOGJjZGRjZDc1OGJmYzAxODllMGY5MDRlN2QzYjI3ZGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhODQ0Y2MxMTIyZDljYTBkZDVmZTYyY2M0NTdhYzU4MTY4NmJmNDAwZmYzZTZkNGQ3NjMzMzYyYzkwNzZjNGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI3ZDIwYzcyYzNiNzEwOWZiMjcwYjg5ODczMmVjNzM1NzVlMzU4ZDAwMWFkNDkwNmYwNWI0NjEyODI3YjJlZmYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d3882893dd7f4628a88c2824fa72a380",
+      "statement": "A checkpoint step is selectable as complete only when its model safetensors, optimizer state, and metadata files exist; scheduler and RNG files are optional enrichments, individual artifacts are atomically replaced through sibling temporary files, and incomplete multi-file sets are ignored by latest-step discovery.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L422-L439",
+          "version": "repo-lines-v1:sha256:19a2d2a3578f512f648719ea650fece3e2271ed77cb084eed1fcfd953cf185e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI5YjEwZTc5MzMzZjhiNWZjZDA1MTc2MzhlZTNhOWU2OWQ2OGQ5NmVjOTUxMDQ5MDhjYTgyZWZjNGMyYWI3ODAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwZWRlZGVmZTVmNjRmYTg2ZDNjZjI0ZmJiYWI0YWZhODRmYWJhYTI1MDhkYjFmNmJhYjFmMmYyYWI1MDM1NGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVkNzEyNDhkZTk4MmIwN2NiNDczYzczOGRmMDNiYzJiOTBhMTc2MWRjNGQyYzQzNTczYmVkZmJhMGRmODg3YjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1OTJiOTU3NzVhM2I5NjMwMGZmMzFmNmM2ZmE5MGEwMTZkMGNiYWI0NDViZDU1ZDM4NjI5NGYzNWJkNmViODUifQ"
+        },
+        {
+          "resource": "repo://utils/checkpoint.py#L15-L32",
+          "version": "repo-lines-v1:sha256:3677777d26aaddbc1fab9e671dd6306ac2a71c7c0947d7114277f83106803416:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFhY2U1MmZhOWU4NmNhYzE1ODQ3MzE4M2IwNzVhYjBmNjVjNGQxOTcwZjUxODlhOWJlN2NhNDE4NWFmZjY3MTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA5ZjNlYjZkZGRmMzQ2NjliZTBiNGJlNzI5ODJmMzlkYjM3N2JkYzJlZDM4MzFmOGY4ZDU0MTBjNzhhMTMyMzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg0MjQzMzc2NzEyNDBiNmNjMDZjNDA4Nzk4MDlmYTY3MjQ1Y2VjYjQzOWU4Y2Q0ZTQ4ZDExYmQ5MjY5MTAzMzQifQ"
+        },
+        {
+          "resource": "repo://utils/checkpoint.py#L70-L87",
+          "version": "repo-lines-v1:sha256:5676e1510ce3690a7555e221d6c79895aef60d50c9bb70f6e4a8785057f32714:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2ZjJkZTI1YTg2N2IxZWUzZjRhZGIxMTNjNzBkZDg4YWEyMTJmY2M5MGFmODgxOTA2YmIxZmMwYzVhYjk4NTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MzNmMmFhNTBkMGU2ZDU5MjFjNDhjYWI2NDYxYTJlZTgyNzBjZjVkY2IxNGUwOTZjZjIwYzI3M2I5YjI0OTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM4MjBlM2M1MzJlMWQ2OTE4NjhiNmNlMjU1NWUyNmZhNThmMzIzOGJjYTU5ODAyMzNiZTZiNjFlMDc5MjhmZmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5MGYzM2NhZTM1MmI1OTJjZjY1MDc2MWUwMThkYjViZDc4ZmVkMmNhYzI2MzZiOTNmYmY3NWIzOTU0NGU1NDgifQ"
+        },
+        {
+          "resource": "repo://utils/checkpoint.py#L89-L134",
+          "version": "repo-lines-v1:sha256:093cdaf7cee02a5d6b26e0dece207d7c301759ec626bbf4b87d10ca1776b7ab7:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjZDI2MTEzYzM5MTZkZDY4NDk0MjY1OWI4ODcyZGIzNjY4YWEyZjlkZWVlZmY1MDJmM2I4NjUwYTkyNzNmZDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzYzNiMWE3MTlhYmVhYmY0NjE4NjZjZDIyMzdkMTMyNzZlOWFkYTVlYjI4MWEwMWM1MzlmMTZmOGEyMmU0MDkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVjN2I4ZTdmZWI0NmI2NDdhNWRmZDhmYjBiOGU4ZDFkZTMyOGJlZjQ4NTdjMGVmOWM5YjBkY2RkMjlhZTIwYWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_730fff023cc345f18abd03c3a2ef962b",
+      "statement": "`--resume-from N` restores model weights plus available optimizer, scheduler, metadata, and RNG state, but the training entrypoint does not restore DataLoader position, sampler order, or an in-progress accumulation micro-step, so an RNG sidecar alone does not guarantee bit-exact input replay.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L137-L143",
+          "version": "repo-lines-v1:sha256:4afd29be14c4d79b1c07a3cab1d1278ea350c370f50b03d913b3268990346973:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjgyNmNjMDYyYzRkYWRlMjIyNWY1YTEwYjc5YTU3MzI3YWU2YjlkNDg0NjhiYzQ3N2M3MmI2M2NjNjM5MzkxZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjQ5MGM0ZmQ1M2M2MDk0ZmNhMWQyNmRhN2JmMTQyOWI1MzdmYmExYjhlODI5MWU3MTE5MDA4Nzc5OGVhOWVmYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWViYmY3YjBkMmJlZDg3YTExNmNhMjU2NTIyMTRmMjQ1ZTMwYmNlYmE2NzJjY2VkZTBjMmQxNDE0ZTAyZDc5YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzllMTYxOTFiMmIxYWU2ZDAyNTBjNjMzZjFhMGVlMmU5ZGZhMWY3YzczYzk5M2JlYTEzZjA3YWZjMWM3OTQwYSJ9"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L335-L348",
+          "version": "repo-lines-v1:sha256:836513df44cf399ede899de57dafca7f9ee836a594c95de9d0bffa1654fff961:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM4OWM2ZGUzYjU0NjQ2YjVkZjNlZDY4YWU1Y2M3NmNmZmY4NzMwMWQ0MDI2YTZjODUwM2I2YjlhZDJlZThhOTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFjMGVjY2JjYjU3MzM1NjUxNDQ1MmJjNGJmODQ5MWMwOTkzMzVmNjJjNThkOWQ5YjY5ODNkZTBhNjc3OGU5NzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNjNjQ4ZGZjOTAwZjczZGQwZjg4MTJkY2YxYjMwNGQxNjk0MjI0YmQyNWZkNTU5MzRmYWQwYmY2YzIwNzcwZTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhhYzI3MzQyMWJhZjBlYWYxZmUwZTY4MjAzODhlNTVjNDJlMGJjN2E0YzFkN2U4NDI0YzBhYWQ0NDUxZjQ5MWIifQ"
+        },
+        {
+          "resource": "repo://utils/checkpoint.py#L34-L68",
+          "version": "repo-lines-v1:sha256:f5f033aca69af2bec1f1cb7e7bf71e463bc37e57f98a3dce27c9f2f11ae34ca4:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUwNWQ1ZWIzOWI5MTUwYjcxZmQyZWZhMjMyMDY3ZWYzMDc5MzBjODE1MTFkOWY5YzU4N2Y5MjAwMTI0MzdjMTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5MzQxYThhMzkxZjI3MDZkYjNjZDE4MGExZmRjNzk3NzMxYjU1YjBiYTUwZTRjYWJkYTMzODcyNzlmNGZmYzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYxNzRhY2IyNWE4Mzc4NzZmMDJmYTI5NWFlMGY2NGQxYmNjNTA3YTExMTg2MWU5MDYyNTIwZDNmYmU1YzhlM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVkM2ZjNGM4MzZmNGVhNTIyMWQxMzMwN2E5Y2JmY2FiOTE4M2U0NDBmYTQzZjE1YzEzNDE5MDBiOTZiMzE5ZjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fd8d45d956c544c19cb1c038b7982df8",
+      "statement": "`generate()` uses `MixedKVCache` for incremental decoding, retaining only recent tokens in windowed-layer ring buffers and the full prefix in growing global-layer buffers; greedy decoding is selected with non-positive temperature, while disabling the cache replays the full history as a correctness reference.",
+      "evidence": [
+        {
+          "resource": "repo://inference/generate.py#L17-L22",
+          "version": "repo-lines-v1:sha256:582a82149b521ada2d95189ec3fbb74165a688ef931e2217c38a314625fc3a29:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzI5YTdmMDIxMGM5NzAwZDA4YjIzOTk4ZTRhYWNjNTI5M2E2M2RmZWRmMDllNmMwYWYxNmI0ZjIyNGQ0YTU4YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTZhNzE1MjU3MmVlODRmMTA5MDZjNzRiOWYyYTkyNDM0ZGRhYjBlM2M0MjgxM2IwNGU1OTdlZmNlYzk1MWIyNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYWVkNDI1YmI4YzBhZjM0NmFiNjk0ZDdjN2NjMGJkY2MzM2QxMTdjMDA2MDQ2MmI0NDA4NDY2ZTA5MjlmNTQ2MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjJmZDFiZjE2ZDIwZTA4ODU3ZTFhZTlmODgwY2E5ZTFjMjJkY2ZhY2YxODYwYTFjNmViMDg5MjgyMmM3ODVkNiJ9"
+        },
+        {
+          "resource": "repo://inference/generate.py#L236-L300",
+          "version": "repo-lines-v1:sha256:c59f2fde58544a03c223e3fd8799a987da31bde7d7a1919b6baf9742612456ae:eyJzZWxlY3RlZExpbmVDb3VudCI6NjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjYmRiYTIxNWQyMjJlZDIxOGNkNTZlZjFiNWEwYmRlMThlNDk0YjBiNDdmNWQzY2M0OTg0MWNhOGE5MTkwNGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjliYTEyYzUxZTkxNjIxNzZiMWFjMTUxNWExZDZiZDRkNTg0YjM1ZjFlYmQzNDBlYTUxYjJiMGUwMWE1MjhiNjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU3NDc2NjQ3OTYxYjRlMzU3ODg4Njg2M2RmNDViMjc0ZWQzZGQ2YThmOTk2Nzg1NjUzYzkxNmM4Yjg1NTlmNjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFiYmZkYWViOWM4NjdjZWQ3MjBhN2JkZmIwZjkzODFkMzUzZTFjMGQ4ZWY0OWM4M2ZlYmE0YjQ0MzA0NGJmYmEifQ"
+        },
+        {
+          "resource": "repo://inference/generate.py#L43-L161",
+          "version": "repo-lines-v1:sha256:d997de28cfad4d6e309c842234296b541f9e6904aa3236d051ef74ee7bb99cfa:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI3YmM0MTlkM2JkNGE0MjI2OGE3ZTQ1OTQ4NjFlMjFhMGE2ZmVmNWViZmU0NDcyZGQ0YTQzOWQxOGZkZjdjYWUyIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI4ZWRkZjEzNzY0Mzk5Y2MyYjhlOWUxYTE2NDA1MmFjZjU3NWZlMmNiYjI0YTQ0NzM0YjExZDA5OTQ0YWZhYThjIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJhMDhjN2U2NTlkMGJiOGQ3OGNiZjQzN2Q3NTI2ODNhYTIwZTg5OTM2Mjc4ZDM2Mzk3ODNiZmU0Y2E2YThmYTg5IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI5Mjc4ZDcwOTQ1MTc0MDk1MzM4ZTM1ODQ3MTQ1YmExYTQ3MmU2YjA1N2E3OTFjMTY4NGVlYTkyZjcwMzIxM2Y5In0"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L157-L190",
+          "version": "repo-lines-v1:sha256:1404634a90bd0c2f2fee3e6d7e890812614e22535562cd613453ca8064fdca0c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI4MDI4ZmEzNTc2ZTEzZjM1MTc1YmI5M2Y1YWU5MmU5YjQ3NDEyNTlkZDQ2N2Y5MzZkNDI0NzhlMjYyODE5MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM5ZGY2YjEwY2ExOTllYTM0NjQ2N2MyMDc2Mjc1NmViMzQ3YjBiNjE0MmE3MjYwZDY3NjE4NTA0NDI2MDU2MDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ3Y2Y1YWRhN2RkM2YzNDZiNjU4ODY3ZTMzNGRhM2M5NjMyYzQwOWVjZWZmN2FkM2MyNzhhNzliZGMyOTA5ZjUifQ"
+        },
+        {
+          "resource": "repo://tests/test_inference.py#L22-L80",
+          "version": "repo-lines-v1:sha256:5b1a7daa97a4ccb10fc248e6d64957aa787e5ba48a82b04409838f0aa84397c4:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVjYmFmOWI4ZjllNWQwZDRkNzY1MWExY2Q3MGRhNmVkMGYzZDA4M2M5OTdkYjMyNTc1OTQ5MDM3NjAxNjlkZTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE4MWQ2MTZlNTFiYTVjYjA0ZmVkYzE0ODVjNTQxZDUwOGU5ZmI4ZDhmOTllNTYwMWVhZWZkZGMyZmY2OTBlNzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBmN2NkNGM3MmU0YWVlY2UyOTBhY2E1NmU0YTY1ZTJiMTJiYTZmMjRhZTFjZjM5ODk1Zjg2Yzg3OTkzNjkxZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ4YWMyYTdiMjU2YTZmOWU0YmUzYzdkOTQ0ZTQ3MDE0NzNlYzlkZWYzYjIyMzQyNTk2Y2UyMjQ5ZjBhMTgxNGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_39e4bc39152449ecae21af54897f6590",
+      "statement": "The passkey evaluator creates deterministic filler, inserts a five-digit passkey at the requested start, middle, or end position, performs greedy cached generation of up to 16 tokens, extracts a standalone five-digit answer, and reports accuracy by context length; the CLI treats at least 85% at 131072 tokens as a target and warns rather than claiming success for an untrained checkpoint.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L231-L239",
+          "version": "repo-lines-v1:sha256:f1dcc982db601e6da5a650bd927b0645852b46147c4e5efa1f1da64fbb5b6071:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWI0YTg4NDk0ZTExOTFjNmI0ZDY1YzA4NDFjYmI5YmJjMDA0Yjg4YWNkYzgxM2FkM2Y5ZGQ5ZmJiOTBjYWVjZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWI1YzhhZWYzYjI2NzBmNmRmOWEyZDRjMzJjZGI1ZWQzNGJmMTQ4MGMyNDNjNzUzODhkYTIxMWZiM2NkMmE4ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTE4OGY3NzYyOGVlMmRhMzgxZjAyZGYxNDkyYzlkMDkyMzQ3YTQwMmVlM2YzOTY5MjI4NmRlOTQxOTY2OGYxZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDAxZjJlYzE3NTkzYzEwNTRlYjQ2MzY3ZDg0NTNlZjI0YTE3M2NlOTZiNzExN2Q5MWY5YTY4ZDQ0ZmVmOGIwMSJ9"
+        },
+        {
+          "resource": "repo://inference/long_context.py#L25-L51",
+          "version": "repo-lines-v1:sha256:38a9690943eb894018f3cf17aaf9a4b7631d89f47f600e639d4eb46c64f0e0ef:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJkODU5YjkzZmQ0YjZmYmMyMGNlMjU4NGY2YTYwN2E3NGYwYmEwNmE1YjY3ZTE2MWVhOTRlZGMxZDQ0NjJmOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlYTA2YzczNWNhMDZlMWE2NThhMzIyODY5ZWYzZTViZGYzZGU2MzQ1ZGEwMTFjOTIyZGJmZWMxY2E4ZDlmZTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE5OGIwNjNkOWI0N2U2NTM3OTYyNTU3MmNjZTE5NzY2OWQ1NzY3ZTEyYzE4YmUwNzU2NTJiOGNkOTgxY2U4ZDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2MmE2MWJiNWMwNmJlNzk3MGM2NTI5MWZlZDUxNGUyMzg5MmY2NWQyYjA0M2Y2ZDY3YjIwNDliYjNhZjFlNmYifQ"
+        },
+        {
+          "resource": "repo://inference/long_context.py#L53-L92",
+          "version": "repo-lines-v1:sha256:1e3458282caedd8ef11d783aae0072c59ed1e0a540e88957d5c51b61bce771f5:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5MzNmZDc3YzkyNjk1NWQ4ZTQ0ZGJiN2EwZDk4Yjc0YzI2NzAyNDVmMWJjYTc3YmY0ZGIzMTgwMmNmMTlkZmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZlNjA0ZWNmNzIyYWU1YmI2ZDNmYmZkNTNlYzViOGVlYjRiNWUyNTI2MzcxMTliZGZlZWU3ZDVhYTA0YjUyZjgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJkZDZhMmVmOWQ3Y2U4ODJiOWYwNGFjYjIzNTI0NGM4Y2NkNjVhYTM5MmQwZjAzZWM1Y2Q1Y2UwY2VkMzJkYzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://inference/long_context.py#L7-L22",
+          "version": "repo-lines-v1:sha256:cbeac1fdf5f64a4373b3b140ab27459c5314100f3142df30c7b0a73d11bf2dbe:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4YThmYzE5NjQyNDFhNWU2NTkxOTI5YmFhMGVmYzg5ZmU5NjRjNzQ4MTE1ZWJkYjE0NzA1YWJiMGI4MWNkNTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZmJhMDUyN2MzOTUzYzRiNmUwZTViNTczOWJhODM2MTJmODA1M2JjZGM5NDY2NzMwMTkzY2QxZDU5MGI0MDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMwNTA1NGE5MDI5YjA2MGQxNTE2OGM1MzI5YWE2N2NkOGI1MGZhZjhiOGExNzlmNGRlYmJlNDM2NGM3ZjE3NTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJiNDA1YzcyNWQxYjJkODNkNTZmMzJiY2U2ZWM3NGZmYWVhZmNkYWNmZTc1MzNlZDQ5ZTkwMmExYmMxZDc0ZjIifQ"
+        },
+        {
+          "resource": "repo://scripts/passkey_eval.py#L14-L25",
+          "version": "repo-lines-v1:sha256:7f6b0cc8c1b07dedf8056086d8ff3ad6f8406e7fc9328224bec5ccba3a4ab746:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiMzk3OTMzYTI0YTgwMWVlOTIzMzI3YmQ2OWEwMTA0OWMwNzc5MTUwMjFjZjJlYzM5ZGRhNGY4MWFhODM3ZTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkZjkwMzM5NjQ3NjYzZjQ5YzkwZDEwOTg0YTY3MDJjMTlmYWEyNWI4YTY1ZTY2MjI0OGEzZGYxNDNkZDhhYmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUwODAxN2QxZDU5YTUxNWQ3NGE2OTE4OGJlN2UyMzY4Y2M4MzkxYzFjYzU2MTI4ZTNmMzM2MDAyZjg4ZGI5M2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxNDhjZmMzNDhhODRlMmYzYmJkNTU3ZjliMjcxNmIzMzFkOWEzMzg1MjgwOTg2MTcyOTI0ZDNkZDlmZjUzYTMifQ"
+        },
+        {
+          "resource": "repo://scripts/passkey_eval.py#L37-L77",
+          "version": "repo-lines-v1:sha256:0a177ce4a1b410502f99a7387158accb25f040c575bf16634153d986a1b691c7:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQxYzU0Y2I4MjI1Yjg2MTYxZTdjOGZhODY3MGNiMmUyNGEzOTMyMzUzZmVmODFmODY0NDM4Y2M4NGZiMTU3NTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2MjMzYjNmZmVhMzJhMjNkZjUzMDY1MzQzNDhmMmRlZTc3NmE1YTZmNzRmYjUzMzE3NWRkYzUzOWE4ZmU0NjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQwZGZhYjg0ZWU0MjAwNGNhYmFlYzk3ZTg4MjFmZmI1YmQwMmI5OTgzMzc0MjExZTM4ZWIxOTBkNWIwOTU2Y2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNDEzNDBjYzIzOWExNTljZTliNjAyMmU5ZjYzMjI4MzJlMmVhZDc2Y2FlOWU0NzU0ZDIxMGViOGZiNmQ1ZTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_aa69abb4b22f4f619cfe7011412c957c",
+      "statement": "Documentation and symbol changes require both strict symbol-reference coverage and the documentation/link checker, and the repository's verification guidance distinguishes these checks from CPU tests, the analytical KV benchmark, and CUDA/Triton smoke validation.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L120-L125",
+          "version": "repo-lines-v1:sha256:401665e31e7db640c31b2eb57844e6738152107c39147d21b498007140e1b840:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjIwNThiYTg2YWQxODkwYmU1NDMyMDgyNWI3Nzc4YmExNTgxNWYzZjQ0MTk4ZTA1NTc1ZDQ5ZmI1YjE2MGZiMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjUyMmZiMzM1MzJkMjA4YWEwN2Q0NzE3OTc3Y2Q4ZWRmZWEwZGRkODNlZTZhY2MzMDdjOGRiODI5ZmNlNmNlMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTlhYTI0MGRlYmI3ZDUzZmM1YzI1NmYzZDI1OGY2Njk4ODg0ZTA2N2QwNjlkYTNiMmU2ZmM1MWVlM2JjNmRkOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzkzYzY2MTQ2NjI4YWRmMDc0MTAyZDg3M2Y4Y2MzODM5OWQ0MGQ2OWUzMjg1ODkzNjM0YzFhMTUzMzg1ZGExMiJ9"
+        },
+        {
+          "resource": "repo://README.md#L342-L365",
+          "version": "repo-lines-v1:sha256:98e10404a27ffb006604cfff6d3cbac9f0b9a309844e8ab8e716069de3054de5:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2N2EwODQ3MjUyZTNkMWNiYTkxYzU4MzIwNGQxYzk5MWQwZDYyYzM3OGIxMDYyOGQzNTRkYWEzMmY5OWYxMzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3YzA2YzU2MWQ1YzMyNzM0MzY4NTI2OGE0NmIzMzkxZjM5OThlZWU4OTBkMmJlNTFmMGQyMWNjNGE1M2FlNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.4.3",
+    "at": "2026-08-28T16:02:00.548Z"
+  }
+}

@@ -48,6 +48,28 @@ Both metrics are **measured, not assumed**. Reproduce with `scripts/kv_cache_ben
 
 ---
 
+## 🗺️ Visual Architecture Atlas
+
+> Explore the full **[Interactive Visual Systems Guide](docs/gpt_oss_visual_guide.html)**: four verified Archify showcase maps, live KV-cache memory calculator, MoE router inspector, and [verification receipts](docs/RECEIPTS.md).
+
+<div align="center">
+  <a href="docs/gpt_oss_visual_guide.html">
+    <img src="docs/gpt-oss-lite-model-architecture.visual-check.1440x900.dark.png" alt="GPT-OSS-Lite Architecture Overview" width="100%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);" />
+  </a>
+  <p><em>Figure 1: GPT-OSS-Lite Architecture Map — 12-layer decoder alternating between 128-token Sliding Window Attention and Full Attention, YaRN 128K context scaling, and top-2 of 8 MoE. Click image to open interactive guide.</em></p>
+</div>
+
+### Interactive Architecture & Systems Diagrams
+
+| Diagram | Description | Interactive HTML | Visual Preview |
+|---|---|:---:|:---:|
+| **Model Architecture** | 12-layer transformer, SWA/Full alternation, learned attention sink bias, YaRN RoPE, and top-2/8 MoE | [Open Map ↗](docs/gpt-oss-lite-model-architecture.html) | [PNG](docs/gpt-oss-lite-model-architecture.visual-check.1440x900.dark.png) |
+| **Optimization Stack** | Memory budgets across 4K–128K context, selective gradient checkpointing, FA2/SDPA, and grouped-GEMM Triton MoE | [Open Map ↗](docs/gpt-oss-lite-optimization-stack.html) | [PNG](docs/gpt-oss-lite-optimization-stack.visual-check.1440x900.dark.png) |
+| **Data Pipeline** | 8.0B-token universal pipeline, tiktoken GPT-OSS tokenizer (128K vocab), binary chunk sharding, and memory-mapped streaming | [Open Map ↗](docs/gpt-oss-lite-data-pipeline.html) | [PNG](docs/gpt-oss-lite-data-pipeline.visual-check.1440x900.dark.png) |
+| **Training Workflow** | End-to-end pretraining loop, chunked cross-entropy (chunk=4096), AdamW optimizer, and atomic safetensors checkpoints | [Open Map ↗](docs/gpt-oss-lite-training-workflow.html) | [PNG](docs/gpt-oss-lite-training-workflow.visual-check.1440x900.dark.png) |
+
+---
+
 ## Architecture
 
 A 12-layer decoder-only transformer. Every layer alternates between two attention patterns:
@@ -342,7 +364,7 @@ Full bit-exact training reproducibility is supported:
 ## Verification
 
 ```bash
-# Full test suite (CPU-friendly, ~40 s)
+# Full test suite (CPU-friendly, ~50 s)
 python3 -m pytest tests/ -v
 # 203 passed / 2 skipped (GPU-gated Triton) across 12 files
 
@@ -387,7 +409,7 @@ Please:
 
 ## Known caveats
 
-- **Full 8B-token pretraining run not yet started** (no GPU on dev machine). The 192-test suite validates all primitives on CPU + tiny shapes.
+- **Full 8B-token pretraining run not yet started** (no GPU on dev machine). The 205-test suite (203 passed, 2 skipped) validates all primitives on CPU + tiny shapes.
 - **`passkey_eval.py` requires a trained checkpoint**; it runs as a stub on untrained models.
 - **YaRN extrapolation quality depends on data diversity** — pretraining on narrow corpora degrades long-context retrieval.
 

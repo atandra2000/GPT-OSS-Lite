@@ -1,0 +1,296 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:e0a7b1fdeea6a775ac606c41ec4d28e4ac18ffeed50e2ec77a275db93b9d041f",
+  "claims": [
+    {
+      "id": "claim_3cfe1e4a673443e9a93e92835776fb7a",
+      "statement": "`training/pretrain.py` is a single-device raw-PyTorch pretraining entrypoint whose `main` owns seeding, hardware setup, YAML loading, model and optimizer construction, data loading, training, logging, checkpoint recovery, and final persistence; the CLI requires `--config` and supports `--max-steps`, `--seed`, and `--resume-from`.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L1-L5",
+          "version": "repo-lines-v1:sha256:0b1e37e5ec2055fc00dcf4302851fdef7147e433d593cb72cd9291e9b2a97dee:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjg1OTEwNDY3Yzg1YzkwOTk4ZmYyNDNjMGIyMzVkY2EwMGQyY2ZkOGI1ZDU0OTk1ZjYzOWExNTc5ZDRiYWYxMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTMwM2VjZGQ0YTRkMTBmMTljNzNmZDQyZmQxMjQzN2ZkMzM1NGE4MjY4MTYwNWRhNTI1NWE5N2EzOTA2OGRiYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZWRkMjUzZjgyZDY0MjAzNTZkYzUzZTQ2Mzk1YzM1MmI1NDQxMDRmNTY1NjZlYTIzOTU3MDU1ZTg3MmI2OTAzZiJ9"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L229-L257",
+          "version": "repo-lines-v1:sha256:530314614719c90040066503898721d72c8486dbfa2e87f90cca937cb9731490:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2MzUxNGNmNzY1YmRlMmU5NzZkZjFlMzEzYjAzMDQwYzg3MWEyYTBhNWY5NmMwNzY1NjI4M2ZkNWU5YTg0ZDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkNTk5Mjg3YTM0ZWY2MDQ0OTkxNmQ0MGI5NTlkNGQ1MmM2MmYxNmJiZWRkZjNkMjNmODQzZTJjM2YyMDY3ZTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZhMjhmMzA0MGRmYmViNjhjYzk0NjA4NDdiODVkYjU5ZDNlMGFkNzA5Nzk5NzFhNzM0YzQ5NWEyMTBiOWViN2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4ZTI2ODQ4NzU2YWU4YzI3YWZhZDhhMjVkZjcxNzZjMjk2MjE1ZmFjZGUxOTA1ODk3MmQzNzI3NWRmM2RlM2EifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L444-L456",
+          "version": "repo-lines-v1:sha256:29a9ed460be610e0e652c5ba5bf64fab987bbad54a728decac93c725a05387bd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0ODZmZjVjZjkzNjNiNDQyOTMzNjgwM2IyYzk2MGU3M2RhOGM0N2ZhMGM2ZjY3NjU4ZDE0YjMyM2NkMjJkMzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmMTk0NDY3NTJjMzNjMTgxZWE5MjMyYTc5NWJlZmYxNWJjM2ZlZWRkMmE1ODA4N2IzZjVjMzNlZWI2MmU5OTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5MDAyOGEyNmE4NGIyMWJiM2Q3Y2U3YTI4MDI3YWNlMWQ0OTM5NmNiZTdhMGEwYTlkODhiMTYyODk2YTYxYTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_534fcb8215494f588404a5bff9b82db9",
+      "statement": "The YAML loader safely parses the file, constructs `ModelConfig` from the `model` mapping, keeps `training` and `data` as dictionaries, and applies `--max-steps` by overriding `training.total_steps` in memory; model validation enforces structural invariants such as GQA divisibility, matching `d_model`, valid MoE counts, and valid YaRN lengths.",
+      "evidence": [
+        {
+          "resource": "repo://models/transformer.py#L51-L122",
+          "version": "repo-lines-v1:sha256:ee983d1b7424da82cb83c8e2c9d1a277f131064d4f450b31ec54cb3a68f6a21a:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwYTZjODg0YTBjOWUwMzlhNzg2MDI1N2NiNWZiNGI0NmI0MjhmMmFlODc4NmQyMmQxNzYzZmVhNzUzNWM5ZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MDMyZTk2NGQwOTMyMzUxZTVkMTg1MjY5MjgxYjE3MWEzYTA5YjA4YjI4NmU2NjFlYTQ3MDMyM2M4MmViNGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM0NjIwMGNmOWNmODQ5NmNiOTRhMTY5ODQxMDc4OGI5MDc3YjhlYjQ1OTRiMTc2ZDRlMTY5Y2E3YTI3OWY1YjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU3YWVjNjM3NjdmMTg4MTQ5NWZhNDFiZDVlNDRiZjZmMWRmZmE0MDcxNGI4NGY2YTg2NjE1YzBiYWZjZWE0Y2YifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L241-L247",
+          "version": "repo-lines-v1:sha256:1159d4a610b5a3468d7f91ed8f6beaae28808ef8538274864a3a56c633ad2b70:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWIwZDEzMTQ1N2I5ZDg1ZWY3N2E5NzM0Yjg1ODBhNzU4OTMxNjNkODA2ZDlhZGIzYmNmNDQzYzQ0NWNiYzljMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWZhM2UxMDEyMjQ3NDNjZThjOWY5MzcyNWI5MGMzMzMyNzRkNWI4N2VkODA2MTA2MGNhYmM3ZDYyODU2ZmFkMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjJmZjRlZDg0Mzc0MmZkNmEzYmJmY2M0ZGU0NjY2MTdlNWNiMTRjNTg0ODlkNmU5N2NmYjlhMzBmYTg1NjczNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGVkYTYxZTdiNDQ0MThjNzc1ZTVhMGJjMDc5MWY1ZjhlMTUzOWVkZGJiZDhkODM5ZGY2MzUxMWI3NmI3N2Q1NiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_a8020b6ea219419185858f7a85e900bc",
+      "statement": "When `--seed` is supplied, initialization seeds Python, NumPy, Torch, and all CUDA generators before model construction and installs `CUBLAS_WORKSPACE_CONFIG=:4096:8` only when that environment variable is absent; without `--seed`, this initialization function is not called and the run is not explicitly reproducible.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L137-L143",
+          "version": "repo-lines-v1:sha256:4afd29be14c4d79b1c07a3cab1d1278ea350c370f50b03d913b3268990346973:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjgyNmNjMDYyYzRkYWRlMjIyNWY1YTEwYjc5YTU3MzI3YWU2YjlkNDg0NjhiYzQ3N2M3MmI2M2NjNjM5MzkxZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjQ5MGM0ZmQ1M2M2MDk0ZmNhMWQyNmRhN2JmMTQyOWI1MzdmYmExYjhlODI5MWU3MTE5MDA4Nzc5OGVhOWVmYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWViYmY3YjBkMmJlZDg3YTExNmNhMjU2NTIyMTRmMjQ1ZTMwYmNlYmE2NzJjY2VkZTBjMmQxNDE0ZTAyZDc5YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzllMTYxOTFiMmIxYWU2ZDAyNTBjNjMzZjFhMGVlMmU5ZGZhMWY3YzczYzk5M2JlYTEzZjA3YWZjMWM3OTQwYSJ9"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L229-L239",
+          "version": "repo-lines-v1:sha256:d500ec06e35a05da1d84b3bb6985a489043aec9f4b777e99031f580100e0c372:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2MzUxNGNmNzY1YmRlMmU5NzZkZjFlMzEzYjAzMDQwYzg3MWEyYTBhNWY5NmMwNzY1NjI4M2ZkNWU5YTg0ZDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2ZWQ1MWRhNTE3YjQ4YjM1MzY2YTc1MTc2M2YzZThmYThiMzUyZTZmM2U5YmVlZDdiYjc4N2I1ZDIxMjRhNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZhMjhmMzA0MGRmYmViNjhjYzk0NjA4NDdiODVkYjU5ZDNlMGFkNzA5Nzk5NzFhNzM0YzQ5NWEyMTBiOWViN2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhlODhlYjk5ZjFlYTJhNzQwNzY5MjhlNDUzMzE1Zjg2NDQ1ZDlkMWY2MzkxMGQyNTZhMjMxMDY3ZTgxNGU5MWUifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L32-L40",
+          "version": "repo-lines-v1:sha256:c24f166269d2b474eea38fd4a45be523136d1ce21efdd888f396003593257f20:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDBiMmVhM2ZjZDE0NTRhYzU5OTFmYTQxYjRhYjk3MDRkZWE2NjIyMWVlNmY1NmRjNTBlODAwOTM4ODhkMDdkMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmQ4MWRlNGE0NTYyZGFhMDY4ODFjYmMzM2VjM2NlNjNhODMwZWQ1NWFmMTMzNmRiNzlkNDkzZjIyNjk0YmQwMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODMxODVjZWYzYWY3YjRlOGE1ODAxMjBiMDIxM2U0ZGQ1YjA0YjUzNDRmMTUzODExOGE0NDBlMGEzNjZhZmYxZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGVjNjhhMDI1OWY0ZTg3MWJkNDdlZjZhMGFmYjk3MjI1NmEwMTc2OTFhMGFjODA0YzM1OTg2YTBjNWY4NjJiMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_e59aee9cbd244e8e980a15ae2c862da8",
+      "statement": "The entrypoint selects `cuda:0` when CUDA is available and CPU otherwise, enables CUDA-specific TF32, cuDNN benchmark, and cuBLASLt settings only when CUDA exists, and invokes `torch.compile` only when both `training.compile` is true and the device is CUDA; compile failure emits a warning and continues uncompiled.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L212-L227",
+          "version": "repo-lines-v1:sha256:0ca1f25c2e2ba9ecf8fee7c7ef5becc80cd2b647dad4c7e1a4abb0a0d414f84b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkMzQ3ODc4NzVlMDUwMjBmYmEyOTFmYzNlN2FmYzc2NDVjMGU3MzQ3MjQ4ZDU1ZDMwMDBhMDZjMjZkZGVmNDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQyMDYzM2VhNDIwMzU0ZThkZjA0Yzc1MGFkNWIwYTAwYzNjMjg2OTU2MDUxZjExYmM0NWEwYzRiMTFiODFlNDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVmMmY1NDBjOGMyYjMzMTVlNmM1MWRlYTUzNGM4ZjBmNzliNzI2ODQ3YWUyZWU4Mjg1MDUwOTFmNzdhOTYwZDEifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L256-L271",
+          "version": "repo-lines-v1:sha256:b13c4ae6d3bff31eee0cb2f5fe458c4cf83598c7f5c0996ce237006a573c7c57:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAzNGRhZTdiOTE0OGFlYTEyYTAyYzE2NWZhNWM0ZDk0M2YzNDdmOTUzNDkwMWM1YzE1YjY1OWU3ZWE3MTUxMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhMGQ0Mjc4MDExNWRkMTIyYTBmNjFjZGRlNTk4YjMzMGRjZTFkNzE1ZTYwNWY2YmU5OWQ4OTNmYTdlMjNkNDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA4Mzc4NWVjMGRhYmZjY2FmMTc4NjQ3NWFhM2JmM2NiNWQ0MWIzZTY0NjlhZjg1ZjhjMzUxMzJkZWE0MDk0ZjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjNjg5MmIxMGFiYTRhMzc2ZGYxM2JhYmY4YmQ4ZTIzNWM5NjE4ZmE3NjAzYjhjYzI3NmRmNmRiNDQ4MjdhN2IifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c11d2346d6c74eff9e75fc9006507278",
+      "statement": "The current entrypoint treats the model-memory estimate as a warning guard rather than an unconditional abort: it catches `RuntimeError` from estimation or `assert_fits_in_available_gpu`, prints a memory warning, and continues, while the GPU assertion itself is a no-op on CPU.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L273-L283",
+          "version": "repo-lines-v1:sha256:7ae7171d1486a9a24531e0801ea659bd57f64db68113586200803a6b585256b0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkYTVjNjZlMTdiMTQ1Mzk3ODM0YjhjODU0ZGM0MTkzZTIxMjUxODBhODk5NmExNGMzMTg4MzMyNmIyZWZiY2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlNjkzZTQ1MmY2ODAwNDdkNjJkYzk3MGQ2MzQ5ODNlMGRlZjdmNThkNjYzNWQ1OTg1MDU0NmZlZTk4ZDk5M2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE1MzkwNTRjMTdmMDJkODdhZTgzNGU4MDY3NjQxN2Y4MTZhZjM0ZGQ0NTk5YjM0MTgwMTA4MzIwNjU1NmU5ZDIifQ"
+        },
+        {
+          "resource": "repo://utils/memory.py#L15-L18",
+          "version": "repo-lines-v1:sha256:672708546b264518014b7cfdd3da0586f375c829747986709802890c99add1be:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjkxNzNjYTExNmVkYjYyNmM5NThkODI0ZTBmZDEyNmFmNjYyMTAyYjcwZTY5NzUyZDZmOGFmZjY5YmQwZWI1ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjkwY2ZiZjM4NjZjMWQxMTExYzVjZDRmYWU2Mzg3MDFmMmI1YmQ4OTZhOTMxY2I3NDE2OTlhZjA4OGVhYzk3MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjU0NGM5YmY3ODRiMDZiYzhkYTc1ODM2OWNjMjg2NDliMTQ5ZTU4MGIwYWVkODI5MGI2ZTBmOGMyNDdhYjkzYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGExYjI1NmI0NDVlYzFlNDAxNzY0NWE3ODExMjg1MzM3NDk1MzFjYTI1ZmVlYTA4MmZkZGRkMzQ5NGI3MmQ2YyJ9"
+        },
+        {
+          "resource": "repo://utils/memory.py#L58-L71",
+          "version": "repo-lines-v1:sha256:56470e75ff6ceb92e9781021d75bc9b9a5f384bfb3ca66ff45792e8d90029b3d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhkODVjMjI5YWU0ZGE1ZjM3MmYxZWYxNDM2MzNjZmEzMmVhZGU5MDMwNTg3YjAzYzMxNzQxNTViMDE2N2ZmMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhZmNkMDIxY2I3YTY4NzFiNjM2YWQ1YzM4ODkwMGMwY2RhOWM1YTFmOWVhZmMzMzU5ZjRhMmNmM2JjY2UzYzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE3NDU0YzllNjU2MTU0ZmVjMzA1YmYzNDM4M2I5YmIzMjA5MWUxMDZlNDNkZmUyZGRhYzhlYWMwNjIwNTY0OTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_957d6ebdd22d43c298d3cd73e3e2da82",
+      "statement": "`GPTOSS.forward` returns vocabulary logits together with the mean of the per-layer router auxiliary losses, and optional gradient checkpointing recomputes every configured Nth block during backward; the production configuration enables it every third block.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L57-L60",
+          "version": "repo-lines-v1:sha256:6d256376ac5da8716b84ae193625f1f0194a0c2d70eef76d5bd316d2dc725a4f:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWVmNjllNzI4MTRiODU4N2E0ZjgxNWU1NGRmY2ViMDY2YTA1NTdlYjZjNDBiMDQxYTQ5OTUxMDUzNDYwZTNkYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTUyYjAxNzUyMzdiNmYzYTYwYTJhNmRkZDlkYTEyZDdjOGY0NzQ1ZTJiZjMzYjYzYzg4ZjVlNGM2Mjc3ZjlhNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTIxZDRlNThkODFkY2VkOGVjOTMzOWU4N2U1MDhhZDA4ZGI1YzNhMmJjNzRhYjE0NjJhN2YyOWYwZTUxZDk5MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjQ2ZjA5MzJiZDA5ZGYzNDU0NTU1MzgxZjZhNjlmYmJlOTg5YTA3MGI4NzFkNjI0YmQyYjcyYzJjZjZjZWYzMSJ9"
+        },
+        {
+          "resource": "repo://models/transformer.py#L186-L227",
+          "version": "repo-lines-v1:sha256:52783c07db9d7eb20febbe324704ed062617efbb773964f712954562f0292a20:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkZDE1NDg4Yzg3MjRhOTEyOGZhZjBkMTBjMDJlYWI4YjMxYzYwMDA1OWEwY2JjMmNiOTg3ZDkzMGMzOWNlOGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMWNhODE2M2I2MTE5YjBkMzlhNjdkN2QyNWE3YzY4YzgwOTU0ODFjNDBiMjcxOGZjMjQ3N2U5ZmM3ZmUxNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlYjhjOWI4ODNlMzdlMzUyMDU5MmM4YjY0M2MyN2RhY2NiZDJmZjRkNTkwMzhiZDMxNTVhY2EyNzgxNzE2ZTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYxZDcxMjRhZmVkODg2Yjg5Yjk4ZDQ4MmYwNDRhMjA1M2EzMWE2N2RjOWMzMzIzM2M0Yjc0MmUwZDQzMTc4M2UifQ"
+        },
+        {
+          "resource": "repo://models/transformer.py#L263-L266",
+          "version": "repo-lines-v1:sha256:d774a7d1040dcb9fe71cba27f41966f85c52677f7ee0c1ca4250fa0e535c8935:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWMwZTMwNGY2NzMwZGQzMGM0ZDFiYWYwNzExMzUwNGM4MjM4YzA1NmNmM2RhMmJkYWFiOWJiYjBhMDk3YjNhOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjBhODk4N2ZkZjdiZDM4MGNmNDk5NDNiM2NlYjYyZjJjNjVhNDYzNmQ5MTgyZmYxMTk0N2FhZGJkMGJmMzdjZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmI1ZjQyOGIxNjEyZTYxYTJhODFhNmEzZjY5NjVjMGI1NzNkN2FhNDFlMmRhYzE3NTJmNTQ3MDFiNWE5ODRhNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTMzNjEzNjQ5MDkwZTc2Y2MyOWExMzcxZDkwN2YxNWY3Zjg3YWU1YmZiNzAyOWJkYTZhMTdkN2E5ZThjN2Y5MiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_7273be5f94e7450ba0588008cc389a3e",
+      "statement": "`data/prepare_data.py` reports the shared universal corpus, tokenizer, and shard settings before delegating preparation to `shared_data.prepare_data.main`, making the shared data package the corpus-construction boundary.",
+      "evidence": [
+        {
+          "resource": "repo://data/prepare_data.py#L18-L30",
+          "version": "repo-lines-v1:sha256:e7a7f9153957e8b0f8d6c9ed6e44c35dcdab537d2f0a1c97565b88893fe29c3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiMzk3OTMzYTI0YTgwMWVlOTIzMzI3YmQ2OWEwMTA0OWMwNzc5MTUwMjFjZjJlYzM5ZGRhNGY4MWFhODM3ZTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlMWMyZTdjYTQyZDUyMmNmMDAwYWYwOTlmZGUwZTc5Zjk0MzA0NDEyYmJiYzVmODNkZTA2YzFmZGFmNTRlMTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc1ODM4ODJiNmMxOTJjM2ZhNGQ5MTBlZjljODg3ZGIyYTg1MWM0ZjMyYTI2ZjkzYWJmNWIwM2JjMmMyODAzYTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNDEzNDBjYzIzOWExNTljZTliNjAyMmU5ZjYzMjI4MzJlMmVhZDc2Y2FlOWU0NzU0ZDIxMGViOGZiNmQ1ZTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_671acbd54aff43b2b58fd19d37fe94ac",
+      "statement": "`PretrainDataset` supports a single memory-mapped Torch-save tensor or a directory of sorted `shard_*.bin` files, optionally reads manifest metadata, detects Torch-save versus raw shard formats, memory-maps raw integer shards, and assembles windows that cross shard boundaries.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L163-L196",
+          "version": "repo-lines-v1:sha256:e54ed50131cc47bf0791385bc3cc933bc37ebb581d2616107b7fbfa2850927ca:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyMDVhNzA2NDliNDE4MmUyYmRmOWI5MzgyYmM3ZThiMzIxOTM4YTMzYTJkZDc0ZTA5ZmI5MzJhY2M3YTZlOGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlN2FhZDVmYjE1OTQwNjUwMTI2NDUyZDVkNTA0N2MzNDY4NDM4NDY5MmNkNDk2ZTIzZGU0ODg5MjBmYWEyYjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA1MzJkMmQwY2MyNDJlNDY5NTY0YTI5NDc4YzBjMDVlNjRjMzkwMWQzOGVhNzQwMDE0NjRjOWM5YzJmZmFiZjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2ZWYyMmRjNDg1NzI4MTQ3YTc4ZWYyZTdiOTUzMThmMTYzZDEyYmRiODY5ZDljODNjMWQ2ZDQwZmM1OTcwZmQifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L55-L153",
+          "version": "repo-lines-v1:sha256:0ca01ed947e0de051bc2f8ca42e98ff1c26af4ceceaddfdfda0c93a0be39a2d7:eyJzZWxlY3RlZExpbmVDb3VudCI6OTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzZWYxMjQ2OTMyMGM5OTI5ZWY4NjEzNTRkZjBmZWM1MTI4MjRkNDI3MzBmOWUwNmRhZjUxOThhZGRkODc5NGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyM2QzMDQwNDJmMjljODE2YjBhMTRlNjI4MTA4ZGQxYjdkYjkwODY5Mjc2MGRhZTBhYzg3MjA1ZDExMGUwNzkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdlNzE4YjNlYzk4ZmUxYjJlNTRkY2U3NTYxNmRmMjlhMmRkMTA3NzRlMWIwZTJmNGRlOWU3M2ExYjQ1ZmEwY2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4ODg2MGU4ZDViNDAyZjg3YzlmOGViMWE5YTgzM2JmY2FhMGNlYmVmYzcyOTg4ODhlMTY5Nzc0YjVjMzg5MDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_469b76746e5743cfa75dcc6d41c5f39e",
+      "statement": "Each dataset item is a contiguous `max_seq_len + 1` token window split into `input_ids=chunk[:-1]` and `target_ids=chunk[1:]`; the DataLoader shuffles micro-batches, drops incomplete batches, uses CUDA pinning by default, and keeps workers persistent when workers are enabled.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L158-L161",
+          "version": "repo-lines-v1:sha256:5102e71c90059961fe56fad83ef724bd192bd4b14139f9f273c47be258c774dc:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmEzMTcyMDI1ZjRjMmU5MDQxYTcwZDdmYTg0ZTgwNGJhOWM3ZmQxZmU2MTliZWJjNGRkZTg4NGU5YWI3ZTBlMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTUzZDA2ZGVmZmZmZjgwNjMzNzE3OGFlMTM2OTU3NzQzNzBkNGYxODQyZWU0NmIxNDdiNDQ4ZjVmZDQ4YTQ1MyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODc2ODc4NzYwZTIyYTgxOTBjYjY4MDJmMGJkMDgzNTZkNTljYTRlNGU2NDIwNWFhYTg3NTY0MTJkYTlhNTQzYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTU2ZTM3OTdmMjk3MjVkYzdjMmVjZDI2ZGZmNmQ5YmVjZDRjNDI1YmFiMzQ5NmU5ZWU1NDYyOGE0MGVmM2YyMyJ9"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L314-L322",
+          "version": "repo-lines-v1:sha256:e681be6df442fcf301b5467680d254c94180abc802bfbacbee29daf7e853ab61:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTc2NTQ3ZjBkODg3ODJlYzgyODZiYTBkYTNkNjU0N2M5MDNhYWU0ZDZlMjc1MGU3MzlmYTMyODczZWFlNWQwZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzBjMWYxODhmMTQyZWQ3YTgyNDY4MGIyMDcxNzJjNTUxOWJjNjE0YTQ4ZmRhN2NmMTY3ZWRiOGRkZjc5OTU2YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTgxMDM3MjBkN2E5MzFkODg0YzM5YmVmOWUxODNmMmIzZDMwYzY3MzMyN2ZlNTFlMjA0ZDk3ZTQwMjBjYTI2OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWIxYzkxNDIyYTY5OTA3Y2QwYmFlYmU4ODAxZGRmMzVjZDI5ZjY4ZjE2YzhiZTcyNWI5MWIyMGQ2ZjkyY2NhNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_ffb62b73839b4b2bb3f1475100178a86",
+      "statement": "The implemented backward loss contract is `L = (chunked CE + aux_loss_alpha * mean router loss) / gradient_accumulation_steps`: chunked cross-entropy sums token losses in vocabulary-sized chunks and divides by the total token count, while `GPTOSS` averages router losses across layers before applying `aux_loss_alpha`.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L64-L68",
+          "version": "repo-lines-v1:sha256:d0db58d011fff3b02ec6c511fab0c56433d400d6aa302294cb3e5262b50d3ab1:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDk5NTc5YzZhODcyYzBlZDBkM2Y4OWJiMTEzMmE0YzJhMjA5ZjY2YTkwNGRjMThhYjQ1MjBkYjA1N2Y0ZTJiMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjI1YTlkZWUxYmRmNjZjMmVjN2FiYjNlNjY3NjA3ODQ4NmY0YzZlN2NjNThjOTMzMWIzOGU3MjJmMmE0NTBjMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjQ2ZjA5MzJiZDA5ZGYzNDU0NTU1MzgxZjZhNjlmYmJlOTg5YTA3MGI4NzFkNjI0YmQyYjcyYzJjZjZjZWYzMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzM2MTdmOTFiODMxY2MwY2E0OGQwYjQ0MTQ0MWFhZjU3MGM1ZGZhMDgxNDAwN2U5YTk1MDQ0ZTZjMjUwYjllNCJ9"
+        },
+        {
+          "resource": "repo://models/transformer.py#L201-L227",
+          "version": "repo-lines-v1:sha256:b9c452b17746f626201ab153e3d3122aae900e1bbba770e33bbd7858cb62a9c6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlNjE5MWM4ODdmMDFmZWUzZjg2ODEzN2QxMDAzYzJiMzdhMmNmODIwZTQ5MjdjMjdhY2I3MWYyNDg3NmYwMjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMWNhODE2M2I2MTE5YjBkMzlhNjdkN2QyNWE3YzY4YzgwOTU0ODFjNDBiMjcxOGZjMjQ3N2U5ZmM3ZmUxNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA4N2RjYzA2MDE3MWU0NTIxNmJhYTZmMDFiMmQ4OGQ3YjY5MDE2ZDExMTY2Y2Y2YmJjYWQyY2ZiZGY5NGFkMmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYxZDcxMjRhZmVkODg2Yjg5Yjk4ZDQ4MmYwNDRhMjA1M2EzMWE2N2RjOWMzMzIzM2M0Yjc0MmUwZDQzMTc4M2UifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L199-L209",
+          "version": "repo-lines-v1:sha256:6ce0cbe45930fa5acbba6da507090514d9544f3b40b1fe347a1c2daea4d2ed99:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYzMzY2MWZlODFkMmYzMDc4YTNlNWRlYzU3YzVjZjYxZjA3ZjRkMDJiNzU2MWU1ZWUwZTYyNzFhN2IyNTgxZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5MDk4Y2M4YzNlZTk4Njk2NTFhZTUxNmIwYzk0YWQ0MDNhZGJmMjE1NDRiYmY3NjMwOGFiZjgxMDQ2N2JhODUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIxOTBjNGE1ZWZiN2VjMTQzNGJhNGQ2ZGI0MzMzYjU1ZjU0NTAzMjk4YmFlMTliN2M0NzJlOWI3NTA2ZTUxOGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU1ZTkzMWFkOTJmOWMwNDE1MDEzOTJjZDU4ZmM4M2U3ZjVkYTA0MTljMjMwMWE5NTJlMTAyMWI2ZmU1ODlmZmQifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L373-L378",
+          "version": "repo-lines-v1:sha256:373b550dfbc301dd1343abbd1acc48628d7629a5b480683ce3121211b96d6b28:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGQyM2Q4YjlmNWRkOThiMWM4NDg2NGUxNGFhODhhODVmZjcwZmY4ZDIyNDY2YjM1NzA1NDM2MTA1OTc4NzM5YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWVmNzI4Zjg1N2E3MGY4NjVhOWI4NDFjNTJiNWM2N2VhMDU4YzYzYzIzMDk0YzljNjBlOWNkYmQ0ZDM3OTNlNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGI2NTRkZGVlZjg0MzVmNTIzOWZmOWE0MWM3NDM2OTU4MmY4ZjIyYTMxZjExMjI4ZjdjNDA0NjRmMjE5ZTdhZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_d8bb1d84fb7749809aebbfa1bedec95e",
+      "statement": "The optimizer-step boundary is `micro_step % accum == 0`; only there does the loop clip gradients, call AdamW, advance the scheduler, clear gradients, increment the optimizer `step`, and update progress, logging, and interval-checkpoint decisions.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L398-L428",
+          "version": "repo-lines-v1:sha256:31a15e4f8a4c029864a536083e8c19be722136089c5c85ea7dc3bbfeb5fa98bc:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyNWY5M2Q2NDgxMWNhMTUyNTQ4MzdlY2EwOGQ4OTYzYzI1YjI1OTlkODJkYTQxMmIyMGYxM2M2MGUwN2Q4YzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxYmQ1OWJhZjEwOThhZTk2ZmQ3ODY0ZjM2ZTg4MjJjNTExMWFlMGZkNzBmNmFiODI2MzZmZWUyZTg1ZjRhYjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImExODU5YThkN2RlYjAzN2FlYjViNTE1YTEwMjM2ODAwNDdkOGQ0ZWM1ZGI3YzBlNWRiYjAyZGRmODdlNzk4OTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhiNjNmNmYxMDI1NWFlZWY4ZWYzOGE0MzU4ZDNlODVhOTY0ZDFiMWYwNzQzNmJiMGZhMjVhNTE0ZGJhY2IyNTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2255170cb52f4d1fb51ab6e015122b64",
+      "statement": "AdamW uses a decayed parameter group and a zero-decay group selected by parameter-name substrings `bias`, `norm`, and `embed`, with configured learning rate, weight decay, betas, hard-coded `eps=1e-6`, foreach updates, and CUDA-only fused updates; its `LambdaLR` performs linear warmup, cosine decay, and a minimum-LR floor once per optimizer step.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L51-L61",
+          "version": "repo-lines-v1:sha256:204a285134e6868dceba0af2dfc976bc8ca0df1f74eafd0b25faf99389c5bd4f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFjZDIwMTUyY2RjNWQ5NGY3ZWQ3ZjJlMThhY2QxMzE3ZWRlYWM0NDAzNzcwMGE4YmM3NGQ4NDlkOTlhNDMzNGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJjYTNjZDFlNjA5ZTdmYWIwN2NkMzQ2M2I3YmZhZjUzMzczNTdjMDFhOTkxNzU1Y2MyZmZmYTZmMjQ5MDUxMjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRmY2UxZjdkOGYzZDA4MzAxNzc1Mjg4YWY1Yzg4NmViMjljMzQwYzNkZmNjZjhmNTA2NGQyMzcxMzBkYmVhNmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUyNmY3Njk3MDcwZGQ5ODUxZDQxMDY0ZTU3YmIwMTZlYmY0MTdlNjcxMzg3MTRhMjU3ZTI1YTQxMzU3OWJmMDkifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L284-L303",
+          "version": "repo-lines-v1:sha256:3e2065039a83733deadc43461dc936fed03be15dbbf81b1acad146f1cf63b38b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkwZmMyYTA0ZDdhZGY3MTQ0NWZjNjc2OGMxMDc3NzliYmMwNTNlMGIyMzJhYTUyYzk3NDRjOWVhYWYwYWQ3ZTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4MzEyMzNkMjhkOTUzNWQ3YjM3NjFkMjFhM2U5YWU0M2Q4MTYwZmQ1MTAzNWExNTM3ZDAxODJlODY4OGY4OWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5OGNhYWNjNWI1ZjRhZmMxMDM0NmU2ZDMxMGNiZjE5YjBkNGQ0N2FjM2E4ZDg5ZGEzM2I3ZDdmNTQ3NWQxN2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdjOTEyODk2YjkyYjIyZjZmNzc4OGNmNjBjYzFhNmMzNmEwZGNiNmNlM2RjYmExYThjNGVjN2Y5N2QxOTNjMGQifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L43-L52",
+          "version": "repo-lines-v1:sha256:2d200b04ea59df8a3f670c8a0cc7d6b6fcfcee0e3f616ff34fa14086d22a1ee0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmYjVlZDczODgwYmFlZDRiZGI1ZjUyOWY2ZTRhYmIwZmFkZDE3NTc1OWJlZDNhODBmZTU1ZTRhMzUzNDU5ODUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyMjEwOTg2ZmIwMTA2Njk1MWRkMjU0M2Q3ZDgxOTdiNWQwNDAwMjE4N2Q1OGVmZWQ1YjgyYjU1OGExZTlmZmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY5MzA3MmI4Y2M0YWE4MGIxNmVmZmU2MGZjNmE5MmUxZmU1Zjc3MWI1NWZlNTM1ODVjMjVjYjVjZGMwMTE3NjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNkNTY3MGEzZTk4ZmQ0ZjFmYjJhOGJjNWZhMDYyY2EwNTQzMTEzNTY5NjlmNjM2MTU0ZDA2MGFkYjgyYjkwZTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f5d9963d3a684008ba9a76d92b9f8bdb",
+      "statement": "The NaN guard checks finiteness before backward; a non-finite loss clears gradients and resets accumulation, five consecutive non-finite losses load the latest complete checkpoint and reset the counter, and the run raises if no complete checkpoint exists or if the guard is disabled.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L62-L68",
+          "version": "repo-lines-v1:sha256:a934a2ae91e4babf57238a8e2e0fc5acb5110269a31353da67467a8f56130778:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTE2YTQ3YmE2NTUwZWJhZjk3NDMyNDJiYzlmMTYzNTU0ZDg0YTAwMzY5ZTFjMGQzZjBmYzk4NDk2NDgzZTA0ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjI1YTlkZWUxYmRmNjZjMmVjN2FiYjNlNjY3NjA3ODQ4NmY0YzZlN2NjNThjOTMzMWIzOGU3MjJmMmE0NTBjMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGJjMDE1OTlhOGE1ZTdlMTBlYjEwNDFiMDMzYjA5MjBlMzkyMDhiNmU5YjNiZTU3NjAzODFkY2JhMDFmMWE1ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzM2MTdmOTFiODMxY2MwY2E0OGQwYjQ0MTQ0MWFhZjU3MGM1ZGZhMDgxNDAwN2U5YTk1MDQ0ZTZjMjUwYjllNCJ9"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L379-L396",
+          "version": "repo-lines-v1:sha256:a39e94f714b460c06b8cde9d634ff0c290c7c38d8966c7ac770b7eaed713af60:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5OWFkYWJiMTlkMjQ1MWViZWFiYTg0ZDExYzk5M2I3NDYxZDQxYzUyYmFiMWYxODIzOTg0OWJlNThiMGFhOTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkNzUyM2UyYmY3NGVjOGU4NjhmMDBjN2ZkMzhmOGZlOGJjZGRjZDc1OGJmYzAxODllMGY5MDRlN2QzYjI3ZGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZkM2MwZjc3MGNmNzNmMzllODRkYjUxNWY5MWE4OGQ0ZjEyZTBjZTcxYTRkODNmZGMyYWM4YjcwNjEyZDRiYjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI3ZDIwYzcyYzNiNzEwOWZiMjcwYjg5ODczMmVjNzM1NzVlMzU4ZDAwMWFkNDkwNmYwNWI0NjEyODI3YjJlZmYifQ"
+        },
+        {
+          "resource": "repo://utils/checkpoint.py#L132-L134",
+          "version": "repo-lines-v1:sha256:b0128921c7a4490053bc9cb460f01f958dab9720d174d4e35c826dc9d26ba6cd:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTkxOGMzZDAyZjdhOTE2NjcyZjViNGU2OTIxN2IyZmNhYzM0NDAyYjg4ZmQ3MTM5ZDNjNDY0OTVkZjAxYTkzNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDNjM2IxYTcxOWFiZWFiZjQ2MTg2NmNkMjIzN2QxMzI3NmU5YWRhNWViMjgxYTAxYzUzOWYxNmY4YTIyZTQwOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjA3ZTAxMWJkYTFlYWRkNGI3Y2VlMDg1YTI5N2YxMDRlNTIyOTI4MDQzZGRiMDRhNjg4NDEzODA3YjFlZDU4ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://utils/checkpoint.py#L70-L75",
+          "version": "repo-lines-v1:sha256:6c467f73d1fe918ee6e6da8c95e20781cad6dac99af771410d67137527acc44f:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTZmMmRlMjVhODY3YjFlZTNmNGFkYjExM2M3MGRkODhhYTIxMmZjYzkwYWY4ODE5MDZiYjFmYzBjNWFiOTg1NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTc0NWIyYmVlZDI3ZTQ3YzA0M2IxMDdiZjVkMjdmOGE5NDQ5MTUyMjk1ZDBkMDU0ZGJhMTBmMjc5ZDUwMjhmYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzgyMGUzYzUzMmUxZDY5MTg2OGI2Y2UyNTU1ZTI2ZmE1OGYzMjM4YmNhNTk4MDIzM2JlNmI2MWUwNzkyOGZmZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmFhMWRkMTkzYjQzNzVjNWI3MjgxOWZjMDkyMWFjN2U5NDNiMDY1YzhjMWQ3MTE5NGRiYWNlMjU1YjdjMmFhNyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3c9e0ff4672d4886823d9b5129f9b41b",
+      "statement": "`TrainingLogger` aggregates losses over its configured interval, reports loss, perplexity, learning rate, throughput, and supplied metrics, optionally forwards them to Weights & Biases when `WANDB_PROJECT` is set, and is closed with `finish()` after training.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L324-L329",
+          "version": "repo-lines-v1:sha256:8c7dac87c187714f87baf5e2fb2a0b5aed4b2c23d5b38ec0113bfc58b614a92f:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzhiNjAyNDVhODkxYmE4ZTI4NzBjNTIyMTM1NTFhZDMzODdhYWI3ZTFmOGE5ODRhYjZmYjkxZTk2MTgzYjliYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzMxNGU4YjQzMjVlNDllZjY1ZDM4YTlhNGJmYzI0ZjM2ZTZhYTFiZTI1NzZkZGI2MGNlOTk4ZTM2MDFjYTMyYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWEwYmZjYjQ3ZmNlMjY1NDdlNWNlMmU2ZDI4Yjc0Y2JkNTg4NjY4MzE3ZjFmMWZhNDIzNTk3ZjRkN2NlMjc1MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTAxYTZjYWMwYjc1MWMyM2U0YzZmZGQxN2M0ZTM5MWE2ZjY2ODg2MmJjOWExYjExNDNjNDE3NzkzYjVlNjVmYiJ9"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L417-L425",
+          "version": "repo-lines-v1:sha256:8109f3352de4206cdd356a5903b2b58ee141d42770a4ce16a07dd185ce15aec4:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWQyNTVlMzA0NzA4NGRlNmMyNGNjODlkMjM5YWY2MzVhMzkyNWZlZjkzZTk3OThhY2Q1NTBkMmExYWM2ZTFkMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTQxMGQwZjE5NjFmZTNlYjZkOGI2YzAyNzRkODIyODllOTU5ZTE4ZTA4YWZiNThhZTExOTY1NDRlMmE4YzMyOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDhkNzkzOTc2NjlmMjYzMmQ5MjdjMWRhZDUwNTU4MWNlNTVlZjVmNmIzY2NmYTJkMjc2YTNjZGEzYTJlM2U1MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGMyMDliZGY3YjFkNzljZWZjMzc1ZDZhZjlhMjMwNWMwMGM5M2ExYTM4OTNmYWM3YmFiMTQzODk1ZTYzM2YyMCJ9"
+        },
+        {
+          "resource": "repo://utils/logging.py#L7-L50",
+          "version": "repo-lines-v1:sha256:ff78d9b513d3846cc1eaed05564887fd6f9ccddb7ed130f360e99ebb8422b76c:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3YjI2YmQ5NWEzZTQ0N2VjMjMyZmExODNkNTkyNDY0ODM2NjYyMGVhMWY2MTlkYTJlM2E5OWQ2OTE1NTQ2MzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlZjQzNTI2MzUyZTY0ODJhN2I0MzI4MDBkMGRmNjJmNDZkNTU0ZmQxNTg2ZDAzODJkYjhlNGIyNDE3MDVmYmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY3OTJjNjc5Yzc5MDFiNjlkMzM3NGU1YTRmOGY5YmM5NjRiZTM2M2NiNjEwYWNkOGE0MDk0YWU5YmZlNWZlNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2Y2Q0NmNiODIyOGE0ZTdlYzVlYTYzNWQwZWFiZGRhMWVmMGM3ODA4OGNkOTc2YjZhODk3OWZhZWEyMjc2ZWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dee61bef00a444ada8e2e23ab4266a3f",
+      "statement": "`CheckpointManager` atomically persists model weights, optimizer state, optional scheduler state, and JSON metadata; model safetensors deduplicate shared data pointers, and checkpoint discovery considers a step complete only when model, optimizer, and metadata files exist.",
+      "evidence": [
+        {
+          "resource": "repo://utils/checkpoint.py#L109-L134",
+          "version": "repo-lines-v1:sha256:bf91a6b2827938a313a4672295323f4436af240d5035299fb73194e996ef4e27:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2NzJiNTg2N2U0MDM2ZmE0OTE3NjYwZGU4Nzk4NGVlNmIwYWJjZWM1N2YxOWE4MWRlZTY1YmM1NjU2OTU5OGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzYzNiMWE3MTlhYmVhYmY0NjE4NjZjZDIyMzdkMTMyNzZlOWFkYTVlYjI4MWEwMWM1MzlmMTZmOGEyMmU0MDkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlOWU4MjgzNTZhMGMwZmVmZmZmMjZhYTEwNWNlNTk3Njc5NjE1NWFmNDNhMWUzNjYyNDdlNDU2ZDY0MDlmNGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://utils/checkpoint.py#L15-L31",
+          "version": "repo-lines-v1:sha256:d1fa605ffaa667b764c644ab0777fcc2da86d820c9e3b62ed55f5ee3ab305e51:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFhY2U1MmZhOWU4NmNhYzE1ODQ3MzE4M2IwNzVhYjBmNjVjNGQxOTcwZjUxODlhOWJlN2NhNDE4NWFmZjY3MTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2MDZmYjcyM2VkNmNhNDRiMjA4NzIwMmUyZGVjZGU1OGU3NGRiYjc3NDEyZWI0MDlkY2MyNzRkNDM1MjI2N2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyMDA5N2U0YWE1MDA2OGJhMTU3ZjlhMjczOWZhZDg2OTk1ZTFlMGNkY2NkYWRjNTg5N2MyMDM0Yzc0ZDNlZmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY2NmZiOWZlN2NjYWI5ODRiMDY5ZjM3YmZhOTI1MzA4ZDllMmFkMjg2NGUzOWFlMzE1ZGRlZjFjNTlkNWNjZDIifQ"
+        },
+        {
+          "resource": "repo://utils/checkpoint.py#L70-L100",
+          "version": "repo-lines-v1:sha256:df6eb114f9eb14efe28c89007b0d5aa0edd0dfe8c0edb31acaf80125923d0ff7:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2ZjJkZTI1YTg2N2IxZWUzZjRhZGIxMTNjNzBkZDg4YWEyMTJmY2M5MGFmODgxOTA2YmIxZmMwYzVhYjk4NTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgzOTEyOGYxYTgyNTQzMTUyZjg0M2MyYjdlOGVhZGViY2YxOTk4YTdkMGIwOTdjMDg2NzEzZTBlOGQwNGNhNmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM4MjBlM2M1MzJlMWQ2OTE4NjhiNmNlMjU1NWUyNmZhNThmMzIzOGJjYTU5ODAyMzNiZTZiNjFlMDc5MjhmZmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdkMTdhNzU0Yzg4YjYyMGZjNmQ3M2JlMmZiM2MxMzZjYTM2OTI1ZjZmZTMxY2RhYzRmM2M4YzRhN2Y2NmMxMGMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5e4ec9fd294a4b12b66e4f3db7865b35",
+      "statement": "Resume restores model, optimizer, and scheduler state at the requested checkpoint step and restores Python, NumPy, Torch, and CUDA RNG states when the matching `rng_step_N.pt` exists; after the loop, the entrypoint always saves a final checkpoint and persists the current RNG states.",
+      "evidence": [
+        {
+          "resource": "repo://training/pretrain.py#L335-L348",
+          "version": "repo-lines-v1:sha256:836513df44cf399ede899de57dafca7f9ee836a594c95de9d0bffa1654fff961:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM4OWM2ZGUzYjU0NjQ2YjVkZjNlZDY4YWU1Y2M3NmNmZmY4NzMwMWQ0MDI2YTZjODUwM2I2YjlhZDJlZThhOTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFjMGVjY2JjYjU3MzM1NjUxNDQ1MmJjNGJmODQ5MWMwOTkzMzVmNjJjNThkOWQ5YjY5ODNkZTBhNjc3OGU5NzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNjNjQ4ZGZjOTAwZjczZGQwZjg4MTJkY2YxYjMwNGQxNjk0MjI0YmQyNWZkNTU5MzRmYWQwYmY2YzIwNzcwZTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhhYzI3MzQyMWJhZjBlYWYxZmUwZTY4MjAzODhlNTVjNDJlMGJjN2E0YzFkN2U4NDI0YzBhYWQ0NDUxZjQ5MWIifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L430-L440",
+          "version": "repo-lines-v1:sha256:26c3255be830178540264c29fc797c20190109b3fea7a721409dbe5f29d13607:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5NDQwYWY0ODRkOGIzMTJhYzAyNjYxYmFmNDZlZTkwNGRmYzVkNDdhNmZmOGFkNDMyMjZhZmZiNjc1ZjY3MDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3ODk5ODgwODliOWJlZTY1ZjNiZDI1ZWZiNGNiODc4Y2MwY2QxYjIyNGIwZTZiNjkzODY4ZDE2OTY1NmRkN2EiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRlNThhYjk3ZDYzOWJhNGEwYWMwNGE5YWRkYmMxNjM5YTBiYTEyYWYxYTM2YmE1OTliMWZkZjYyMDgwNWMzYTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5MDAyOGEyNmE4NGIyMWJiM2Q3Y2U3YTI4MDI3YWNlMWQ0OTM5NmNiZTdhMGEwYTlkODhiMTYyODk2YTYxYTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2b3ab8d3d4354b429118edcb381bad54",
+      "statement": "The focused tests verify scheduler boundaries and decay, chunked-CE equivalence and gradient flow, single-file and sharded dataset windows, checkpoint round trips and atomicity, router auxiliary gradients, NaN detection, memory accounting, logger calls, and tied-weight checkpoint deduplication; shared-data integration tests are skipped when the sibling package is unavailable.",
+      "evidence": [
+        {
+          "resource": "repo://tests/test_data_pipeline.py#L1-L5",
+          "version": "repo-lines-v1:sha256:08106f3bd121cf9bb326fcf3348b70ff28d5b5df48b571280c76adcf5c7a0963:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmI4NDE3ZjJjYjhiNmM3OTMzMmYxZTY1NDI0YTg3YWQ5NTY2YmRlMWNjY2I5ZjQyZWFhZWI0ZDA5Zjk4YmI4NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTMwM2VjZGQ0YTRkMTBmMTljNzNmZDQyZmQxMjQzN2ZkMzM1NGE4MjY4MTYwNWRhNTI1NWE5N2EzOTA2OGRiYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGRhZDM0MjljMDNkNGYwMmEyMTgyN2YyNjYxZmNkYWJkOTRiMDRlNTlhMmY1M2FkODBjODQ3Mjc0NmMxYTAwOCJ9"
+        },
+        {
+          "resource": "repo://tests/test_data_pipeline.py#L563-L637",
+          "version": "repo-lines-v1:sha256:7dea906b250d7f9c2425628747197d54a639481ca28445f7410f3dce6002bd4c:eyJzZWxlY3RlZExpbmVDb3VudCI6NzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlNDU4OTU0Y2RkZTdiMGVmOTgyYmM3MzEyOWEyOTM3MTUxZTBjZmI1NDM2ZDk0ZjkxM2JjMmM2ODc2YTA1ZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhYjk5NjM4MThjZjhiMzRlZTc1ZjNkNmJhNWUwZjViNDFhODNiMTFkNTg2YzYwOWU0ZGU3NjkyM2Q0YTU1MjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlY2FlZjQ2ZjZkMzc1ZDFmYjkzOWViMzcxZDYxMjM2ZWFjYzE1Y2IzMDllYjdmMzI1MTk1MDNhNDI1YTk4ZjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1Mjc5MWU1ZGU5ODkyMGM5ZGExNzZhYzJlMzhiM2I5N2U4ZjFlOTFjMDY0MGUzZGQxOTU5ODA3YmNmZTg4NTcifQ"
+        },
+        {
+          "resource": "repo://tests/test_training.py#L19-L65",
+          "version": "repo-lines-v1:sha256:8a6b171e68afc1a51ca7fc83532b2bb178bfafdb13c74eb30a5aebf1724b8950:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3YjFlZDQ2NTZiNDUyYTg0ZWE2ODZjNWZlMmQ4NzNjZmVmOTZhOTlmMWNmNTRmODI4M2NhM2RkOWZhNGZhNzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ1ZmFlMzBjODc1NjhlZDFiY2ZmZGIzMTAxYTZlYmZkM2ZjMTg4ZjA1OWY0NWQzMzEyZGYwYTAzMDM1NDYyNmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3NzkxMjBkZGQ1ODY3NDA4MjkwOTRlNTUxNWQwZTIyOWE3ZjU1MmM0MDUzYTUxOWZiM2U3YjJmMjEwMmY2NzcifQ"
+        },
+        {
+          "resource": "repo://tests/test_training.py#L67-L190",
+          "version": "repo-lines-v1:sha256:372912c74100590fa9a081240a5c0c92967785e2c84b6bca4a1c92b73da8e400:eyJzZWxlY3RlZExpbmVDb3VudCI6MTI0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkNTE5MDYzYmU4MDVlOGI0MTQzNzZlNTY3YmU1YWY1ZmU3MTk5NTNjMGU5ZDQ3ODExZDZiZmZjMmRhMTBhNzc2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJiOTMwMzdmMTQ5ZmQ4YjZiMTNjYzJiNDE0ZWIyYmJlMmExN2E4ZGZmNGZjNjQxMzY4ZDc2Mzk4ZTUxZTE1OTI5IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI2M2YzMDdkYTA5NjY1MTFhODM0YmQxMzg2ZTA0MTFjY2Q4MGI1MzgzNTJhZGQzYzZlMTM3NGIwYmJmY2Q5Y2E2IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        },
+        {
+          "resource": "repo://tests/test_utils.py#L19-L177",
+          "version": "repo-lines-v1:sha256:c047d1658dbbf9a4f7af80fe7d2c9fe8466c7f38e2f739d2bc35c424ed2663e7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTU5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIxMjQwMWNiNWYyYTBiMTUwZGIzMmFmOTI3MTlkNTc2NGMxZTFjMjZhMGU2ZGFhMzUyYjdlOWRlYTQ2MjRiOTUwIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI5OTkzNDUyMTdkYzU3ZmI3YjNkMWRmMDg5M2U3Nzc1MTJkNDE2ZTJjNzY1Mjk0MDVjYjJlNGY2MmUwNjJmZjc2IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJhOThiMDYzZDliNDdlNjUzNzk2MjU1NzJjY2UxOTc2NjlkNTc2N2UxMmMxOGJlMDc1NjUyYjhjZDk4MWNlOGQ1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.4.3",
+    "at": "2026-08-28T16:02:00.548Z"
+  }
+}

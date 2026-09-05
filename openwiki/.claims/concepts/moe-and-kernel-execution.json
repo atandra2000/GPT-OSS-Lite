@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:5750001cbbeb41b342aa29f3cf205dbb16bfb4cd1eb834676602426d8d48671f",
+  "claims": [
+    {
+      "id": "claim_cf224400a5134a65804f9480f7e6bb41",
+      "statement": "GPT-OSS-Lite places a MoE layer in every transformer block; each layer flattens `(B, T, D)` input to tokens, routes them, adds routed and shared expert outputs, restores the original shape, and returns a scalar auxiliary loss. The model averages per-block auxiliary losses and returns that mean alongside vocabulary logits.",
+      "evidence": [
+        {
+          "resource": "repo://models/moe.py#L64-L105",
+          "version": "repo-lines-v1:sha256:744227fb09aa7ff7cec77482e78e920d84cbdce060ca05e670c4e4349d2bac3b:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzZDhmNzgyYzVhY2VmZWU5ODllNTNhZDFhYmNhOWQwYmQ5ZmMyNjkzZGE5YzcwM2MzNjQ0ZTVhMmZlNjg1ZWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4YjA4YTljYzYzMzY4YWRjYjcwMzkxYjEyNDg3YjEyNzVkOWYzMTgyNGU4ZTlmNTUyYTIyYjczNTc5YWFlNDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZkZTY3OGQ5NTJjMTJlNDBjMjk4YmZmMzk4NWI4YWIxNTkxZjdjN2ZjYmZjMTQ3NTJiZTg4OGMxYzg5Yzc5ZDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5NDc2ZTVkYmZhNWM1MGFlZmFiYjFkYzg5Y2NhODgwNDc1ZGI1M2MxMjQ2ZmZhZDc0MTg4NjEyZDU2MjJmNDYifQ"
+        },
+        {
+          "resource": "repo://models/transformer.py#L138-L153",
+          "version": "repo-lines-v1:sha256:2ce8317e8fc28f7bc1cecd29be681d176bdb47c3bdff6e6c6721cb98a5bc1614:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyMDc2YzdhYjRmNjA0ZDYzNTFmYjExZTlmOWE3NjU4ZTJkZDZiYzhhODhlMTU0YTAyOTI2ZTM0NGJjNjNmYTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4NzQ1ODUyODRmNjk3NjUzNjVjMTVmNmY4ZjAwNGUwNWQ5ODlkNGE2MWE5Y2NiN2QwNzM3M2ViZmY5ZWNlODgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY5YzUwZGJjN2I2MTIwY2NjZWNiYjI3YWE4YWY2MGEzMjg3YjBiZWI4OGFmOWZiOTcxYzRiNWU5NWUyMmUyMTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwYTFhMGQzYTlmOGNhNWE2MjFjYmI4OTNiMTE0Mjg2YjdhMWMwYWY5ZjlmZmEyNzkxNjU2YmI5M2UyNjFmNTgifQ"
+        },
+        {
+          "resource": "repo://models/transformer.py#L186-L227",
+          "version": "repo-lines-v1:sha256:52783c07db9d7eb20febbe324704ed062617efbb773964f712954562f0292a20:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkZDE1NDg4Yzg3MjRhOTEyOGZhZjBkMTBjMDJlYWI4YjMxYzYwMDA1OWEwY2JjMmNiOTg3ZDkzMGMzOWNlOGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMWNhODE2M2I2MTE5YjBkMzlhNjdkN2QyNWE3YzY4YzgwOTU0ODFjNDBiMjcxOGZjMjQ3N2U5ZmM3ZmUxNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlYjhjOWI4ODNlMzdlMzUyMDU5MmM4YjY0M2MyN2RhY2NiZDJmZjRkNTkwMzhiZDMxNTVhY2EyNzgxNzE2ZTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYxZDcxMjRhZmVkODg2Yjg5Yjk4ZDQ4MmYwNDRhMjA1M2EzMWE2N2RjOWMzMzIzM2M0Yjc0MmUwZDQzMTc4M2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c8ff795faa194c78a16240e4b2422d83",
+      "statement": "The default MoE topology is 8 routed experts with top-2 activation, 1 shared expert, `ffn_dim=1536`, and `moe_dispatch=\"stacked\"`; the default training configuration uses the same topology and sets `aux_loss_alpha: 0.01`.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L17-L69",
+          "version": "repo-lines-v1:sha256:dc94b93974339ee9a017f7183ecc04f86a6619bc807080f0a9abe613f948e352:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhOGU2YWU0MTRhNDM3ZDM5NjBiNjA3MTM5M2JmMjNmYjg3NDkxMGY3MTBkMjljOGExYzYxNmI0MDczZTNkYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEyMjFiNmFhY2RhMjNiNGVhNWEzOWY5N2JlODE5ZDg3OGVkZGM4MmUwYTU1YWFmZjNjYjhmZTk2NmM0MjljYjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEyZGE5MmNjMjMxYWE4ZGQ0ZDI1ZWYwZjdjNTY3YTNkM2NjZTQ4NjlhNzAwNzUxYWJiMDhkODU0ZTkyNzc1ZjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIwMWJhNmQxZTc0NjhkNTg2NzMzZjFhMzZiN2RlN2FlYmQzM2Q1MGFiODUyYmVmNWEyYmEzOTg2ZTc5NjljY2MifQ"
+        },
+        {
+          "resource": "repo://models/transformer.py#L23-L50",
+          "version": "repo-lines-v1:sha256:602b25249756c32e45017d253488313e8b0bea1850dced5e7cb9104527f2a4fa:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmODUwMDU1YmExNWQ3OWZlMDgyNWIxZTkwYzM0ZjE5NDc3MzM1YTc0YzIyMWJmMTFhMGQxNTI4NzBiOWUzZjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdjNGE1ZmJlYTMxMTcyNTA4NDY1MzEyODBjNzY1ODhlZmNlZDc0MDQ5MWQ5ODA0YTAwYmFiYTU1YTA0OWJjMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0NjdlNjM0Yjc2ZjAyNWRiYjMxZTg3ODZmMmQwNDc2ZWUyY2M1Njg0NDk3ZDcxZjk1ZGVkMjY3ODk4ODYwMDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_68f12f89a52c44c5af652cca6622aef3",
+      "statement": "Each routed or shared expert is a bias-free SwiGLU module computing `W2(F.silu(W1(x)) * W3(x))`, with W1 and W3 projecting to the intermediate width and W2 projecting back to the model width.",
+      "evidence": [
+        {
+          "resource": "repo://models/moe.py#L11-L21",
+          "version": "repo-lines-v1:sha256:e163591b8f1419d0c4c8548eb45aa087dc493206553554f7e3bf48ecbc3cc2a0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzOThkNDhlZWEzMDA4OWY3MTczNDc5NGEzMDM3NDhkNWQ1YmZhMjI3OGY3NzVlNTc1MDRiNTZjOWVlMmZhYjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzNWIxNDEwZDE1OWIxYTMxOTQ5Njc1NWViZWRiZjg5ZjVhZGE0NTRmNTI2NzgyY2YxZGJkODM2ZjU4YTg0NzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzZGE1YmRhZTcxMGE1Yzk1OTVmZTczZDM2MTYwYjg2ZGNlOTc4NmI0MGNkMTU3NzI0OGVmNDY5YjRlNDljYTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE3ZDI5NjdjNDQ0ZjQ1MDYyNDU3OTRiY2JmZGVjZmNjNDUyZmY1ZTRiYjk1MDU2ZTE1MzJmMDVlNjkyNDNkYzcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3703b52150f94e009d9c178045059cac",
+      "statement": "The router is a bias-free linear gate that computes softmax over all routed experts in FP32, selects exactly `n_activated` top probabilities, renormalizes the selected probabilities with a `1e-6` minimum denominator, returns those weights in the input dtype, and retains raw logits for auxiliary-loss computation.",
+      "evidence": [
+        {
+          "resource": "repo://models/moe.py#L24-L43",
+          "version": "repo-lines-v1:sha256:418fdcdd18bed1e21d78aa4b9cb60472381235768898643074125eb9a27b1e2f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE3MTViMjlmMzUzYTA5NjVhMzU4Njc1Yzk4MWFhMmE0MmUwODI5YTYxYjRhODQyZjZmZmMxY2NjYzNlNDMzNjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkwMDY1NTY0NzYxZGVmZTM5NGU5MWMyZDgxMWNkYjdhNjk1NmM2M2IyNzgzYjcwNGIwZDU2MTMwMWFiNDQ4ZDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmZTM3ZDNmZDFjYTA0NDU4MGEyZTQyMTE5MGEyMDMyODllZmUyZjQ4ODBmYzlmYzJmMzcxMDA3NWJkMzI2MjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ1YzM5NjI5NzQyZTU3YjFhYTVkYjFhMThmNGQ2YjJlMWIzNjI5OWJlNjEyNWRjZjk3Y2EyY2QyNmQ5MTQzNDYifQ"
+        },
+        {
+          "resource": "repo://tests/test_moe.py#L38-L73",
+          "version": "repo-lines-v1:sha256:274b2b3813967550fdf69445f9cdb1c0585aaf63a6972378b5f75b503f9b87f2:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyNjRlN2Y3MjdkNzhkNjhkMjUwZmIzZWQxZmYwODQyYjY4MzEzODc1NmVhY2JjZDFiNmQ1MDY4YjU1ZWY4ZjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmODY3YTkxN2UzNTk2NWE0MzYyMDdiOGVjZWY3Y2Q5NmRkOTg4MWVjZGZjOWM0YjQ1NmEyNWRiZjAyMWMzM2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNkYjA1YTM5ZGYzZmJhNzhlYmM3NWFkYzg4MTYxODc3ODM1MTEzNWViOGEwZTUzZGI4ZDg4ZmRmYzNmYTYzZDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMyNzIyODJmZGRkNDQyYzM1Nzc4MTljZTI2YTFiMzg1NTRiYTA2MDAzYzUyMWQyODY0ZjgzNjg0YzAxZTk5Y2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_08ebdca829a643438f34930c555d08ed",
+      "statement": "The auxiliary objective is the standard Switch/GShard-style `E * sum(f * P)`: `f` is the hard top-k slot frequency from `bincount`, `P` is the mean FP32 softmax probability, and only the final scalar is cast back to the logits dtype. The training loop adds this loss to cross-entropy with coefficient 0.01 before gradient-accumulation scaling.",
+      "evidence": [
+        {
+          "resource": "repo://configs/pretrain_a100_502m.yaml#L64-L68",
+          "version": "repo-lines-v1:sha256:d0db58d011fff3b02ec6c511fab0c56433d400d6aa302294cb3e5262b50d3ab1:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDk5NTc5YzZhODcyYzBlZDBkM2Y4OWJiMTEzMmE0YzJhMjA5ZjY2YTkwNGRjMThhYjQ1MjBkYjA1N2Y0ZTJiMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjI1YTlkZWUxYmRmNjZjMmVjN2FiYjNlNjY3NjA3ODQ4NmY0YzZlN2NjNThjOTMzMWIzOGU3MjJmMmE0NTBjMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjQ2ZjA5MzJiZDA5ZGYzNDU0NTU1MzgxZjZhNjlmYmJlOTg5YTA3MGI4NzFkNjI0YmQyYjcyYzJjZjZjZWYzMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzM2MTdmOTFiODMxY2MwY2E0OGQwYjQ0MTQ0MWFhZjU3MGM1ZGZhMDgxNDAwN2U5YTk1MDQ0ZTZjMjUwYjllNCJ9"
+        },
+        {
+          "resource": "repo://models/moe.py#L46-L61",
+          "version": "repo-lines-v1:sha256:c7c3fb0ab5b8ff7e23acf11542dfc76a8d8604bbdc3217fc001b26254e6f0000:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1OTQwMWQ4OWUxYjdhM2IzMzAxMGYxNjg2ZDBkNDdhMTUzMDE5ZTU5YzRmMzdlZWQ0ODYyMTgzNDMzY2U0MzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MDU2MDUzNmFmNjIwNGIxNjU1MGM3M2QxODdiMmM3NmFhMzAyNDgwMjBlMGE4NDM0MDk4YWQ3Yzc1ZmE3MTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0NjMxMTAxNTIzYzBjOTY2YzI1MTczMWE2Y2Q3MTQ1ZjhmZTZkZmUyMjBlNTkzOWM1MWE5Zjc2NTUyYjg0NjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJjNDE1NDA3NmVmOGE1ODFmMjc0ZjIxMzU1ZmYwMzVhNDY0NTA2MWZhZjEwN2JiNDAyODRlOGIwNGZlZDhhMjkifQ"
+        },
+        {
+          "resource": "repo://training/pretrain.py#L350-L399",
+          "version": "repo-lines-v1:sha256:cc747f28c36595bb4999fdc11cd87e41f5c10be5aafade12762fd6b99d618d4d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4MDRjZTRhMTZiNzJiZTI4ODZjODNkMjhlZDY4ZDA2YWM5N2U4NzI1NzY2ZjQ1MzZjODkwYTM5NDljOWRmZTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwNGY0OGZiMTBhYjAwMjRjOTAxZjEyOTY0Y2FkYWE5Mjc4ODQ2ZjQ1NjFkNGI5ZGQ1YWE1ZDliZWMzNmE1MmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJlYjIyNmQyZDFjMTQ5ODEwNDIyNWRlM2I4ZDFiMTI5Yzc5NmVmZmRiNmUwZTdmZmVmZTExOTQwYjBlODk1NjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBlZGNiOGQyODQ1Zjg1ZTFjNDBmNjY1YTJiOWZkNzcwY2M0MTZlZmY1M2RmZmM1NmJhN2RkYTBhOWRjNWQ1ZWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1daa25ce0353432a9a7defad25a79d13",
+      "statement": "Shared experts bypass routing: when configured, each shared SwiGLU runs on every flattened token and its output is summed directly into the routed result without router weights.",
+      "evidence": [
+        {
+          "resource": "repo://models/moe.py#L95-L105",
+          "version": "repo-lines-v1:sha256:389186c3a0aba08c41a0e688e2fbcf1f1c313a03ae0c3aa6bd8bd3f28270983f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5Zjk1MDNkZTY3NTc4N2M2MGU1MTRjOTc0YWY2ZWM5NzZlMmVmYTJjY2ViNGYzYjYzMGQ4NjkwNzA3MTgzNTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4YjA4YTljYzYzMzY4YWRjYjcwMzkxYjEyNDg3YjEyNzVkOWYzMTgyNGU4ZTlmNTUyYTIyYjczNTc5YWFlNDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNlZDk0MjZiODVlNDY4Y2Y1YjhmOTdkNzE1Njk1MmY3ZGEzZGNkNTEzYzg0Y2E2YTc1MjM2MjMxNDk0YjZmNWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5NDc2ZTVkYmZhNWM1MGFlZmFiYjFkYzg5Y2NhODgwNDc1ZGI1M2MxMjQ2ZmZhZDc0MTg4NjEyZDU2MjJmNDYifQ"
+        },
+        {
+          "resource": "repo://tests/test_moe.py#L125-L138",
+          "version": "repo-lines-v1:sha256:158bfdff7d562c1e2d9dc64b244659eb0a4e8cc16eb6ba407d4832a6815af210:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1YTRjZTAzNDY0MDU2NTkzMDQ2NjBlNGNlZjUyNDIxY2FiZjUxYWYwNzJlNWFjZjVjMzY4ZjI1YWE4ODllMTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0MTNhNGYxMjEwNzNlZjFlMDgzMDBiODNhNDcyY2UyY2ExYTQ1YjEyOWI2YTgwOGM4ZjQ0ZTdmMzUyYTFjZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEyZjhhNzQ3Zjc3ZmJhZGQ3ZmM3Yzk3NjI3MmQ4N2M2OWY0ODhjODZiZmVkMGQzNGE2NDNmNmRhMzE4NDkxYmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5MTFmZGZlZGRhNDlhZDdlMmE3Mzc2N2VlNDNjOGQ3OTVlOGZjMmUzNTI2MTdhNTUwNDdmOTRmYzg0ZjY2NDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9c77be6bd01d4a4386fd825a0b5e6743",
+      "statement": "Both MoE dispatch paths flatten routing slots, repeat token ids, stably sort by expert id, derive expert counts and offsets, process contiguous per-expert ranges, apply routing weights, and accumulate duplicate token contributions back to the token buffer with `index_add` semantics.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L137-L143",
+          "version": "repo-lines-v1:sha256:4afd29be14c4d79b1c07a3cab1d1278ea350c370f50b03d913b3268990346973:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjgyNmNjMDYyYzRkYWRlMjIyNWY1YTEwYjc5YTU3MzI3YWU2YjlkNDg0NjhiYzQ3N2M3MmI2M2NjNjM5MzkxZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjQ5MGM0ZmQ1M2M2MDk0ZmNhMWQyNmRhN2JmMTQyOWI1MzdmYmExYjhlODI5MWU3MTE5MDA4Nzc5OGVhOWVmYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWViYmY3YjBkMmJlZDg3YTExNmNhMjU2NTIyMTRmMjQ1ZTMwYmNlYmE2NzJjY2VkZTBjMmQxNDE0ZTAyZDc5YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzllMTYxOTFiMmIxYWU2ZDAyNTBjNjMzZjFhMGVlMmU5ZGZhMWY3YzczYzk5M2JlYTEzZjA3YWZjMWM3OTQwYSJ9"
+        },
+        {
+          "resource": "repo://models/moe.py#L107-L205",
+          "version": "repo-lines-v1:sha256:dffaf0b33ff0bf0995befad24d3aa8f19456129a698c8db2b4a025ac5a7234a0:eyJzZWxlY3RlZExpbmVDb3VudCI6OTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4ZjRkZWJlM2ZhOTJlMmU1ZDQzZDAwNGYxZTlkYTZjZjA3ZmYxNWZkODcwMjk5NDE0OTBhNDAxNDdkMGVlN2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2YmJhMDY3ODAyZTUxZTdhMWEwOWFiNmMwOTFiM2Q0MTIyMjExY2FjZTdhNDJkM2U2MDdlOTcxYTVjNzk0NzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3MDE3NDdkMzA4NGIxZTc4M2FlODI5YWQ0ODM0ZGYzZTI4MjIyYmEyNTExZDNjYjk4N2Q4ZjlhZjIyYTZkY2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://tests/test_moe.py#L158-L184",
+          "version": "repo-lines-v1:sha256:882325215097d560e3368595ff33b99d925cd012402428d341b0ad92d2a66ad3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3YjcwNjZiZWYzMTY4YTg5YTI5NjljMmIwYzgzYjc1NzU0MTlkMDI3OGUyMzMyNTkwMmNhOGFiNWViOThkYTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3MjM4Yzc4Y2IyM2IyZWU0MzViYTdjYWU1YjZhNjliOGYyZjYxMDZkZmRlZjZhZjY2YzhiMDgyMGExYTRiYjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIxZDZlNmIwODYyMDA1ZDk2Zjk5NjI0MGJhOTBjMzAyOWZiYzRmOGNiZmQwMzZmZGI0OTc5ZWYxZDQ1NWFkOWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5NTY2ZGJmYzFhYTE3M2JiMWQ4NWY1MWM3NWZlNWQ2ZTgyM2RjNDdkZTRmNTliZTNmZTllM2MyYjFmZjE1OTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4adf4aa9707148d0bb43a2755626478b",
+      "statement": "The `\"stacked\"` dispatcher is the pure-PyTorch reference path: it runs the complete SwiGLU expert on each non-empty expert slice and works without Triton on CPU, Mac, and CUDA. It is the default unless the dispatch setting is exactly `\"triton_grouped\"`.",
+      "evidence": [
+        {
+          "resource": "repo://models/moe.py#L168-L205",
+          "version": "repo-lines-v1:sha256:0316cfc425d5e8aad8a820706520bf32b803c561bcca7ef88812af5fcdee1823:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2NGM5NTU2MjJlZTk3MzRkMDZiOTVkZjM1NTY4NTIyOWY5YTA0NmUzODZkODhmYzQ3ZTVhNjQ2N2Y0MmIwZTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2YmJhMDY3ODAyZTUxZTdhMWEwOWFiNmMwOTFiM2Q0MTIyMjExY2FjZTdhNDJkM2U2MDdlOTcxYTVjNzk0NzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZjYmExOGFkZDczZTE1MjMwMWEyNjViMmRhOGIzNDViMWNhNDllZmIxODJiMzBhMmMyODc4MjcyYzU3NGJkMjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://models/moe.py#L64-L105",
+          "version": "repo-lines-v1:sha256:744227fb09aa7ff7cec77482e78e920d84cbdce060ca05e670c4e4349d2bac3b:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzZDhmNzgyYzVhY2VmZWU5ODllNTNhZDFhYmNhOWQwYmQ5ZmMyNjkzZGE5YzcwM2MzNjQ0ZTVhMmZlNjg1ZWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4YjA4YTljYzYzMzY4YWRjYjcwMzkxYjEyNDg3YjEyNzVkOWYzMTgyNGU4ZTlmNTUyYTIyYjczNTc5YWFlNDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZkZTY3OGQ5NTJjMTJlNDBjMjk4YmZmMzk4NWI4YWIxNTkxZjdjN2ZjYmZjMTQ3NTJiZTg4OGMxYzg5Yzc5ZDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5NDc2ZTVkYmZhNWM1MGFlZmFiYjFkYzg5Y2NhODgwNDc1ZGI1M2MxMjQ2ZmZhZDc0MTg4NjEyZDU2MjJmNDYifQ"
+        },
+        {
+          "resource": "repo://models/transformer.py#L16-L50",
+          "version": "repo-lines-v1:sha256:51cb2a09a8912c9cf0e4e8b1a313bee0c2bade7d4a42691c7b724b28e67876ce:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2ZmJhZTBiOTFkNDRmYzBkNDlmNWRlNjkxZGE2ZmM0MzFmMjYwMTM0YmY3MzFlMGUyMWY3NjQ4MDk0MzM0Y2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwMjM3Yzg3MTI4MTA5OWMxYTJlNmNkMzU3NTMzYWM5MzA4ZGEwNmYzN2Q5MWY5MTU5ZTAyYjIxN2YxZTJjN2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0NjdlNjM0Yjc2ZjAyNWRiYjMxZTg3ODZmMmQwNDc2ZWUyY2M1Njg0NDk3ZDcxZjk1ZGVkMjY3ODk4ODYwMDEifQ"
+        },
+        {
+          "resource": "repo://tests/test_moe_triton.py#L101-L108",
+          "version": "repo-lines-v1:sha256:678d713a03c612f452b917e316f21c0739b15e4cd7bf958584a9235fd39916ee:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDI2NzA5ZjliY2Q0OTJkYjM0MWY1OGU5MmUzMTg4YWIyMjkzYjE4NzIyYTM4YjE2OTM4YThjZTY3NmIyOTMwMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjNkZjJhY2YwNmU4YzNmMDNjNzEzNWM2ZThhYzVhOWNhNTQzMmFiZTA2YTc0YWNhMGZkZDlhNTNhMDA4Zjk4NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTVkMzdjZThiNzMyYjNiNTVmY2ZkMmFlNWI1MjY0ZmVlOWZiZTg0OWMwN2QxMjZhYjYzZDA2YmRlYzg0OGE0YiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_466a7f395056431b8a7deb33b77298f1",
+      "statement": "The explicitly opt-in Triton path replaces only the routed W1/W3 plus SiLU and elementwise multiplication stage. `_dispatch_triton` keeps expert grouping, applies per-expert W2 in PyTorch, scales by routing weights, and scatters with the same accumulation contract; router computation, auxiliary loss, shared experts, and other model components remain outside the fused kernel.",
+      "evidence": [
+        {
+          "resource": "repo://models/moe.py#L107-L166",
+          "version": "repo-lines-v1:sha256:cc51d2ea13ef7ac242b56d8d7ed767cc29b6b6a6f5ae3815e8eb0f0a069cd7ba:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4ZjRkZWJlM2ZhOTJlMmU1ZDQzZDAwNGYxZTlkYTZjZjA3ZmYxNWZkODcwMjk5NDE0OTBhNDAxNDdkMGVlN2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiYjU0MmE5MDcwY2FhNGM5OTg5ZmQxN2U0NGE5NmIwMmViNTBmY2JjZWQ2N2VhMGU0N2FjODgzZTg5NjgwZGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3MDE3NDdkMzA4NGIxZTc4M2FlODI5YWQ0ODM0ZGYzZTI4MjIyYmEyNTExZDNjYjk4N2Q4ZjlhZjIyYTZkY2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVkODlmZTA0NjE3MDY4ZjBhYmVmODNmY2FmZjE3ZTFiM2JhNDcwZjA0ZGFmYjUzNTFiNTQ4MGY0ZmE4ZTVhMDMifQ"
+        },
+        {
+          "resource": "repo://models/moe_triton.py#L1-L5",
+          "version": "repo-lines-v1:sha256:f89617fc1c928f643f008966d32585bb742dcc5695fafa2f32e4254e0f29a17e:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTA3OTEyYzA5ZWEyNjM3NjlkNDM3N2ZjYmZhZmRhYTc0ZWFkNzEzYWRlMmU3ODI1NWYxN2ZmODk3Y2JlMzA1MCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzQ3ZTgyMTZlMjEyZjRlNzVhZDA3MTNlYTgwNWViNDU1MzE1NjZjYzBiMDA4MzRlYjVhYTliMzA0NmNlN2Y3ZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODlkNWY2ZGZiYjAzMTg5ZWYyYWEwYWFhNTA3ZWY4YjFiZTA0NGIzNDE4MDg5Y2MwYjNlMDBkYzk2YTcyYjE2ZiJ9"
+        },
+        {
+          "resource": "repo://models/moe_triton.py#L205-L222",
+          "version": "repo-lines-v1:sha256:cb578450cf9c5c592a7bc5f9602a53bf497b08e58e3e512885754e74c402a780:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3OGZjYTI1YjAxYzQzNjM1YTMxZGVlOTg4MDZlY2I3YjMyN2FiOTc1MjRmNzQyZWQ2ZTA2MjdiMzYxMjEyYzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI1OWQ3M2RmNDFiNDJjMzViOWI0YWUyNjA0MDJkOTJlNTA0NzdmNmQ4ODI4MDU4NmYwM2ZmNmFiMDQ2NDI5OGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_71e0c39abaa74d05be16f9ef5293a06e",
+      "statement": "The Triton kernel uses a three-dimensional expert/token-tile/intermediate-tile launch with fixed `BLOCK_T=16`, `BLOCK_M=32`, and `BLOCK_N=32`; it masks partial token, feature, and reduction tiles, accumulates W1 and W3 products in FP32, disables TF32 for tiled dots, applies SiLU in FP32, and casts the fused result to the output dtype.",
+      "evidence": [
+        {
+          "resource": "repo://models/moe_triton.py#L147-L181",
+          "version": "repo-lines-v1:sha256:006060d3fbd3f7a3d46d0dfcfefca9871fac7a552e8dd8b126a920e88b7613b6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmN2MwZDhhMmM0YTJlMDEyNjlmOTc5YWE0NGI1Y2JhMTNiZTNjYWJjMmNhNTM2NDc1OTJkYzIyMWY4MjIwZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5MDlhNTNhNjE4ZDAyOGUxZDMwMDBjMGE3YWJjZWVjYmU1ZmIzN2Y0ZTUxMWVmZTQ2NjQzZmFkNmU2Njg3MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNjOThiNGJmZjY4NTgwNDZjYTY5MjU5NTEzN2EwOGU5ZDY4OGRkMGRjYzJlYjEwZGVkNjc0MjEzNTVkZmRlZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZhNmYwMzAwZDU5MzFlNGM2MjRlMjkzNGU0MGViYTExYzRjMTFjMTA3MWMyYmNlMWJmYmYzNDA4OGY1NjkwZjEifQ"
+        },
+        {
+          "resource": "repo://models/moe_triton.py#L53-L132",
+          "version": "repo-lines-v1:sha256:e668dd289319268842cc3e457ea3e3b21dfc95b16fc488bccd3601fc1128b16d:eyJzZWxlY3RlZExpbmVDb3VudCI6ODAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmMDViM2ZmZDMyYzBiZWU4MDkzZWVlYzkwNjFlZThkZWE5NTAxMTUwY2U3YWU3NjY1Y2I1ZmExN2Q0YmY1YmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhODE0M2EzMDNlNmE3Nzc5MDc1MDNjOTY2M2JmNjM5M2RlOGE2ZmVlYzlhMzllYjljNzdkNmQwZDQyZmExMDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBiNDY4YWQwYWJkNWRmODYyMGJiOTRiZGZmZTg1ZjQyMTEwZWNkYThhZjc2NGE0ZDVjM2JhMDZiYWE1Zjc3M2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYwMzRmOTVlNjk1YjZmNDE0OTEwNDU1MmZiMjJlYWJiMDJjNjJkYjgwOTExODBhOWU4NmI4NmQxMzNjODA2NjQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7505c4a9fa824be8b403d27c0df919a9",
+      "statement": "The Triton operation is wrapped in a custom autograd Function whose forward launches the kernel and whose backward recomputes `_moe_w1w3_silu_reference` under `torch.enable_grad()` to obtain gradients for sorted inputs, W1, and W3; expert ids, counts, and offsets receive no gradients.",
+      "evidence": [
+        {
+          "resource": "repo://docs/concepts/kernels-and-checkpointing.md#L158-L183",
+          "version": "repo-lines-v1:sha256:80b0a65578a9299ce617618f420fa370268a9a1b3da3376cc894d4496e5b2634:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM2NGNmZjNiODI4MjIwNTRlMDhkOTZmMzE3NTM1N2Q0Y2IxM2VkYTYyNDg0OWNkYzNmMGQxODE2MDFhZTE1OTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4YjhiZTIwNGVlMTNlYzZmMTk3MWIzZTY2MmRiN2VmOWQ4NDhmZDM4NWUxM2U5YTZhMWE1ZjQyZjFjNmYzOTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZkYTU5OGZhOGM0MGVhMDAxZTJkNzJlZTQ5OTQzZDQ4Mjk3YTk1ODc5NTRjYzgxMDI3MjhhMTRhYjNiYWRlZGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc5NjY4OWM1ODY1MTIyZmE1NzZlZGFmYzJmYzQxM2FjMTg4MTZlMzU1ZTk5MGEwNTQwNDZjYTEyNzk0MGM1ZDUifQ"
+        },
+        {
+          "resource": "repo://models/moe_triton.py#L135-L202",
+          "version": "repo-lines-v1:sha256:df4d4f17d4f69cfa1c141c2c468a378d5ce36c0a4cb0425eeddb568caa0732b4:eyJzZWxlY3RlZExpbmVDb3VudCI6NjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyNzIyY2VmNTlmOTkyYTFmZDU5ZmM4OGU4ZDk0N2MzMmFkNDNhNzQwOTViNjNkODNlZjNiNGRlMzlkYTUxMTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0NzdjMTJkMWFkMmNhYzZkZDczMDgzNzgwMjNlZWRhOTE3N2RhOGJhZjY3ZTNjZGY3OWJiOTllM2E2MjJjYTciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmMWY1MmRmZWFmNDNlZDQ5OTllMTlhYjM3YzA0NzIyZjgxOTUzODQxY2Y4NWE2Zjc2Y2FhMTFjZWE4NTM4OGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg2YjNmZWFkY2JiOWI3ZjMyODU5YjczZjdhZmQ1NGQxMmY3MzY2OWUwMmQwMzFmMDU4N2I0NmM2MTk5YmM1NzIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_933f086a2606428c87b20c257b4a7f21",
+      "statement": "Triton availability is recorded by a guarded module import. Calling `triton_moe_w1w3_silu` when Triton is unavailable raises a descriptive `ImportError`, and requested dimensions above the 8192 `d_ff` or `d_model` hard caps raise `ValueError` before launch.",
+      "evidence": [
+        {
+          "resource": "repo://models/moe_triton.py#L147-L181",
+          "version": "repo-lines-v1:sha256:006060d3fbd3f7a3d46d0dfcfefca9871fac7a552e8dd8b126a920e88b7613b6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmN2MwZDhhMmM0YTJlMDEyNjlmOTc5YWE0NGI1Y2JhMTNiZTNjYWJjMmNhNTM2NDc1OTJkYzIyMWY4MjIwZTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5MDlhNTNhNjE4ZDAyOGUxZDMwMDBjMGE3YWJjZWVjYmU1ZmIzN2Y0ZTUxMWVmZTQ2NjQzZmFkNmU2Njg3MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNjOThiNGJmZjY4NTgwNDZjYTY5MjU5NTEzN2EwOGU5ZDY4OGRkMGRjYzJlYjEwZGVkNjc0MjEzNTVkZmRlZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZhNmYwMzAwZDU5MzFlNGM2MjRlMjkzNGU0MGViYTExYzRjMTFjMTA3MWMyYmNlMWJmYmYzNDA4OGY1NjkwZjEifQ"
+        },
+        {
+          "resource": "repo://models/moe_triton.py#L205-L222",
+          "version": "repo-lines-v1:sha256:cb578450cf9c5c592a7bc5f9602a53bf497b08e58e3e512885754e74c402a780:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3OGZjYTI1YjAxYzQzNjM1YTMxZGVlOTg4MDZlY2I3YjMyN2FiOTc1MjRmNzQyZWQ2ZTA2MjdiMzYxMjEyYzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwYzFmMTg4ZjE0MmVkN2E4MjQ2ODBiMjA3MTcyYzU1MTliYzYxNGE0OGZkYTdjZjE2N2VkYjhkZGY3OTk1NmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI1OWQ3M2RmNDFiNDJjMzViOWI0YWUyNjA0MDJkOTJlNTA0NzdmNmQ4ODI4MDU4NmYwM2ZmNmFiMDQ2NDI5OGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://models/moe_triton.py#L7-L23",
+          "version": "repo-lines-v1:sha256:933c62b93404e3e3e19bfc125f58681860c32b089c835ace5d6ee25385b2ac28:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4NDBkMzlmMGI4YjFjYTc3YmNiMmI0MmVmYTk4ODhlNTgwODM3MjQ0YThkZDQzMzE4MjdhZDliMjQwYzMzODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3NzI5MjZmMzY3Njc5ZTA4MTk0NWRmZDk0MzkyZTg1ZGI1MmFhNWZiYTM3ZThjMDI1OTRiMzZmNWQzYTQ0NjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFmZjMzNzc4Yzg2MzZhMTQxZDFjMmFiYjE2MTFiMDYxYWQwZWUwODUwNmI5ODU2NjE2NDQ1MzI1ZjVlZGE5MTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRhOWVkMGQyNWVlZjEzZjRmNmFlZGUxZmIyMjJmZmNlYjQxZGM5NGE4MTI4NjdhYmZmNTBlNGVjNDMwMGRkMTYifQ"
+        },
+        {
+          "resource": "repo://tests/test_moe_triton.py#L74-L98",
+          "version": "repo-lines-v1:sha256:a0d67b2b8bcee3fdb87d82a5fe22c169b4710d16121996785721be7b5b773d18:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYxZDAzYzMwYWJiZDM2YjdkNjY2NzllYTBiN2JmZjlhNzBiMTE1MTY0MDE0ZDE4NmQ0MmY3ZjEyMTY5M2MyMjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5MDlhNTNhNjE4ZDAyOGUxZDMwMDBjMGE3YWJjZWVjYmU1ZmIzN2Y0ZTUxMWVmZTQ2NjQzZmFkNmU2Njg3MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM4MTJkZDdjY2JmMjg2NGJjY2Y0NjZkMDFjZDY0ZjhkYzEyZDcxNDhkMjYyODUzZWJiNGE2YmExNjYxNTkzYzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQzMDBmYzE2NGQxZjFmZWUyMDMyZDEyYWNhODkzN2YwYWEyYmFiYjBiOTAzZDVhZWE0NDY2NGVhMzRiNjZkODkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dd69dd47fa944ce9b1a10d744ccc1f76",
+      "statement": "Configured Triton failures must not silently downgrade to PyTorch: the project explicitly requires a visible error for missing Triton, compilation failure, or runtime failure, while the normal default path remains raw PyTorch `\"stacked\"` dispatch.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L71-L105",
+          "version": "repo-lines-v1:sha256:4ffa39defba7fd0d76a3b0d93ef1318b77e78cea8d2ba256d8ed9f173b67601e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyYjJkM2E5OTliYjM0ZWU0YzUzMzg1YTdiMjk2NWFlNWE3MGZiM2JkM2QwNWQ1ZjgyMWUxYThjNWUzYTFiZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5YjllZDcxMzc3NTNjOTFlY2IxNmY5OTRmNGNjZTZiYWYzMzhkZDlmNzFlNjFkZjM1OTIxOGY0ZjFhOGI0OGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY4ZTZiNGU4MDVhMDkxZmYzZDEyMGIwM2MyNmY5NzE3N2U3YjBiMzJjN2I2YTEwN2Y3OGVkOGQ5ZGFmZTYyYjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyNTcyYWE3NDg3Yjk1ZWY3ZWEwY2Y1ZGVjNzJlZTZmOWQwMWFmODY4YjdjNzZhMWJmMDFhNDUyZWQ3ZmI4ZDgifQ"
+        },
+        {
+          "resource": "repo://models/moe.py#L85-L100",
+          "version": "repo-lines-v1:sha256:bd174bf63db1feada818fcdae87bed9d10a11f9d9c81ec836961bd5ef3d058ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE3NmVlZjEzYzJlODNhNTI5ZTMzNTM3MjNmZDI5ODlhMTg0MzQ4NzVjYjJjYWQ2Y2E5Mzg2YWUzYmNlYjc4N2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwMjkxY2YwOWFlYTk3ZDQzZTY3Nzk1NTMxZmQ5ZmI1ZDY1NTRiMzdhM2I2ZGYyZjVhYzc0ZTVkMmEyMTE3NTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk3ZDYzYjY5YjlhODU0Zjg5OTFiZjVhNjYzYzQ1MDJhN2M0YmY2NmJkYzdmNDU0NGM0MjQ0ODhiODUyMjg1MDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1NWI4MTcxMGZlNjY5OTk4ZjkyNjg0YzY1MjJjNzM3NWZkZTE4YWE4NWRiYjQ3YjgyYjIxMjE4NGEzZWRjNDAifQ"
+        },
+        {
+          "resource": "repo://tests/test_moe_triton.py#L76-L121",
+          "version": "repo-lines-v1:sha256:b98f7e852d5104d800e47fbb88906fbc87c800cccaa75f9d662fa16f85491216:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MWFiMzgwZDJlNTAwNzk1NGQzZjUwNzBhYjgzZWU3MGUzYjFiODgxZWU1Mjk4YjFkNGRlMjViOTlkMGNkY2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAzMGM3ZGNhODU4YWZmOGE1NDUwOWFlODdlYWI4NWUyN2UyODc3YmViZmFiNjYwNzZkMTc3MmE5YTRlNTRhN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ3MTdiOGIwMWU2ZWQ0N2RmNzY0ODVmMGFlMDM2ZWIwMzMyNjQ4MTk2N2UxOTQwYTE3ZDk4MWY2OTRmZTJhODYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg4MGVkMDhlMWM2ZmRhY2U2YjE1NjUxMjllZjliMjBlMWRmZTQzZTlhNjFmOTYyNGExZGFiY2RlOWU5MzhlODUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1a97bc6a67884bf69eb7ea5f7b95fd77",
+      "statement": "Focused MoE tests protect router shapes, index bounds, weight normalization, auxiliary-loss finiteness and gradients, shared-expert activity, dispatch correctness, and deterministic output; Triton tests separately cover the CPU reference, empty expert ranges, missing-Triton and hard-cap failures, plus GPU FP32/BF16 kernel parity.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/e2e_gpu_smoke.py#L108-L160",
+          "version": "repo-lines-v1:sha256:2d55a2abc6b8d1bb5cf106de634ce75db64aeaad2074d85d653baa8fecb71b48:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhYmJjZTFiOWFkODA3NDVmNjQzMjdlNzRmYWIxZjdhZjBiZjcyNWI2MjVmYjgxOWZjMjI3ZTc2YTNkYzU1M2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlNjIyYWQ2NjM0ZmY0MjZhNjA3YzU0MzYwMjIwYTAwMzQ0MzIwZWRmMWI1YTUwNjI0YzFhNWRhYWJiZTNhODAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0N2E1YzIyMGU4NWY3NjNlZmE2NzJkZGI4NzJhZjg0Nzg0NGZhNzZjZDRiNjdjMjQ5NDUzMDM5NDExMzY5NGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIxOGJjZmQ2ODlkYTk4Mzc2MDFmOTA0ZmRhZDkxNjFlYTlkZGY5YTQyZGUxYjBiNzE5NjQ3NGU4MjU1YmY2ZDcifQ"
+        },
+        {
+          "resource": "repo://tests/test_moe.py#L16-L232",
+          "version": "repo-lines-v1:sha256:13589154e7ac1e69fea4e5810f4698135dbc3b1c3fbbb6f95f2dc714d89bbe81:eyJzZWxlY3RlZExpbmVDb3VudCI6MjE3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI4NjM3YWRiNDE4ZDllZDU3YjdiMjQzZjBjMWNmNjY2ZmE5MGYzMzg1ZjIzYjlhNWYwNjE3MzFmOTE0YzI0ZGMzIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0YjZkNjEyOTEzNzg3NjNkOWZlYmU1MDBiNDZmODUyMTk4ZmQ0ODE3Yzc5ZjUxOWNkOWE4NGVmNzBmY2QxZGVhIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI3NjFiMjM4YWFkZjFmMzYwZWJkYmJjM2ZiMDA3ODM1YzQ3NDIyODZkMDY3N2M5ZDYyOWI1N2QwYmNmOWUyZmRjIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        },
+        {
+          "resource": "repo://tests/test_moe_triton.py#L16-L168",
+          "version": "repo-lines-v1:sha256:9a1db4519104848bf146b96449c9f065bea774c2ca8180e6e673bf7cf2f706b0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkYjUyNDg4OWI1ZDUxMmRhMzgwNDAyZDg2NjA0YmExNzNmYjQ4YWJiOTdkYjkwMWM2Nzk0MDFmNGU3ZWYzNTZhIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJkYmVhNzZlMzg0MDg3ZTIzYWViMDUwN2I1NWQxYTQyZDI3MDJlMWIwMGNlYmZlZjNkOTEyMDZjMDc3Y2U5OTc5IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIyODY5NjIxOTlmNjdiNGU5NWY4M2ZkYWRkMjZmZWRjMTNiYWYyYWYwMjY5ZmQwZmVmZDUzNjIxMzgyNjVkYjliIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.4.3",
+    "at": "2026-08-28T16:02:00.548Z"
+  }
+}
