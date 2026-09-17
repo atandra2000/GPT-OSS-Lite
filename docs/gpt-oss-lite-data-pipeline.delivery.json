@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "dataflow",
+  "input": "/Users/atandrabharati/Desktop/CoreProjects/LLM/GPT-OSS-Lite/docs/gpt-oss-lite-data-pipeline.archify.json",
+  "output": "/Users/atandrabharati/Desktop/CoreProjects/LLM/GPT-OSS-Lite/docs/gpt-oss-lite-data-pipeline.html",
+  "specification": {
+    "sha256": "1ec1f8fe422c479c2d8472ef29e0c8053f096db38d44203e5848aefb5355c668",
+    "bytes": 5911
+  },
+  "artifact": {
+    "sha256": "79ee1da4b1e64357d264cf115faf803ef555312ef60ca40ac6e2499177fdfb35",
+    "bytes": 714822
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

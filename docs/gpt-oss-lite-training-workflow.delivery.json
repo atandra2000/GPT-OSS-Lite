@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/Users/atandrabharati/Desktop/CoreProjects/LLM/GPT-OSS-Lite/docs/gpt-oss-lite-training-workflow.archify.json",
+  "output": "/Users/atandrabharati/Desktop/CoreProjects/LLM/GPT-OSS-Lite/docs/gpt-oss-lite-training-workflow.html",
+  "specification": {
+    "sha256": "99e758febd117447165c3eadcd690414191b6258a506bd4b4c7c83cbce0b3031",
+    "bytes": 5868
+  },
+  "artifact": {
+    "sha256": "396a615b33a8c614edc7590404b963b8fb68822cf875b713a7897e96eedd1a5f",
+    "bytes": 719036
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

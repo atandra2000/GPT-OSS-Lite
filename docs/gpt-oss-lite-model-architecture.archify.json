@@ -7,47 +7,318 @@
     "quality_profile": "showcase",
     "repository": {
       "url": "https://github.com/atandra2000/GPT-OSS-Lite.git",
-      "revision": "8e29cb0ffd034d521115489a3565516fd30d1571"
+      "revision": "3c9675deaf163b7bfa3d8d8f7d0fae6883fdedc0"
     },
     "views": [
-      { "id": "forward_path", "label": "Forward path", "focus": ["input_ids", "embedding", "attention", "moe", "final_norm", "outputs"], "note": "Follow token IDs through the 12-layer decoder to logits and the routing auxiliary loss." },
-      { "id": "long_context", "label": "Long-context mechanics", "focus": ["positions", "attention", "kv_cache"], "note": "Isolate YaRN, alternating local/global attention, learned sinks, and decode-time cache behavior." },
-      { "id": "sparse_capacity", "label": "Sparse capacity", "focus": ["model_config", "moe"], "note": "See how top-2 routing exposes 502M stored parameters while activating roughly 247M per token." }
+      {
+        "id": "forward_path",
+        "label": "Forward path",
+        "focus": [
+          "input_ids",
+          "embedding",
+          "attention",
+          "moe",
+          "final_norm",
+          "outputs"
+        ],
+        "note": "Follow token IDs through the 12-layer decoder to logits and the routing auxiliary loss."
+      },
+      {
+        "id": "long_context",
+        "label": "Long-context mechanics",
+        "focus": [
+          "positions",
+          "attention",
+          "kv_cache"
+        ],
+        "note": "Isolate YaRN, alternating local/global attention, learned sinks, and decode-time cache behavior."
+      },
+      {
+        "id": "sparse_capacity",
+        "label": "Sparse capacity",
+        "focus": [
+          "model_config",
+          "moe"
+        ],
+        "note": "Top-2 routed experts plus one shared expert execute within every repeated block."
+      }
     ]
   },
   "layout": {
     "mode": "grid",
-    "origin": [40, 24],
+    "origin": [
+      45,
+      35
+    ],
     "cols": 4,
-    "gapX": 72,
-    "gapY": 16,
-    "cellW": 150,
-    "cellH": 76
+    "gapX": 60,
+    "gapY": 65,
+    "cellW": 195,
+    "cellH": 90
   },
   "components": [
-    { "id": "input_ids", "type": "external", "label": "Input IDs", "sublabel": "(B, T) int64", "row": 1, "col": 0 },
-    { "id": "embedding", "type": "backend", "label": "Token Embedding", "sublabel": "128K vocab → d_model 768", "tag": "weight tied", "row": 1, "col": 1, "sources": [{ "path": "models/transformer.py", "line": 159, "end_line": 170, "label": "GPTOSS.__init__" }] },
-    { "id": "attention", "type": "backend", "label": "Attention ×12", "sublabel": "8Q/4KV GQA · SWA 128 ↔ full", "tag": "pre-norm + residual", "row": 1, "col": 2, "sources": [{ "path": "models/attention.py", "line": 179, "end_line": 215, "label": "GPTOSSAttention.forward" }, { "path": "models/attention.py", "line": 78, "end_line": 122, "label": "causal_attention" }] },
-    { "id": "moe", "type": "backend", "label": "MoE Sublayer ×12", "sublabel": "top-2 of 8 routed + 1 shared", "tag": "SwiGLU · FP32 aux balance", "row": 1, "col": 3, "sources": [{ "path": "models/moe.py", "line": 85, "end_line": 105, "label": "MoELayer.forward" }, { "path": "models/moe.py", "line": 46, "end_line": 61, "label": "aux_load_balancing_loss" }] },
-    { "id": "final_norm", "type": "backend", "label": "Final Norm + LM Head", "sublabel": "RMSNorm · tied 768 → 128K", "tag": "native dtype", "row": 2, "col": 3, "size": [150, 60], "sources": [{ "path": "models/transformer.py", "line": 186, "end_line": 227, "label": "GPTOSS.forward" }] },
-    { "id": "outputs", "type": "external", "label": "Model Outputs", "sublabel": "logits (B,T,V) + mean aux", "row": 2, "col": 2 },
-    { "id": "model_config", "type": "database", "label": "ModelConfig", "sublabel": "typed dimensions + invariants", "row": 0, "col": 1, "sources": [{ "path": "models/transformer.py", "line": 17, "end_line": 122, "label": "ModelConfig" }] },
-    { "id": "positions", "type": "backend", "label": "YaRN + Pruned RoPE", "sublabel": "4K train → 128K target", "tag": "θ=100K · scale=32", "row": 0, "col": 2, "sources": [{ "path": "models/attention.py", "line": 179, "end_line": 215, "label": "position encoding" }] },
-    { "id": "kv_cache", "type": "database", "label": "MixedKVCache", "sublabel": "SWA ring · global growth", "tag": "decode", "row": 0, "col": 3, "sources": [{ "path": "inference/generate.py", "label": "MixedKVCache" }] }
+    {
+      "id": "input_ids",
+      "type": "external",
+      "label": "Input IDs",
+      "sublabel": "(B, T) int64",
+      "row": 1,
+      "col": 0,
+      "size": [
+        195,
+        80
+      ]
+    },
+    {
+      "id": "embedding",
+      "type": "backend",
+      "label": "Token Embedding",
+      "sublabel": "128000 rows · width 768",
+      "tag": "weight tied",
+      "row": 1,
+      "col": 1,
+      "sources": [
+        {
+          "path": "models/transformer.py",
+          "label": "GPTOSS.__init__"
+        }
+      ],
+      "size": [
+        195,
+        80
+      ]
+    },
+    {
+      "id": "attention",
+      "type": "backend",
+      "label": "Norm → Attention → Add",
+      "sublabel": "8 Q / 4 KV · head dim 96",
+      "tag": "even SWA 128 / odd full",
+      "row": 1,
+      "col": 2,
+      "sources": [
+        {
+          "path": "models/attention.py",
+          "label": "GPTOSSAttention.forward"
+        },
+        {
+          "path": "models/attention.py",
+          "label": "causal_attention"
+        }
+      ],
+      "size": [
+        195,
+        80
+      ]
+    },
+    {
+      "id": "moe",
+      "type": "backend",
+      "label": "Norm → MoE → Add",
+      "sublabel": "top-2 of 8 + 1 shared",
+      "tag": "SwiGLU · ffn 1536",
+      "row": 1,
+      "col": 3,
+      "sources": [
+        {
+          "path": "models/moe.py",
+          "label": "MoELayer.forward"
+        },
+        {
+          "path": "models/moe.py",
+          "label": "aux_load_balancing_loss"
+        }
+      ],
+      "size": [
+        195,
+        80
+      ]
+    },
+    {
+      "id": "final_norm",
+      "type": "backend",
+      "label": "Norm + Tied Head",
+      "sublabel": "768 → 128000 logits",
+      "tag": "native dtype",
+      "row": 2,
+      "col": 3,
+      "sources": [
+        {
+          "path": "models/transformer.py",
+          "label": "GPTOSS.forward"
+        }
+      ],
+      "size": [
+        195,
+        80
+      ]
+    },
+    {
+      "id": "outputs",
+      "type": "external",
+      "label": "Model Outputs",
+      "sublabel": "logits (B,T,V) + mean aux",
+      "row": 2,
+      "col": 2,
+      "size": [
+        195,
+        80
+      ]
+    },
+    {
+      "id": "model_config",
+      "type": "database",
+      "label": "ModelConfig",
+      "sublabel": "A100 YAML + defaults",
+      "row": 0,
+      "col": 1,
+      "sources": [
+        {
+          "path": "models/transformer.py",
+          "label": "ModelConfig"
+        }
+      ],
+      "size": [
+        195,
+        80
+      ]
+    },
+    {
+      "id": "positions",
+      "type": "backend",
+      "label": "YaRN RoPE",
+      "sublabel": "global: 24/48 pairs off",
+      "tag": "local: all 48 pairs",
+      "row": 0,
+      "col": 2,
+      "sources": [
+        {
+          "path": "models/attention.py",
+          "label": "position encoding"
+        }
+      ],
+      "size": [
+        195,
+        80
+      ]
+    },
+    {
+      "id": "kv_cache",
+      "type": "database",
+      "label": "MixedKVCache",
+      "sublabel": "rotated K · unchanged V",
+      "tag": "decode-only state",
+      "row": 0,
+      "col": 3,
+      "sources": [
+        {
+          "path": "inference/generate.py",
+          "label": "MixedKVCache"
+        }
+      ],
+      "size": [
+        195,
+        80
+      ]
+    }
   ],
   "connections": [
-    { "id": "ids_to_embed", "from": "input_ids", "to": "embedding", "label": "token lookup", "variant": "emphasis" },
-    { "id": "embed_to_attention", "from": "embedding", "to": "attention" },
-    { "id": "attention_to_moe", "from": "attention", "to": "moe", "label": "residual stream" },
-    { "id": "moe_to_norm", "from": "moe", "to": "final_norm", "label": "12th block output", "fromSide": "bottom", "toSide": "top", "labelAt": [766, 200] },
-    { "id": "norm_to_outputs", "from": "final_norm", "to": "outputs", "label": "next-token logits", "variant": "emphasis" },
-    { "id": "config_to_embedding", "from": "model_config", "to": "embedding", "label": "validated dimensions", "variant": "dashed", "labelAt": [322, 98] },
-    { "id": "positions_to_attention", "from": "positions", "to": "attention", "label": "rotate Q/K", "variant": "dashed", "labelAt": [544, 98] },
-    { "id": "attention_to_cache", "from": "attention", "to": "kv_cache", "label": "rotated K/V during decode", "variant": "dashed", "route": "orthogonal-v", "labelAt": [655, 98] }
+    {
+      "id": "ids_to_embed",
+      "from": "input_ids",
+      "to": "embedding",
+      "label": "token lookup",
+      "variant": "emphasis",
+      "labelDy": -40
+    },
+    {
+      "id": "embed_to_attention",
+      "from": "embedding",
+      "to": "attention"
+    },
+    {
+      "id": "attention_to_moe",
+      "from": "attention",
+      "to": "moe"
+    },
+    {
+      "id": "moe_to_norm",
+      "from": "moe",
+      "to": "final_norm",
+      "label": "after block 12",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 55
+    },
+    {
+      "id": "norm_to_outputs",
+      "from": "final_norm",
+      "to": "outputs",
+      "label": "next-token logits",
+      "variant": "emphasis",
+      "labelDy": -40
+    },
+    {
+      "id": "config_to_embedding",
+      "from": "model_config",
+      "to": "embedding",
+      "label": "validated dimensions",
+      "variant": "dashed",
+      "labelDy": 55
+    },
+    {
+      "id": "positions_to_attention",
+      "from": "positions",
+      "to": "attention",
+      "label": "rotate Q/K",
+      "variant": "dashed",
+      "labelDy": 55
+    },
+    {
+      "id": "attention_to_cache",
+      "from": "attention",
+      "to": "kv_cache",
+      "label": "decode append",
+      "variant": "dashed",
+      "route": "orthogonal-v"
+    }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Hybrid attention", "items": ["Even layers: 128-token sliding window with bounded ring-buffer KV", "Odd layers: full causal attention for global information flow", "Each head has a learned zero-value sink logit clamped to [-10, 15]"] },
-    { "dot": "violet", "title": "Sparse capacity", "items": ["Every token activates two routed SwiGLU experts plus one shared expert", "Standard Switch/GShard-style auxiliary loss discourages router collapse", "Stored capacity is ~502M parameters; active path is ~247M per token"] },
-    { "dot": "emerald", "title": "Long-context contract", "items": ["YaRN extrapolates 4,096 training positions to 131,072", "Global layers prune 25% of RoPE frequency pairs; local layers retain full RoPE", "Mixed cache reaches about 2.00× KV reduction versus twelve full-attention layers at 128K"] }
+    {
+      "dot": "cyan",
+      "title": "Repeated composite",
+      "items": [
+        "Even blocks 0,2,…10: SWA. Odd blocks 1,3,…11: full.",
+        "Each sublayer has its own pre-norm and residual addition."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Logical cache, not physical VRAM",
+      "items": [
+        "At 131072 tokens: 12T / (6T + 6×128) = 1.998×.",
+        "Excludes global spare capacity, ring duplication and temporary tensors."
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Source / configured baseline",
+      "items": [
+        "Revision 3c9675deaf16",
+        "configs/pretrain_a100_502m.yaml",
+        "ModelConfig defaults · no CLI overrides"
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "GPTOSSBlock ×12 · Attention THEN MoE in EACH block",
+      "wraps": [
+        "attention",
+        "moe"
+      ],
+      "pad": 18
+    }
   ]
 }

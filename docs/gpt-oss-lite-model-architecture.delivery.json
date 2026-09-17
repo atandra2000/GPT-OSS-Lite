@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/atandrabharati/Desktop/CoreProjects/LLM/GPT-OSS-Lite/docs/gpt-oss-lite-model-architecture.archify.json",
+  "output": "/Users/atandrabharati/Desktop/CoreProjects/LLM/GPT-OSS-Lite/docs/gpt-oss-lite-model-architecture.html",
+  "specification": {
+    "sha256": "dd5f904082fb0cd5264b2cf620f558f0b90c12567ed1a53c973b7d2d02a6981b",
+    "bytes": 6967
+  },
+  "artifact": {
+    "sha256": "632f1cd9b84271d8d4c69da9fa623d31fd557daccb53f1ffed2b08fd1713fc10",
+    "bytes": 715968
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  },
+  "evidence": {
+    "verified": true,
+    "repository": "https://github.com/atandra2000/GPT-OSS-Lite",
+    "revision": "3c9675deaf163b7bfa3d8d8f7d0fae6883fdedc0",
+    "references": 9
+  }
+}
