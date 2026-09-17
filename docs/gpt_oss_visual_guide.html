@@ -23,7 +23,7 @@ h1{font-size:clamp(36px,5.5vw,68px);line-height:1.05;margin:12px 0 20px;font-wei
 .jump-nav{display:flex;flex-wrap:wrap;gap:12px;margin:30px 0;padding:16px 20px;background:var(--paper);border:1px solid var(--line);border-radius:12px}
 .jump-nav a{font-weight:600;font-size:14px;text-decoration:none;padding:6px 12px;border-radius:8px;background:var(--soft);color:var(--accent)}
 .jump-nav a:hover{opacity:.85}
-.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;margin:30px 0}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px;margin:30px 0}
 .card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,.03)}
 .card h3{margin-top:0;font-size:20px;display:flex;align-items:center;justify-content:space-between}
 .card p{color:var(--muted);font-size:15px}
@@ -38,11 +38,12 @@ select,input[type=number]{width:100%;padding:8px 12px;border-radius:8px;border:1
 .calc-stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
 .calc-stat:last-child{border-bottom:none}
 .calc-stat strong{font-family:ui-monospace,monospace;font-size:16px;color:var(--accent)}
-table{width:100%;border-collapse:collapse;margin:20px 0;font-size:14px}
+table{overflow-wrap:anywhere;width:100%;border-collapse:collapse;margin:20px 0;font-size:14px}
 th,td{padding:10px 14px;border:1px solid var(--line);text-align:left}
 th{background:var(--soft);font-weight:600}
 code{font-family:ui-monospace,monospace;font-size:13px;background:var(--code-bg);padding:2px 6px;border-radius:4px}
 footer{border-top:1px solid var(--line);margin-top:60px;font-size:14px;color:var(--muted)}
+code{overflow-wrap:anywhere} select{max-width:100%} .ctrl-row>div{min-width:0} table{table-layout:fixed;width:100%;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -51,17 +52,17 @@ footer{border-top:1px solid var(--line);margin-top:60px;font-size:14px;color:var
   <div class="eyebrow">Interactive Visual Systems Guide</div>
   <h1>GPT-OSS-Lite</h1>
   <p class="lead">
-    A from-scratch, pure-PyTorch reproduction of the long-context GPT-OSS architecture (~502M total / ~247M active parameters, 12 layers, alternating SWA & Full attention, YaRN 128K, Top-2-of-8 MoE with attention sink preservation).
+    A from-scratch, pure-PyTorch reproduction of the long-context GPT-OSS architecture (~502M total / ~247M active parameters, 12 layers, alternating SWA & Full attention, YaRN 128K, Top-2-of-8 MoE with learned per-head sink logits).
   </p>
   <div class="pill-bar">
     <div class="pill">Params: <strong>502.1M Total / 247.4M Active</strong></div>
-    <div class="pill">Context: <strong>128K Tokens (YaRN)</strong></div>
+    <div class="pill">Context: <strong>128K Target (YaRN)</strong></div>
     <div class="pill">Layers: <strong>12 (6 SWA + 6 Full)</strong></div>
     <div class="pill">MoE: <strong>Top-2 of 8 Experts</strong></div>
-    <div class="pill">KV Cache Gain: <strong>2.00× Reduction</strong></div>
+    <div class="pill">Calculated KV Ratio: <strong>2.00× Reduction</strong></div>
   </div>
   <nav class="jump-nav">
-    <a href="#diagrams">Architecture Maps</a>
+    <a href="#overview">Overview</a><a href="#model">Model</a><a href="#data">Data</a><a href="#training">Training</a><a href="#optimization">Optimizations</a>
     <a href="#kv-calc">KV-Cache Simulator</a>
     <a href="#moe-sim">MoE Router Inspector</a>
     <a href="#specs">System Specs</a>
@@ -70,39 +71,39 @@ footer{border-top:1px solid var(--line);margin-top:60px;font-size:14px;color:var
 </header>
 
 <main>
-  <section id="diagrams">
+  <section id="overview">
     <div class="eyebrow">Standalone Showcase Deliverables</div>
-    <h2>Architecture & Workflow Maps</h2>
-    <p>Four standalone Archify diagrams verified with 9/9 showcase checks and responsive multi-viewport capture.</p>
+    <h2>Overview</h2>
+    <p>Source baseline: <code>3c9675d</code>, <code>configs/pretrain_a100_502m.yaml</code> plus <code>ModelConfig</code> defaults. See evidence below for exact hashes and independent validation, browser and perceptual status.</p>
 
     <div class="grid-2">
-      <div class="card">
+      <div class="card" id="model">
         <h3>Model Architecture <span>🏛️</span></h3>
-        <p>12-layer transformer backbone showing alternating sliding-window and full self-attention blocks, rotary embeddings with YaRN frequency scaling, and top-2 MoE routing.</p>
+        <p>12-layer transformer backbone showing alternating sliding-window and full self-attention blocks, one Attention+MoE composite repeated 12 times. Global YaRN disables 24 of 48 frequency pairs, not 25%. Decode stores rotated K and unchanged V.</p>
         <code>docs/gpt-oss-lite-model-architecture.html</code>
         <br>
         <a class="card-btn" href="gpt-oss-lite-model-architecture.html">Open Diagram ↗</a>
       </div>
 
-      <div class="card">
+      <div class="card" id="data">
         <h3>Data Pipeline <span>⚡</span></h3>
-        <p>Dynamic token packing, document boundary masking, attention-sink token pinning, and deterministic multi-worker shard pre-fetching for 8.0B pretraining tokens.</p>
+        <p>Declared 8B-token recipe, shared packing and mmap-backed windows. EOS 128009 exceeds the configured 128000 embedding rows. This integration gap is unresolved, not a working producer-to-model handoff.</p>
         <code>docs/gpt-oss-lite-data-pipeline.html</code>
         <br>
         <a class="card-btn" href="gpt-oss-lite-data-pipeline.html">Open Diagram ↗</a>
       </div>
 
-      <div class="card">
+      <div class="card" id="training">
         <h3>Training Workflow <span>🔄</span></h3>
-        <p>Pure PyTorch pretraining loop featuring mixed-precision BF16 forward pass, auxiliary load-balancing loss, gradient accumulation, and safetensors checkpointing.</p>
+        <p>Pure PyTorch pretraining loop featuring mixed-precision BF16 forward pass, auxiliary load-balancing loss, CE before the finite-loss gate, four-micro-batch accumulation and optimizer-clock checkpoints. Final save adds RNG separately. Neither periodic nor final saves capture sampler position. Five nonfinite losses restore the latest checkpoint or abort when none exists.</p>
         <code>docs/gpt-oss-lite-training-workflow.html</code>
         <br>
         <a class="card-btn" href="gpt-oss-lite-training-workflow.html">Open Diagram ↗</a>
       </div>
 
-      <div class="card">
+      <div class="card" id="optimization">
         <h3>Optimization Stack <span>🚀</span></h3>
-        <p>Kernel execution topology: PyTorch 2.x SDPA FlashAttention-2, optional Triton grouped-GEMM MoE dispatch, and memory-efficient fused layer norms.</p>
+        <p>Separate host, activation, inference-cache, compute and optimizer-state budgets. Compilation and SDPA dispatch are conditional. Periodic checkpoints omit RNG and sampler position.</p>
         <code>docs/gpt-oss-lite-optimization-stack.html</code>
         <br>
         <a class="card-btn" href="gpt-oss-lite-optimization-stack.html">Open Diagram ↗</a>
@@ -114,7 +115,7 @@ footer{border-top:1px solid var(--line);margin-top:60px;font-size:14px;color:var
     <div class="simulator-box">
       <div class="eyebrow">Interactive Systems Experiment</div>
       <h2>KV-Cache Memory & Alternating Attention Calculator</h2>
-      <p>Compare standard Multi-Head Attention (MHA), Grouped-Query Attention (GQA), and GPT-OSS-Lite's Alternating Sliding Window Attention (SWA) with Attention Sinks across context lengths.</p>
+      <p>Logical BF16 K/V entries only, not measured VRAM. Uses 12 layers, 4 KV heads and head_dim=96. Excludes global spare capacity, ring duplication and temporary tensors. Learned sink logits do not reserve four cached tokens.</p>
 
       <div class="ctrl-row">
         <div>
@@ -131,7 +132,8 @@ footer{border-top:1px solid var(--line);margin-top:60px;font-size:14px;color:var
           <label for="swa-window">SWA Window Size (Tokens)</label>
           <select id="swa-window" onchange="updateKVCalc()">
             <option value="512">512 Tokens</option>
-            <option value="1024" selected>1,024 Tokens (Default)</option>
+            <option value="128" selected>128 Tokens (Configured)</option>
+            <option value="1024">1,024 Tokens (Hypothetical)</option>
             <option value="2048">2,048 Tokens</option>
           </select>
         </div>
@@ -143,19 +145,19 @@ footer{border-top:1px solid var(--line);margin-top:60px;font-size:14px;color:var
 
       <div class="calc-result" id="kv-results">
         <div class="calc-stat">
-          <span>Pure Full MHA (12 Layers, 16 Heads, d=64):</span>
-          <strong id="mha-mem">-- MB</strong>
+          <span>Pure Full MHA (12 Layers, 8 Heads, d=96):</span>
+          <strong id="mha-mem">-- MiB</strong>
         </div>
         <div class="calc-stat">
           <span>Pure Full GQA (12 Layers, 4 KV Heads):</span>
-          <strong id="gqa-mem">-- MB</strong>
+          <strong id="gqa-mem">-- MiB</strong>
         </div>
         <div class="calc-stat">
-          <span>GPT-OSS-Lite Alternating SWA (6 SWA + 6 Full + 4 Sinks):</span>
-          <strong id="swa-mem">-- MB</strong>
+          <span>GPT-OSS-Lite Alternating SWA (6 SWA + 6 Full):</span>
+          <strong id="swa-mem">-- MiB</strong>
         </div>
         <div class="calc-stat">
-          <span>Measured VRAM Savings vs Full GQA:</span>
+          <span>Calculated Logical Storage Ratio vs Full GQA:</span>
           <strong id="vram-ratio" style="font-size:18px;color:var(--accent)">2.00× Reduction</strong>
         </div>
       </div>
@@ -166,7 +168,7 @@ footer{border-top:1px solid var(--line);margin-top:60px;font-size:14px;color:var
     <div class="simulator-box">
       <div class="eyebrow">Interactive Router Inspector</div>
       <h2>Top-2 of 8 MoE Expert Routing & Load Balancer</h2>
-      <p>Simulate token gate probability distribution across 8 routed experts and observe dynamic top-2 routing with softmax renormalization.</p>
+      <p>Illustrative logits, not learned expert specializations. Bars show full softmax probabilities, not renormalized routing weights. Temperature is a teaching control, not a production router setting.</p>
 
       <div class="ctrl-row">
         <div>
@@ -201,11 +203,11 @@ footer{border-top:1px solid var(--line);margin-top:60px;font-size:14px;color:var
         <tr><th>Pillar</th><th>Specification</th><th>Source Reference</th></tr>
       </thead>
       <tbody>
-        <tr><td><strong>Backbone</strong></td><td>12-layer Transformer, d_model=1024, n_heads=16, d_head=64</td><td><code>models/transformer.py:GPTOSSTransformer</code></td></tr>
-        <tr><td><strong>Attention Pattern</strong></td><td>Alternating: Even layers 1024-token SWA + 4 sink tokens; Odd layers Full Attention</td><td><code>models/attention.py:AlternatingAttention</code></td></tr>
-        <tr><td><strong>Context Scaling</strong></td><td>YaRN RoPE interpolation up to 131,072 (128K) tokens</td><td><code>models/rope.py:YaRNScaledRotaryEmbedding</code></td></tr>
-        <tr><td><strong>Feed-Forward / MoE</strong></td><td>8 Routed Experts + 2 Active per token, SwiGLU hidden_dim=2816</td><td><code>models/moe.py:MoELayer</code></td></tr>
-        <tr><td><strong>Training Target</strong></td><td>8.0B Chinchilla-optimal tokens, single A100-80GB (~32h budget)</td><td><code>training/trainer.py:Trainer</code></td></tr>
+        <tr><td><strong>Backbone</strong></td><td>12-layer Transformer, d_model=768, n_heads=8, n_kv_heads=4, d_head=96</td><td><code>models/transformer.py:GPTOSS</code></td></tr>
+        <tr><td><strong>Attention Pattern</strong></td><td>Alternating: Even layers 128-token SWA + learned per-head sink logit; Odd layers Full Attention</td><td><code>models/attention.py:GPTOSSAttention</code></td></tr>
+        <tr><td><strong>Context Scaling</strong></td><td>YaRN RoPE interpolation up to 131,072 (128K) tokens</td><td><code>models/yarn.py:YaRNRoPE</code></td></tr>
+        <tr><td><strong>Feed-Forward / MoE</strong></td><td>8 Routed Experts + 2 Active per token, 1 Shared Expert, SwiGLU ffn_dim=1536</td><td><code>models/moe.py:MoELayer</code></td></tr>
+        <tr><td><strong>Training Target</strong></td><td>8.0B Chinchilla-optimal tokens, single A100-80GB (16–20h unverified target)</td><td><code>training/pretrain.py:main</code></td></tr>
       </tbody>
     </table>
   </section>
@@ -213,23 +215,23 @@ footer{border-top:1px solid var(--line);margin-top:60px;font-size:14px;color:var
   <section id="receipts">
     <div class="eyebrow">Verification Evidence</div>
     <h2>Delivery Receipts & Artifact Hashes</h2>
-    <p>All delivered HTML artifacts are compiled and verified with SHA-256 bindings. For details see <a href="RECEIPTS.md">RECEIPTS.md</a>.</p>
+    <p>All delivered HTML artifacts are compiled and verified with SHA-256 bindings. Fresh diagram browser checks pass separately from visual review, which is unavailable. Measured secondary text minima are 7–9 CSS px, below the proposed 11px target. Guide mobile checks and viewer interactions/exports remain unverified. For exact source/config pins and limits see <a href="RECEIPTS.md">RECEIPTS.md</a>.</p>
     <table>
       <thead>
         <tr><th>Artifact</th><th>Type</th><th>SHA-256 Hash</th><th>Byte Size</th></tr>
       </thead>
       <tbody>
-        <tr><td><code>gpt-oss-lite-model-architecture.html</code></td><td>architecture</td><td><code>c710d2de8f1ef06711f5486591ff3bafb6e07e4887ebb0bb4024a6b1858a7e4d</code></td><td>716,189 B</td></tr>
-        <tr><td><code>gpt-oss-lite-data-pipeline.html</code></td><td>dataflow</td><td><code>44302a663debaa6700d1946f0bdba5dfeeb1115ab8c94bc285ea82d561be21f3</code></td><td>714,641 B</td></tr>
-        <tr><td><code>gpt-oss-lite-training-workflow.html</code></td><td>workflow</td><td><code>2845e284382521246335248a86ce1d4cb737aa9382f3c5ed52a909fab8e57908</code></td><td>716,818 B</td></tr>
-        <tr><td><code>gpt-oss-lite-optimization-stack.html</code></td><td>architecture</td><td><code>6f64c4ef389ca18b38d6c18152a0dc73a6e995bcabfeaabb18e073bb3b523c67</code></td><td>721,636 B</td></tr>
+        <tr><td><code>gpt-oss-lite-model-architecture.html</code></td><td>architecture</td><td><code>632f1cd9b84271d8d4c69da9fa623d31fd557daccb53f1ffed2b08fd1713fc10</code></td><td>715,968 B</td></tr>
+        <tr><td><code>gpt-oss-lite-data-pipeline.html</code></td><td>dataflow</td><td><code>79ee1da4b1e64357d264cf115faf803ef555312ef60ca40ac6e2499177fdfb35</code></td><td>714,822 B</td></tr>
+        <tr><td><code>gpt-oss-lite-training-workflow.html</code></td><td>workflow</td><td><code>396a615b33a8c614edc7590404b963b8fb68822cf875b713a7897e96eedd1a5f</code></td><td>719,036 B</td></tr>
+        <tr><td><code>gpt-oss-lite-optimization-stack.html</code></td><td>architecture</td><td><code>28fe1e481ffd50f6e2ae17243b9d18621961c5f08f582d2268caf47bb45c6d06</code></td><td>710,291 B</td></tr>
       </tbody>
     </table>
   </section>
 </main>
 
 <footer>
-  <p>GPT-OSS-Lite Illustrated Systems Guide · Verified Archify Showcase Delivery · Source-anchored to PyTorch repository.</p>
+  <p>GPT-OSS-Lite systems guide · Source-grounded documentation, not a training or visual-polish certificate.</p>
 </footer>
 
 <script>
@@ -239,21 +241,21 @@ function updateKVCalc() {
   const B = parseInt(document.getElementById('batch-size').value, 10);
 
   const layers = 12;
-  const d_head = 64;
+  const d_head = 96;
   const bytes_per_elem = 2; // BF16
 
-  // Full MHA: 16 KV heads, S tokens, 12 layers
-  const mha_bytes = B * layers * 16 * S * d_head * 2 * bytes_per_elem;
+  // Full MHA: 8 KV heads, S tokens, 12 layers
+  const mha_bytes = B * layers * 8 * S * d_head * 2 * bytes_per_elem;
   // Full GQA: 4 KV heads, S tokens, 12 layers
   const gqa_bytes = B * layers * 4 * S * d_head * 2 * bytes_per_elem;
 
-  // SWA Alternating: 6 Full layers (S tokens) + 6 SWA layers (min(S, W+4) tokens) with 4 KV heads
-  const swa_tokens = Math.min(S, W + 4);
+  // SWA Alternating: 6 Full layers (S tokens) + 6 SWA layers (min(S, W) tokens) with 4 KV heads
+  const swa_tokens = Math.min(S, W);
   const alt_bytes = B * 4 * d_head * 2 * bytes_per_elem * (6 * S + 6 * swa_tokens);
 
-  document.getElementById('mha-mem').textContent = (mha_bytes / (1024 * 1024)).toFixed(2) + ' MB';
-  document.getElementById('gqa-mem').textContent = (gqa_bytes / (1024 * 1024)).toFixed(2) + ' MB';
-  document.getElementById('swa-mem').textContent = (alt_bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  document.getElementById('mha-mem').textContent = (mha_bytes / (1024 * 1024)).toFixed(2) + ' MiB';
+  document.getElementById('gqa-mem').textContent = (gqa_bytes / (1024 * 1024)).toFixed(2) + ' MiB';
+  document.getElementById('swa-mem').textContent = (alt_bytes / (1024 * 1024)).toFixed(2) + ' MiB';
 
   const ratio = (gqa_bytes / alt_bytes).toFixed(2);
   document.getElementById('vram-ratio').textContent = ratio + '× Reduction vs Full GQA';

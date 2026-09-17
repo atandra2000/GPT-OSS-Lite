@@ -5,42 +5,259 @@
     "title": "GPT-OSS-Lite Data Pipeline",
     "locale": "en",
     "quality_profile": "showcase",
-    "viewBox": [1080, 420],
+    "viewBox": [
+      1080,
+      420
+    ],
     "views": [
-      { "id": "corpus_lineage", "label": "Corpus lineage", "focus": ["mixture", "download", "clean", "packed", "pretrain_dataset"], "note": "Follow the universal 8B-token corpus from seven declared sources to durable uint32 shards." },
-      { "id": "quality_contract", "label": "Quality and integrity", "focus": ["pipeline_config", "clean", "dedup_state", "packed"], "note": "See the filters, exact SHA-256 dedup state, document-boundary rule, and manifest contract." },
-      { "id": "training_handoff", "label": "Training handoff", "focus": ["packed", "pretrain_dataset", "batches"], "note": "Trace mmap-backed shards into shifted 4,096-token input and target windows." }
+      {
+        "id": "corpus_lineage",
+        "label": "Corpus lineage",
+        "focus": [
+          "mixture",
+          "download",
+          "clean",
+          "packed",
+          "pretrain_dataset"
+        ],
+        "note": "Follow the universal 8B-token corpus from seven declared sources to durable uint32 shards."
+      },
+      {
+        "id": "quality_contract",
+        "label": "Quality and integrity",
+        "focus": [
+          "pipeline_config",
+          "clean",
+          "dedup_state",
+          "packed"
+        ],
+        "note": "See the filters, exact SHA-256 dedup state, document-boundary rule, and manifest contract."
+      },
+      {
+        "id": "training_handoff",
+        "label": "Training handoff",
+        "focus": [
+          "packed",
+          "pretrain_dataset",
+          "batches"
+        ],
+        "note": "The loader does not remap EOS 128009 into the configured 128000-row embedding. Compatibility remains unresolved."
+      }
     ]
   },
   "stages": [
-    { "label": "Recipe" },
-    { "label": "Acquire" },
-    { "label": "Curate" },
-    { "label": "Encode + Pack" },
-    { "label": "Train" }
+    {
+      "label": "Recipe"
+    },
+    {
+      "label": "Acquire"
+    },
+    {
+      "label": "Curate"
+    },
+    {
+      "label": "Encode + Pack"
+    },
+    {
+      "label": "Train"
+    }
   ],
   "nodes": [
-    { "id": "mixture", "type": "external", "label": "8B Corpus Recipe", "sublabel": "7 sources · weights sum 1.0", "stage": 0, "row": 0, "tag": "mixture.yaml", "width": 150 },
-    { "id": "pipeline_config", "type": "database", "label": "Pipeline Contract", "sublabel": "BPE · uint32 · 50M · seed 42", "stage": 0, "row": 1, "tag": "data_config.yaml", "width": 150 },
-    { "id": "download", "type": "cloud", "label": "Stream Download", "sublabel": "Hugging Face → raw JSONL", "stage": 1, "row": 0, "tag": "subprocess", "width": 145 },
-    { "id": "clean", "type": "backend", "label": "Clean + Deduplicate", "sublabel": "quality filters · SHA-256", "stage": 2, "row": 0, "tag": "clean JSONL", "width": 155 },
-    { "id": "dedup_state", "type": "database", "label": "Resume State", "sublabel": "persisted seen set", "stage": 2, "row": 1, "tag": "state/", "width": 140 },
-    { "id": "packed", "type": "database", "label": "Tokenize + Pack", "sublabel": "LLaMA-3 BPE · EOS · uint32", "stage": 3, "row": 0, "tag": "shards + manifest", "width": 160 },
-    { "id": "pretrain_dataset", "type": "backend", "label": "PretrainDataset", "sublabel": "mmap · offsets · window stitching", "stage": 4, "row": 0, "tag": "one-shard cache", "width": 165 },
-    { "id": "batches", "type": "external", "label": "Training Batches", "sublabel": "input/target · 8 × 4096", "stage": 4, "row": 1, "tag": "pinned workers", "width": 150 }
+    {
+      "id": "mixture",
+      "type": "external",
+      "label": "Declared 8B Recipe",
+      "sublabel": "7 weights, not output quotas",
+      "stage": 0,
+      "row": 0,
+      "tag": "mixture.yaml",
+      "width": 150
+    },
+    {
+      "id": "pipeline_config",
+      "type": "database",
+      "label": "Pipeline Contract",
+      "sublabel": "EOS 128009 · uint32",
+      "stage": 0,
+      "row": 1,
+      "tag": "data_config.yaml",
+      "width": 150
+    },
+    {
+      "id": "download",
+      "type": "cloud",
+      "label": "Stream Download",
+      "sublabel": "Hugging Face → raw JSONL",
+      "stage": 1,
+      "row": 0,
+      "tag": "subprocess",
+      "width": 145
+    },
+    {
+      "id": "clean",
+      "type": "backend",
+      "label": "Clean + Deduplicate",
+      "sublabel": "quality filters · SHA-256",
+      "stage": 2,
+      "row": 0,
+      "tag": "clean JSONL",
+      "width": 155
+    },
+    {
+      "id": "dedup_state",
+      "type": "database",
+      "label": "Resume State",
+      "sublabel": "persisted seen set",
+      "stage": 2,
+      "row": 1,
+      "tag": "state/",
+      "width": 140
+    },
+    {
+      "id": "packed",
+      "type": "database",
+      "label": "Tokenize + Pack",
+      "sublabel": "BPE + EOS 128009",
+      "stage": 3,
+      "row": 0,
+      "tag": "shards + manifest",
+      "width": 160
+    },
+    {
+      "id": "pretrain_dataset",
+      "type": "backend",
+      "label": "PretrainDataset",
+      "sublabel": "mmap + stitched windows",
+      "stage": 4,
+      "row": 0,
+      "tag": "one-shard cache",
+      "width": 165
+    },
+    {
+      "id": "batches",
+      "type": "security",
+      "label": "Embedding ID Gap",
+      "sublabel": "128009 > max ID 127999",
+      "stage": 4,
+      "row": 1,
+      "tag": "not a working handoff",
+      "width": 180
+    }
   ],
   "flows": [
-    { "id": "config_to_recipe", "from": "pipeline_config", "to": "mixture", "label": "knobs", "classification": "validated YAML", "variant": "dashed", "route": "straight", "labelAt": [100, 217] },
-    { "id": "recipe_to_download", "from": "mixture", "to": "download", "label": "source IDs", "classification": "weighted recipe", "variant": "emphasis", "labelAt": [208, 114] },
-    { "id": "download_to_clean", "from": "download", "to": "clean", "label": "raw text", "classification": "JSONL", "variant": "emphasis", "labelAt": [423, 114] },
-    { "id": "clean_to_state", "from": "clean", "to": "dedup_state", "label": "hashes", "classification": "resume metadata", "variant": "dashed", "route": "straight", "labelAt": [530, 217] },
-    { "id": "clean_to_packed", "from": "clean", "to": "packed", "label": "clean text", "classification": "accepted documents", "variant": "emphasis", "labelAt": [638, 114] },
-    { "id": "packed_to_dataset", "from": "packed", "to": "pretrain_dataset", "label": "shards", "classification": "uint32 + manifest", "variant": "emphasis", "labelAt": [853, 114] },
-    { "id": "dataset_to_batches", "from": "pretrain_dataset", "to": "batches", "label": "windows", "classification": "PyTorch tensors", "variant": "emphasis", "route": "straight", "labelAt": [960, 217] }
+    {
+      "id": "config_to_recipe",
+      "from": "pipeline_config",
+      "to": "mixture",
+      "label": "knobs",
+      "classification": "validated YAML",
+      "variant": "dashed",
+      "route": "straight",
+      "labelAt": [
+        100,
+        217
+      ]
+    },
+    {
+      "id": "recipe_to_download",
+      "from": "mixture",
+      "to": "download",
+      "label": "source IDs",
+      "classification": "declared recipe",
+      "variant": "emphasis",
+      "labelAt": [
+        208,
+        114
+      ]
+    },
+    {
+      "id": "download_to_clean",
+      "from": "download",
+      "to": "clean",
+      "label": "raw text",
+      "classification": "JSONL",
+      "variant": "emphasis",
+      "labelAt": [
+        423,
+        114
+      ]
+    },
+    {
+      "id": "clean_to_state",
+      "from": "clean",
+      "to": "dedup_state",
+      "label": "hashes",
+      "classification": "resume metadata",
+      "variant": "dashed",
+      "route": "straight",
+      "labelAt": [
+        530,
+        217
+      ]
+    },
+    {
+      "id": "clean_to_packed",
+      "from": "clean",
+      "to": "packed",
+      "label": "clean text",
+      "classification": "accepted documents",
+      "variant": "emphasis",
+      "labelAt": [
+        638,
+        114
+      ]
+    },
+    {
+      "id": "packed_to_dataset",
+      "from": "packed",
+      "to": "pretrain_dataset",
+      "label": "shards",
+      "classification": "uint32 + manifest",
+      "variant": "emphasis",
+      "labelAt": [
+        853,
+        114
+      ]
+    },
+    {
+      "id": "dataset_to_batches",
+      "from": "pretrain_dataset",
+      "to": "batches",
+      "label": "out-of-range EOS",
+      "classification": "no ID remap",
+      "variant": "security",
+      "route": "straight",
+      "labelAt": [
+        960,
+        217
+      ]
+    }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Canonical mixture", "items": ["FineWeb-Edu 40% · DCLM 15%", "Stack v2 Python 15% · Jupyter 5%", "OpenMath 10% · arXiv 10% · Cosmopedia 5%"] },
-    { "dot": "amber", "title": "Ownership boundary", "items": ["GPT-OSS-Lite/data/prepare_data.py is a thin project shim", "LLM/shared_data owns download, clean, tokenize, pack, and resume behavior", "The project consumes the packed output through training/pretrain.py:PretrainDataset"] },
-    { "dot": "emerald", "title": "Integrity invariants", "items": ["Source weights sum to 1.0 and target 8,000,000,000 tokens", "EOS separates documents; the packer never splits a document across shards", "Manifest dtype controls mmap arithmetic; uint32 is required for token id 128009"] }
+    {
+      "dot": "cyan",
+      "title": "Declared recipe ≠ quotas",
+      "items": [
+        "Web 55% · code 20% · math 10% · arXiv 10% · Cosmopedia 5%.",
+        "interleave_sources cycles documents; remaining quota is never decremented."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Unresolved integration gap",
+      "items": [
+        "TokenStream appends EOS 128009 after validating document tokens.",
+        "128000 rows allow 0–127999. No model/data repair is included."
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Source / configured baseline",
+      "items": [
+        "Revision 3c9675deaf16 · pretrain_a100_502m.yaml",
+        "Shared data_config.yaml + mixture.yaml (hashes in RECEIPTS).",
+        "Windows may cross EOS; no document attention mask."
+      ]
+    }
   ]
 }
