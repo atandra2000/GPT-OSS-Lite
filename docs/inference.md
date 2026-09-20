@@ -763,4 +763,4 @@ All byte and FLOP figures in §4 are derived from architecture constants and rep
 - [foundations-and-architecture.md](concepts/foundations-and-architecture.md) — architecture, KV math
 - [operations.md](guides/operations.md) — benchmark commands, OPT catalog
 
-<!-- docs:verified 2026-08-05 · 6491066 -->
+<!-- docs:verified 2026-09-21 · ada1459 -->

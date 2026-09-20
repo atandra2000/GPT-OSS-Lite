@@ -113,3 +113,5 @@
 | MFU | Model FLOPs Utilization |
 | BPE | Byte-Pair Encoding |
 | CE | Cross-Entropy (loss) |
+
+<!-- docs:verified 2026-09-21 · ada1459 -->

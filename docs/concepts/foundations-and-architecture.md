@@ -1822,4 +1822,4 @@ assert m.num_active_parameters() == 247_032_672
 - [training.md](../training.md) — training loop and config reference
 - [inference.md](../inference.md) — `MixedKVCache`, generation
 
-<!-- docs:verified 2026-08-05 · 6491066 -->
+<!-- docs:verified 2026-09-21 · ada1459 -->

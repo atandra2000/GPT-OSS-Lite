@@ -886,4 +886,4 @@ On an untrained model this runs end-to-end, prints an accuracy table at ~0% per 
 - [attention-and-positional.md](attention-and-positional.md) — attention softmax derivation
 - [moe.md](moe.md) — routing instability, FP32 islands
 
-<!-- docs:verified 2026-08-05 · 6491066 -->
+<!-- docs:verified 2026-09-21 · ada1459 -->

@@ -156,4 +156,4 @@ Training hyperparameters (`aux_loss_alpha`, `compile`, etc.) live under `trainin
 - [attention-and-positional.md](../concepts/attention-and-positional.md) — YaRN parameter semantics
 - [operations.md](../guides/operations.md) — CLI reference for scripts and utils
 
-<!-- docs:verified 2026-08-05 · 6491066 -->
+<!-- docs:verified 2026-09-21 · ada1459 -->

@@ -91,3 +91,5 @@ The table uses the observed `readability.viewports[].minimumProjectedNodeTextPx`
 - Internal guide links and HTML Python symbol references are checked separately from the Markdown-only gates.
 
 No CUDA training, corpus build, model/data compatibility repair, exact-resume verification or trained 128K retrieval evaluation was performed.
+
+<!-- docs:verified 2026-09-21 · ada1459 -->

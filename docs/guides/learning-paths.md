@@ -79,3 +79,5 @@ optimization catalog, and the measurement discipline.
   getting-started covers onboarding, operations covers scripts/utils, and
   `tests/test_doc_refs.py` + `scripts/check_docs.py` are the two gates
   every doc change must keep green.
+
+<!-- docs:verified 2026-09-21 · ada1459 -->

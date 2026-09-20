@@ -1023,4 +1023,4 @@ When in doubt, trust `manual_causal_attention` for golden values — the sink SD
 - [foundations-and-architecture.md](foundations-and-architecture.md) — GQA, SWA, KV-memory primer
 - [inference.md](../inference.md) — `MixedKVCache` ring/global semantics
 
-<!-- docs:verified 2026-08-05 · 6491066 -->
+<!-- docs:verified 2026-09-21 · ada1459 -->
