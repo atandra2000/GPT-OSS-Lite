@@ -2,7 +2,7 @@
 
 > **Start here.** This directory is the canonical reference for GPT-OSS-Lite: a faithful from-scratch PyTorch reproduction of OpenAI's GPT-OSS long-context architecture (~502M total / ~247M active parameters, 12-layer alternating sliding-window / full attention, YaRN 128K, top-2-of-8 MoE). For a one-page project overview see the root [README.md](../README.md).
 
-The documentation is organized into four layers: **concept chapters** (`docs/concepts/`) that consolidate theory + implementation per topic, a **reference** (`docs/references/`) for config tables and API signatures, **guides** (`docs/guides/`) for onboarding and operations, and two top-level chapters for training and inference. Every code symbol is cited as a machine-verified `file.py:Symbol` anchor (see `tests/test_doc_refs.py`).
+The documentation is organized into four layers: **concept chapters** (`docs/concepts/`) that consolidate theory + implementation per topic, a **reference** (`docs/references/`) for config tables and API signatures, **guides** (`docs/guides/`) for onboarding and operations, and two top-level chapters for training and inference. Every code symbol is cited as a machine-verified `file.py:Symbol` anchor (see `tests/test_doc_refs.py`), and [AUDIT.md](AUDIT.md) records the dated verification state of the whole corpus.
 
 ## Visual systems atlas
 
@@ -25,7 +25,7 @@ Explore the [Interactive Visual Systems Guide](gpt_oss_visual_guide.html): four 
 
 ## Learning path
 
-Read in this order for a first pass.
+Read in this order for a first pass — or take the audience-routed alternative in [guides/learning-paths.md](guides/learning-paths.md) (beginner / intermediate / expert tracks), with a quick term-and-notation lookup in [guides/glossary.md](guides/glossary.md).
 
 | Step | Layer | Document | You'll learn |
 |------|-------|----------|--------------|
@@ -60,6 +60,8 @@ Read in this order for a first pass.
 | Config tables / API signatures | [config-and-api.md](references/config-and-api.md) |
 | What must not break? | [AGENTS.md](../AGENTS.md) + [foundations-and-architecture.md](concepts/foundations-and-architecture.md) invariants |
 | Onboarding | [getting-started.md](guides/getting-started.md) |
+| "What does term X mean?" / notation lookup | [glossary.md](guides/glossary.md) |
+| Where do I start given my background? | [learning-paths.md](guides/learning-paths.md) |
 
 ---
 
@@ -116,19 +118,24 @@ Every chapter file ends with a verification footer:
 
 | Doc | ~Lines | Status |
 |---|---|---|
-| training.md | 2,240 | Comprehensive |
-| concepts/attention-and-positional.md | 2,224 | Comprehensive |
-| concepts/foundations-and-architecture.md | 1,960 | Comprehensive |
-| guides/operations.md | 1,652 | Comprehensive |
-| concepts/moe.md | 1,408 | Comprehensive |
-| concepts/optimizers-and-numerics.md | 1,237 | Comprehensive |
-| inference.md | 1,157 | Comprehensive |
-| concepts/attention-sinks.md | 1,126 | Comprehensive |
-| concepts/kernels-and-checkpointing.md | 755 | Comprehensive |
-| guides/getting-started.md | 320 | Comprehensive |
+| training.md | 1,983 | Comprehensive |
+| concepts/foundations-and-architecture.md | 1,825 | Comprehensive |
+| concepts/attention-and-positional.md | 1,540 | Comprehensive |
+| guides/operations.md | 1,527 | Comprehensive |
+| concepts/moe.md | 1,234 | Comprehensive |
+| concepts/attention-sinks.md | 1,026 | Comprehensive |
+| concepts/optimizers-and-numerics.md | 889 | Comprehensive |
+| inference.md | 766 | Comprehensive |
+| concepts/kernels-and-checkpointing.md | 559 | Comprehensive |
+| guides/getting-started.md | 277 | Comprehensive |
 | concepts/tokenization.md | 236 | Comprehensive |
-| references/config-and-api.md | 166 | Comprehensive |
-| **Total** | **14,481** | |
+| references/config-and-api.md | 159 | Comprehensive |
+| AUDIT.md | 123 | Comprehensive |
+| guides/glossary.md | 115 | Comprehensive |
+| RECEIPTS.md | 93 | Comprehensive |
+| guides/learning-paths.md | 81 | Comprehensive |
+| **Total** | **12,433** | |
+
 
 
 
