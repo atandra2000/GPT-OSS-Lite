@@ -13,11 +13,11 @@ After pulling new code.
 
 **Steps:**
 
-1. **Run the full CPU-friendly test suite (190 passed / 2 skipped, ~40s).**
+1. **Run the full CPU-friendly test suite (203 passed / 2 skipped, ~55s).**
    ```bash
    python3 -m pytest tests/ -v
    ```
-   Expected: 190 passed, 2 skipped.
+   Expected: 203 passed, 2 skipped.
 
 2. **Verify the headline metric is still measured correctly.**
    ```bash

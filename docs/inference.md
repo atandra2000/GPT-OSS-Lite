@@ -745,7 +745,7 @@ The absolute position of the new token — the §4.8 contract. Each layer's `app
 ```bash
 python3 scripts/kv_cache_benchmark.py     # 2.00× at 128K, 1.94× at 4K — measured 2026-08-04
 python3 -m pytest tests/test_inference.py -v   # ring/global semantics, generate, cache equivalence
-python3 -m pytest tests/ -q               # full suite: 190 passed / 2 GPU-gated skips
+python3 -m pytest tests/ -q               # full suite: 203 passed / 2 GPU-gated skips
 ```
 
 All byte and FLOP figures in §4 are derived from architecture constants and reproduce the benchmark's output; the A100 throughput figures in §4.3 are `[INFERENCE]` — derived from published hardware specs, not measured on this repo (`.benchmarks/` is empty). The ≥ 85% passkey target at 128K is a target, not a result: no pretraining run has completed.

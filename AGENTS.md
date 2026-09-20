@@ -8,7 +8,7 @@
 
 ```bash
 cd LLM/GPT-OSS-Lite
-python3 -m pytest tests/ -q                    # 190 passed / 2 skipped, ~40 s
+python3 -m pytest tests/ -q                    # 203 passed / 2 skipped, ~55 s
 python3 scripts/kv_cache_benchmark.py          # headline: ≥ 1.8× KV-cache cut
 python3 tests/test_doc_refs.py --strict-coverage
 python3 scripts/check_docs.py
