@@ -1524,4 +1524,4 @@ After changing `models/attention.py`, always run `test_sliding_window_matches_fu
 - [inference.md](../inference.md) — `MixedKVCache`, generation
 - [attention-sinks.md](../concepts/attention-sinks.md) — attention masks and sinks
 
-<!-- docs:verified 2026-08-05 · 6491066 -->
+<!-- docs:verified 2026-09-21 · ada1459 -->

@@ -154,4 +154,4 @@ Every chapter file ends with a verification footer:
 | Workflows | [SKILLS.md](../SKILLS.md) |
 | LLM architecture skill | `../../.agents/skills/llm-architecture/SKILL.md` |
 
-<!-- docs:verified 2026-08-05 · 6491066 -->
+<!-- docs:verified 2026-09-21 · ada1459 -->

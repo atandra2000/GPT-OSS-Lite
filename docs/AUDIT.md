@@ -121,3 +121,5 @@ raw PyTorch:
 - [x] No unmeasured headline presented as measured (passkey and run
       duration marked as targets, A7).
 - [x] Full default pytest green on CPU (203 passed / 2 skipped).
+
+<!-- docs:verified 2026-09-21 · ada1459 -->
