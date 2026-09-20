@@ -1127,7 +1127,7 @@ $$
 
 Halving the chunk size doubles the relative overhead; small chunks are the MoE norm (4096 tokens over 8 experts ≈ 512-token chunks before top-2 splitting). The W1/W3+SiLU stage is two of the expert's three GEMMs, so `models/moe.py:MoELayer._dispatch_triton` hands that stage to a single fused grouped-GEMM launch, `models/moe_triton.py:triton_moe_w1w3_silu`, which consumes the same counts/offsets layout natively: per-expert masked tiles of 16 tokens (no padding, no per-expert launch), W2 staying in PyTorch. The numeric launch-vs-compute ratios, the activation-traffic savings ($\approx 96$ MiB/layer at 4096 tokens), and the tile-shape derivation are in [triton programming](kernels-and-checkpointing.md) §6–7, with A100 rates marked `[INFERENCE]` there (`.benchmarks/` is empty).
 
-The two paths are numerically interchangeable — the Triton path is opt-in via `ModelConfig.moe_dispatch` (default `"stacked"`) and its parity is pinned by the GPU-gated tests in `tests/test_moe_triton.py`; on CPU-only machines those tests skip (repo-wide: 190 passed / 2 skipped).
+The two paths are numerically interchangeable — the Triton path is opt-in via `ModelConfig.moe_dispatch` (default `"stacked"`) and its parity is pinned by the GPU-gated tests in `tests/test_moe_triton.py`; on CPU-only machines those tests skip (repo-wide: 203 passed / 2 skipped).
 
 ### 10. Code walkthrough
 
