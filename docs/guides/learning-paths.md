@@ -31,7 +31,9 @@ ground up. No prior sliding-window-attention or MoE background required.
 | 1 | [getting-started.md](getting-started.md) (§1–§2) | What GPT-OSS-Lite is, the headline 1.94×–2.0× KV-cache number, and the ~502M total / ~247M active parameter split. |
 | 2 | [foundations-and-architecture.md](../concepts/foundations-and-architecture.md) | Why decoder-only, the full 12-layer topology, the GQA 8Q/4KV head layout, and the config→code routing through `models/transformer.py:ModelConfig` and `models/transformer.py:GPTOSS`. |
 | 3 | [attention-sinks.md](../concepts/attention-sinks.md) | The alternating sliding-window/full design (`models/attention.py:GPTOSSAttention`), why even layers keep only 128 tokens, and the learned sink bias with its clamp. |
+| 3a | [sliding-full-alternation.md](../concepts/sliding-full-alternation.md) · [learned-sinks.md](../concepts/learned-sinks.md) (optional compact primers) | The same two mechanisms from first principles in one sitting each — the eviction problem and the zero-value sink, the banded mask and the 2.00× cache cut. |
 | 4 | [attention-and-positional.md](../concepts/attention-and-positional.md) | Attention math end-to-end: QK^T scaling, masking, and the RoPE → YaRN path that stretches a 4K training window to 128K. |
+| 4a | [yarn-scaling.md](../concepts/yarn-scaling.md) (optional compact primer) | The three YaRN knobs as implemented: frequency ramp (42-of-48 compression), mscale temperature, per-layer pruning. |
 | 5 | [moe.md](../concepts/moe.md) | Top-2-of-8 routing (`models/moe.py:MoERouter`), the auxiliary load-balancing loss (`models/moe.py:aux_load_balancing_loss`), and the shared expert. |
 | 6 | [inference.md](../inference.md) (KV-cache chapters) | How `inference/generate.py:MixedKVCache` keeps ring buffers on windowed layers and full prefixes on global layers — the mechanism behind the headline metric. |
 | 7 | [config-and-api.md](../references/config-and-api.md) + `models/transformer.py:GPTOSS` | The code tour: every block with its shape contract. |
@@ -80,4 +82,4 @@ optimization catalog, and the measurement discipline.
   `tests/test_doc_refs.py` + `scripts/check_docs.py` are the two gates
   every doc change must keep green.
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

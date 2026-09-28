@@ -274,4 +274,4 @@ The from-scratch theory chapters build on each other; read them in this order:
 - [inference.md](../inference.md) — generation and passkey eval
 - [operations.md](operations.md) — scripts and utilities
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

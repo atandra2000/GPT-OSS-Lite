@@ -230,3 +230,15 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# --- pytest entry points (default `pytest` run includes the doc gate) ---
+
+def test_doc_references_resolve():
+    errors = check_resolution()
+    assert not errors, "\n".join(f"STALE ANCHOR  {e}" for e in errors)
+
+
+def test_coverage_zero_gaps():
+    gaps = check_coverage()
+    assert not gaps, "\n".join(f"UNANCHORED  {g}" for g in gaps)

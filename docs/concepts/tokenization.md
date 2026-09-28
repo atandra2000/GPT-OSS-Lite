@@ -233,4 +233,4 @@ python3 -c "from training.pretrain import PretrainDataset; d=PretrainDataset('da
 - [training.md](../training.md) — shard format, manifest, DataLoader configuration
 - [optimizers-and-numerics.md](optimizers-and-numerics.md) — softmax over the 128K vocabulary
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

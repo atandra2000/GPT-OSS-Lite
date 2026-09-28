@@ -18,6 +18,7 @@
 | `python3 -m pytest tests/ -q` | **203 passed, 2 skipped** (GPU-gated), ~54 s on macOS CPU |
 | Anchor census | 426 `file.py:Symbol` citations across docs (165 distinct file↔symbol pairs) |
 | Corpus size | 17 markdown files under `docs/`, ~91 000 words (measured `wc -w` 2026-09-21) |
+| *Wave-1 concepts closeout, re-run 2026-09-21* | `--strict-coverage` OK — 0 gaps; `scripts/check_docs.py` OK — **20 files** linted; `pytest -q` **203 passed, 2 skipped** (56.5 s). Three compact one-topic primers landed (`concepts/sliding-full-alternation.md`, `concepts/learned-sinks.md`, `concepts/yarn-scaling.md`, ~2.9K words) cross-linking the authoritative deep dives; nav learning-path 11→15 rows, agent-routing row added; corpus re-measured below in the size table (`scripts/check_docs.py --update-sizes`). |
 
 ---
 
@@ -59,7 +60,7 @@
 | A3 | low | no glossary; notation and config-key semantics scattered across concepts + reference | **fixed 2026-09-21** — `guides/glossary.md` added (notation, attention/YaRN/MoE/training/inference/data terms, acronyms) |
 | A4 | low | no `AUDIT.md` (this file) | **fixed 2026-09-21** |
 | A5 | low | six stale "190 passed / 2 skipped" mentions (AGENTS.md, SKILLS.md ×2, inference.md, kernels-and-checkpointing.md ×2, moe.md) vs the measured 203 | **fixed 2026-09-21** — all six corrected to the 2026-09-21 measurement |
-| A6 | info | `scripts/check_docs.py` has no `--coverage` flag under that name; the equivalent gate is `--check-symbols` (delegates to `test_doc_refs.py --strict-coverage`) | accepted — naming differs; the strict mode is stronger (enforced in CI via pytest) |
+| A6 | info | `scripts/check_docs.py` has no `--coverage` flag under that name; the equivalent gate is `--check-symbols` (delegates to `test_doc_refs.py --strict-coverage`) | **fixed 2026-09-27** — a real `--coverage` flag now enforces public-symbol coverage in the standalone gate (sharing `test_doc_refs.py`'s AST inventory). CI runs `check_docs.py --coverage`. 13 modules, 0 gaps. `--check-symbols` is retained as the stronger full-resolution mode. |
 | A7 | info | passkey retrieval at 128K (≥85%) and the full 8.0B-token run are unmeasured targets | accepted — docs correctly mark them as targets pending the A100 run |
 
 ## 3. From-scratch codebase explanation (condensed map)
@@ -122,4 +123,4 @@ raw PyTorch:
       duration marked as targets, A7).
 - [x] Full default pytest green on CPU (203 passed / 2 skipped).
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

@@ -114,4 +114,4 @@
 | BPE | Byte-Pair Encoding |
 | CE | Cross-Entropy (loss) |
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->
