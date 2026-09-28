@@ -1231,4 +1231,4 @@ Related: implementation reference [moe.md](moe.md); fused kernel [triton program
 - [`tests/test_moe_triton.py`](../../tests/test_moe_triton.py) — Triton contract tests.
 - [training.md](../training.md) — α=0.01 in the training loop.
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

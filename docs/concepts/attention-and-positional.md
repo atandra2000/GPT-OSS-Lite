@@ -1537,4 +1537,4 @@ Additional checks:
 - [foundations-and-architecture.md](foundations-and-architecture.md) — primer: attention, GQA, SWA
 - [inference.md](../inference.md) — rotated-K caching in `MixedKVCache`
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

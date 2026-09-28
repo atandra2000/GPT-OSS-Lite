@@ -58,6 +58,7 @@ docs_html/
 .env.local
 
 # Agent & tooling artifacts
+**/.claude/autoharness/
 .codebase-memory/
 .remember/
 .superpowers/

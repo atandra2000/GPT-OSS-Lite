@@ -97,13 +97,21 @@ Scripts that `import _bootstrap` must be run with `scripts/` as cwd **or** rely 
 
 ### A.3 `check_docs.py`
 
-**Purpose:** Validate all `docs/**/*.md` files for broken links, stale patterns, control characters, and missing backtick paths. Optionally refresh the doc size table in [README.md](../README.md) or stamp verification footers.
+**Purpose:** Validate all `docs/**/*.md` files for broken links, dead heading anchors, stale patterns, control characters, and missing backtick paths. Optionally enforce public-symbol coverage, refresh the doc size table in [README.md](../README.md), or stamp verification footers.
 
 #### Invocation
 
 ```bash
 # Lint only (exit 0 = clean)
 python3 scripts/check_docs.py
+
+# CI gate — lint + require every public symbol in the 13 coverage
+# modules to be cited at least once
+python3 scripts/check_docs.py --coverage
+
+# Full doc↔code anchor resolution (delegates to test_doc_refs.py
+# --strict-coverage; slower, resolves every anchor by import)
+python3 scripts/check_docs.py --check-symbols
 
 # Refresh ## Doc size reference table in docs/README.md
 python3 scripts/check_docs.py --update-sizes
@@ -139,7 +147,7 @@ On failure, prints `docs/<file>:<line>: <message>` to stderr and exits 1.
 ### A.4 `kv_cache_benchmark.py` (headline ≥1.8×)
 
 **Purpose:** Prove the **architectural KV-cache reduction** of the alternating sliding-window / full-attention design without loading a model or GPU. This is the analytical counterpart to `MixedKVCache` described in
-[foundations-and-architecture.md](../concepts/foundations-and-architecture.md) §9 and [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24)
+[foundations-and-architecture.md](../concepts/foundations-and-architecture.md) §9 and [Part C](operations.md#part-c--optimization-catalog-opt-1--opt-24)
 (OPT-11/12).
 
 #### Architecture constants (from `configs/pretrain_a100_502m.yaml`)
@@ -295,7 +303,7 @@ Exit **0** on success; raises `SystemExit(1)` on any failure.
 
 #### Component profiler — `profile_components.py`
 
-**Purpose:** Break down forward latency by subsystem on `micro_cfg()` — useful when deciding which [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24) entry to profile next.
+**Purpose:** Break down forward latency by subsystem on `micro_cfg()` — useful when deciding which [Part C](operations.md#part-c--optimization-catalog-opt-1--opt-24) entry to profile next.
 
 ##### Invocation
 
@@ -381,7 +389,7 @@ prompt=32, new=64: 52.1 ms (1228 tok/s)
 prompt=128, new=64: 61.3 ms (1044 tok/s)
 ```
 
-Decode cost is dominated by per-step `MixedKVCache` updates and MoE forward. Longer prompts increase prefill time but decode tok/s should stabilize once the cache is warm. See OPT-11/12/13/14/22 in [Part C](operations.md#part-c--optimization-catalog-opt-1-opt-24).
+Decode cost is dominated by per-step `MixedKVCache` updates and MoE forward. Longer prompts increase prefill time but decode tok/s should stabilize once the cache is warm. See OPT-11/12/13/14/22 in [Part C](operations.md#part-c--optimization-catalog-opt-1--opt-24).
 
 **Related:** [kv cache engineering](../inference.md) — decode-bandwidth model behind the tok/s ceiling.
 
@@ -421,7 +429,7 @@ python3 scripts/microbench_a100.py \
 [microbench] ✅ PASSED: peak < 25.0 GB
 ```
 
-Estimator math is documented in [§B.3](operations.md#b3-estimate_model_memory_gb-mixed-kv-term-assert_fits_in_available_gpu).
+Estimator math is documented in [§B.3](operations.md#b3-estimate_model_memory_gb--mixed-kv-term--assert_fits_in_available_gpu).
 
 **Related:** [numerics](../concepts/optimizers-and-numerics.md) (FP32/BF16 memory footprint) · [optimizers](../concepts/optimizers-and-numerics.md) (AdamW 12 B/param state).
 
@@ -449,7 +457,7 @@ python3 scripts/step_time_a100.py \
 | `--warmup` | 5 | Warmup steps (discarded) |
 | `--compile` | off | Enable `torch.compile(mode="max-autotune")` |
 
-Enables TF32 + cuDNN benchmark (see [OPT-20](operations.md#opt-20--cudnnbenchmark_limit0-preferred_blas_librarycublaslt)).
+Enables TF32 + cuDNN benchmark (see [OPT-20](operations.md#opt-20--cudnnbenchmark_limit0--preferred_blas_librarycublaslt)).
 
 ##### Expected output (A100, with `--compile`)
 
@@ -1426,7 +1434,7 @@ if use_grad_ckpt and (layer_idx % grad_ckpt_every == 0):
 
 **Files:** `models/transformer.py`, `training/pretrain.py`, `configs/pretrain_a100_502m.yaml`
 
-**Related:** [§B.3](operations.md#b3-estimate_model_memory_gb-mixed-kv-term-assert_fits_in_available_gpu) (activations), [autograd checkpointing](../concepts/kernels-and-checkpointing.md) (memory/compute tradeoff)
+**Related:** [§B.3](operations.md#b3-estimate_model_memory_gb--mixed-kv-term--assert_fits_in_available_gpu) (activations), [autograd checkpointing](../concepts/kernels-and-checkpointing.md) (memory/compute tradeoff)
 
 ---
 
@@ -1524,4 +1532,4 @@ After changing `models/attention.py`, always run `test_sliding_window_matches_fu
 - [inference.md](../inference.md) — `MixedKVCache`, generation
 - [attention-sinks.md](../concepts/attention-sinks.md) — attention masks and sinks
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

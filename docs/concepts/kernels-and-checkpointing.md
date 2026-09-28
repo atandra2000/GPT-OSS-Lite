@@ -556,4 +556,4 @@ Verification commands (all CPU-runnable):
 - [moe.md](moe.md) — MoE design, Triton contract, tiling rationale
 - [foundations-and-architecture.md](foundations-and-architecture.md) — model layout, hardware budget
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

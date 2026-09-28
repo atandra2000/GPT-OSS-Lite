@@ -92,4 +92,4 @@ The table uses the observed `readability.viewports[].minimumProjectedNodeTextPx`
 
 No CUDA training, corpus build, model/data compatibility repair, exact-resume verification or trained 128K retrieval evaluation was performed.
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

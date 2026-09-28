@@ -33,14 +33,17 @@ Read in this order for a first pass — or take the audience-routed alternative 
 | 1 | Concept | [foundations-and-architecture.md](concepts/foundations-and-architecture.md) | Why decoder-only, GQA, SWA, sinks, YaRN, MoE; system diagram, `GPTOSS` / `ModelConfig` |
 | 2 | Concept | [attention-sinks.md](concepts/attention-sinks.md) | SWA/full alternation, learned sink bias, SDPA paths |
 | 3 | Concept | [attention-and-positional.md](concepts/attention-and-positional.md) | Attention math + position encoding (RoPE → YaRN 128K) |
-| 4 | Concept | [moe.md](concepts/moe.md) | Top-2 routing, aux loss α=0.01, Triton opt-in |
-| 5 | Chapter | [training.md](training.md) | `pretrain.py`, schedules, NaN guard, data pipeline, YAML reference |
-| 6 | Chapter | [inference.md](inference.md) | `MixedKVCache`, `generate()`, KV-cache engineering |
-| 7 | Reference | [config-and-api.md](references/config-and-api.md) | Config tables + key API signatures |
-| 8 | Guide | [operations.md](guides/operations.md) | Scripts, utils, OPT-1…24 catalog |
-| 9 | Concept | [kernels-and-checkpointing.md](concepts/kernels-and-checkpointing.md) | GPU execution model, Triton, gradient checkpointing |
-| 10 | Concept | [optimizers-and-numerics.md](concepts/optimizers-and-numerics.md) | Optimizers, BF16/FP16/TF32 formats, sampling |
-| 11 | Concept | [tokenization.md](concepts/tokenization.md) | BPE algorithm, 128K vocab economics |
+| 4 | Concept | [sliding-full-alternation.md](concepts/sliding-full-alternation.md) | Compact primer: why even layers slide, the banded mask, the 2.00× KV-cache cut |
+| 5 | Concept | [learned-sinks.md](concepts/learned-sinks.md) | Compact primer: the softmax-mass problem, the zero-value sink key, the clamp |
+| 6 | Concept | [yarn-scaling.md](concepts/yarn-scaling.md) | Compact primer: frequency ramp, mscale temperature, per-layer pruning |
+| 7 | Concept | [moe.md](concepts/moe.md) | Top-2 routing, aux loss α=0.01, Triton opt-in |
+| 8 | Chapter | [training.md](training.md) | `pretrain.py`, schedules, NaN guard, data pipeline, YAML reference |
+| 9 | Chapter | [inference.md](inference.md) | `MixedKVCache`, `generate()`, KV-cache engineering |
+| 10 | Reference | [config-and-api.md](references/config-and-api.md) | Config tables + key API signatures |
+| 11 | Guide | [operations.md](guides/operations.md) | Scripts, utils, OPT-1…24 catalog |
+| 12 | Concept | [kernels-and-checkpointing.md](concepts/kernels-and-checkpointing.md) | GPU execution model, Triton, gradient checkpointing |
+| 13 | Concept | [optimizers-and-numerics.md](concepts/optimizers-and-numerics.md) | Optimizers, BF16/FP16/TF32 formats, sampling |
+| 14 | Concept | [tokenization.md](concepts/tokenization.md) | BPE algorithm, 128K vocab economics |
 
 ---
 
@@ -50,6 +53,7 @@ Read in this order for a first pass — or take the audience-routed alternative 
 |---|---|
 | How does this repo implement X? | `models/*.py` + matching concept chapter |
 | Sink bias / SWA / YaRN theory + impl | [attention-sinks.md](concepts/attention-sinks.md) |
+| SWA alternation / sinks / YaRN — compact one-topic primers | [sliding-full-alternation.md](concepts/sliding-full-alternation.md) · [learned-sinks.md](concepts/learned-sinks.md) · [yarn-scaling.md](concepts/yarn-scaling.md) |
 | RoPE / YaRN / attention math | [attention-and-positional.md](concepts/attention-and-positional.md) |
 | MoE / Triton | [moe.md](concepts/moe.md) + [kernels-and-checkpointing.md](concepts/kernels-and-checkpointing.md) |
 | YAML / train loop / data | [training.md](training.md) |
@@ -130,11 +134,15 @@ Every chapter file ends with a verification footer:
 | guides/getting-started.md | 277 | Comprehensive |
 | concepts/tokenization.md | 236 | Comprehensive |
 | references/config-and-api.md | 159 | Comprehensive |
-| AUDIT.md | 123 | Comprehensive |
-| guides/glossary.md | 115 | Comprehensive |
-| RECEIPTS.md | 93 | Comprehensive |
-| guides/learning-paths.md | 81 | Comprehensive |
-| **Total** | **12,433** | |
+| concepts/yarn-scaling.md | 151 | Comprehensive |
+| concepts/learned-sinks.md | 143 | Comprehensive |
+| concepts/sliding-full-alternation.md | 132 | Comprehensive |
+| AUDIT.md | 126 | Comprehensive |
+| guides/glossary.md | 117 | Comprehensive |
+| RECEIPTS.md | 95 | Comprehensive |
+| guides/learning-paths.md | 85 | Comprehensive |
+| **Total** | **12,870** | |
+
 
 
 
@@ -154,4 +162,4 @@ Every chapter file ends with a verification footer:
 | Workflows | [SKILLS.md](../SKILLS.md) |
 | LLM architecture skill | `../../.agents/skills/llm-architecture/SKILL.md` |
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->

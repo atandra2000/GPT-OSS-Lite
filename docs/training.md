@@ -1980,4 +1980,4 @@ python3 -c "from training.pretrain import PretrainDataset; d=PretrainDataset('da
 - [moe.md](concepts/moe.md) — aux loss theory
 - Hoffmann et al., *Training Compute-Optimal LLMs* (Chinchilla)
 
-<!-- docs:verified 2026-09-21 · ada1459 -->
+<!-- docs:verified 2026-09-21 · 41a8c94 -->
