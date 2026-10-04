@@ -270,7 +270,7 @@ Everything except step 3 is the same code the stacked path uses — the Triton p
 | Backward drift | Gradients disagree with an autograd reference | Backward *is* the reference; end-to-end parity: `pytest tests/test_moe_triton.py -v` → `test_moe_triton_grouped_matches_stacked` (GPU tests auto-skip on CPU) |
 | Wrong dispatch selected | `triton_grouped` ignored | `ModelConfig.moe_dispatch` default `"stacked"`; set explicitly in YAML (`configs/pretrain_a100_502m.yaml`) |
 
-CPU verification (no Triton): `pytest tests/test_moe_triton.py -v` — runs the reference-correctness, ImportError-policy, and hard-cap tests; the two GPU-gated kernel-parity tests (skipif `gpu_required`) skip on CPU-only machines (203 passed / 2 skipped repo-wide). GPU verification: `pytest tests/test_moe_triton.py -v` (GPU tests auto-skip on CPU) and `python3 scripts/e2e_gpu_smoke.py`, which exercises `stacked` vs `triton_grouped` numerical equivalence plus the five-step training loop on sm_75 (operations catalog entry A.6, [operations.md](../guides/operations.md#a6-e2e_gpu_smokepy)). Performance claims beyond these are `[INFERENCE]`: `.benchmarks/` is empty, and the 5–15% MoE-forward speedup on sm_80+ is an estimate, not a measurement.
+CPU verification (no Triton): `pytest tests/test_moe_triton.py -v` — runs the reference-correctness, ImportError-policy, and hard-cap tests; the two GPU-gated kernel-parity tests (skipif `gpu_required`) skip on CPU-only machines (207 tests repo-wide: 152 passed / 55 skipped; 205 passed / 2 skipped when the sibling `LLM/shared_data` repo is present). GPU verification: `pytest tests/test_moe_triton.py -v` (GPU tests auto-skip on CPU) and `python3 scripts/e2e_gpu_smoke.py`, which exercises `stacked` vs `triton_grouped` numerical equivalence plus the five-step training loop on sm_75 (operations catalog entry A.6, [operations.md](../guides/operations.md#a6-e2e_gpu_smokepy)). Performance claims beyond these are `[INFERENCE]`: `.benchmarks/` is empty, and the 5–15% MoE-forward speedup on sm_80+ is an estimate, not a measurement.
 
 For the surrounding machinery: routing and aux-loss math in [moe.md](moe.md), optimizer numerics in [optimizers-and-numerics.md](optimizers-and-numerics.md), and the softmax/attention side of GPU numerics in [attention-and-positional.md](attention-and-positional.md). The kernel's place in the MoE contract is [moe.md](moe.md#sanctioned-triton-path-moe_dispatchtriton_grouped).
 
@@ -543,7 +543,7 @@ Verification commands (all CPU-runnable):
   (every=2 estimate must exceed every=3).
 - `pytest tests/test_training.py -v` — training-loop integration: chunked CE
   under autocast, aux-loss accumulation, NaN guard, checkpoint round-trip.
-- Full suite baseline: 203 passed / 2 skipped (GPU-gated Triton).
+- Full suite baseline: 207 tests — 152 passed / 55 skipped (205 passed / 2 skipped with the sibling `LLM/shared_data` repo present).
 - `python3 scripts/check_docs.py` and `python3 tests/test_doc_refs.py` validate
   this chapter's links and anchors; run after any edit.
 

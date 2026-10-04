@@ -83,7 +83,7 @@ The table uses the observed `readability.viewports[].minimumProjectedNodeTextPx`
 
 ## Project checks
 
-- `python3 -m pytest tests/ -q`: 203 passed, 2 skipped (CPU, 51.01 s).
+- `python3 -m pytest tests/ -q`: 207 tests — 152 passed, 55 skipped (CPU, 54.94 s). 53 skips are the data-pipeline tests, which require the sibling `LLM/shared_data` repo; 2 are GPU-gated Triton parity. With `shared_data` checked out the same suite reports 205 passed / 2 skipped.
 - `python3 scripts/kv_cache_benchmark.py`: analytical 2.00× at 128K, exceeds 1.8× threshold. Not an allocated-VRAM benchmark.
 - `python3 tests/test_doc_refs.py --strict-coverage`: no stale anchors, no uncovered public symbols.
 - `python3 scripts/check_docs.py`: OK (14 Markdown files). This gate does not certify HTML prose or JavaScript.
