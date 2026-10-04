@@ -15,7 +15,7 @@
 |---|---|
 | `python3 tests/test_doc_refs.py --strict-coverage` | OK — all `file.py:Symbol` anchors resolve, strict public-symbol coverage holds, 0 line anchors |
 | `python3 scripts/check_docs.py` | OK — 14 files linted (links, backtick paths, stale patterns) |
-| `python3 -m pytest tests/ -q` | **203 passed, 2 skipped** (GPU-gated), ~54 s on macOS CPU |
+| `python3 -m pytest tests/ -q` | **207 tests: 152 passed, 55 skipped** (~55 s on macOS CPU). 53 skips are the data-pipeline tests (need the sibling `LLM/shared_data` repo), 2 are GPU-gated Triton. With `shared_data` present: 205 passed / 2 skipped. |
 | Anchor census | 426 `file.py:Symbol` citations across docs (165 distinct file↔symbol pairs) |
 | Corpus size | 17 markdown files under `docs/`, ~91 000 words (measured `wc -w` 2026-09-21) |
 | *Wave-1 concepts closeout, re-run 2026-09-21* | `--strict-coverage` OK — 0 gaps; `scripts/check_docs.py` OK — **20 files** linted; `pytest -q` **203 passed, 2 skipped** (56.5 s). Three compact one-topic primers landed (`concepts/sliding-full-alternation.md`, `concepts/learned-sinks.md`, `concepts/yarn-scaling.md`, ~2.9K words) cross-linking the authoritative deep dives; nav learning-path 11→15 rows, agent-routing row added; corpus re-measured below in the size table (`scripts/check_docs.py --update-sizes`). |
@@ -59,9 +59,12 @@
 | A2 | low | no audience-routed learning paths (only the linear walkthrough) | **fixed 2026-09-21** — `guides/learning-paths.md` added |
 | A3 | low | no glossary; notation and config-key semantics scattered across concepts + reference | **fixed 2026-09-21** — `guides/glossary.md` added (notation, attention/YaRN/MoE/training/inference/data terms, acronyms) |
 | A4 | low | no `AUDIT.md` (this file) | **fixed 2026-09-21** |
-| A5 | low | six stale "190 passed / 2 skipped" mentions (AGENTS.md, SKILLS.md ×2, inference.md, kernels-and-checkpointing.md ×2, moe.md) vs the measured 203 | **fixed 2026-09-21** — all six corrected to the 2026-09-21 measurement |
+| A5 | low | six stale "190 passed / 2 skipped" mentions (AGENTS.md, SKILLS.md ×2, inference.md, kernels-and-checkpointing.md ×2, moe.md) vs the then-measured 203 | **fixed 2026-09-21** — all six corrected; the target value 203 was itself later found wrong, see A8 |
 | A6 | info | `scripts/check_docs.py` has no `--coverage` flag under that name; the equivalent gate is `--check-symbols` (delegates to `test_doc_refs.py --strict-coverage`) | **fixed 2026-09-27** — a real `--coverage` flag now enforces public-symbol coverage in the standalone gate (sharing `test_doc_refs.py`'s AST inventory). CI runs `check_docs.py --coverage`. 13 modules, 0 gaps. `--check-symbols` is retained as the stronger full-resolution mode. |
 | A7 | info | passkey retrieval at 128K (≥85%) and the full 8.0B-token run are unmeasured targets | accepted — docs correctly mark them as targets pending the A100 run |
+| A8 | medium | the documented "203 passed / 2 skipped" was not reproducible: a module-level `pytest.importorskip("shared_data")` in `tests/test_data_pipeline.py` aborted collection for all 53 data-pipeline tests, so they vanished from the report instead of skipping. A bare checkout actually runs 152 tests, not 203. | **fixed 2026-10-05** — the import is now guarded with `try/except ImportError` + a module-level `skipif`, so all 53 tests collect and report individually (207 collected: 152 passed / 55 skipped; 205 passed / 2 skipped with `shared_data` present). All stale counts corrected across README, AGENTS.md, SKILLS.md, inference.md, kernels-and-checkpointing.md, moe.md, AUDIT.md, RECEIPTS.md. |
+| A9 | low | AGENTS.md attributed `MixedKVCache` to `inference/long_context.py`; the class lives in `inference/generate.py` | **fixed 2026-10-05** — attribution corrected |
+| A10 | low | `docs/concepts/foundations-and-architecture.md` called the RMSNorm `detach()` "standard pre-norm practice"; HuggingFace and Megatron both propagate gradient through the RMS statistic | **fixed 2026-10-05** — reworded as a deliberate local tradeoff for a smaller backward graph |
 
 ## 3. From-scratch codebase explanation (condensed map)
 
@@ -121,6 +124,6 @@ raw PyTorch:
 - [x] Nav map carries a measured, dated size table (regenerated A1).
 - [x] No unmeasured headline presented as measured (passkey and run
       duration marked as targets, A7).
-- [x] Full default pytest green on CPU (203 passed / 2 skipped).
+- [x] Full default pytest green on CPU (207 tests: 152 passed / 55 skipped).
 
 <!-- docs:verified 2026-09-21 · 41a8c94 -->

@@ -13,11 +13,13 @@ After pulling new code.
 
 **Steps:**
 
-1. **Run the full CPU-friendly test suite (203 passed / 2 skipped, ~55s).**
+1. **Run the full CPU-friendly test suite (207 tests, ~55s).**
    ```bash
    python3 -m pytest tests/ -v
    ```
-   Expected: 203 passed, 2 skipped.
+   Expected: 152 passed, 55 skipped (205 passed / 2 skipped if the sibling
+   `LLM/shared_data` repo is checked out; the 2 remaining skips are GPU-gated
+   Triton parity tests).
 
 2. **Verify the headline metric is still measured correctly.**
    ```bash
