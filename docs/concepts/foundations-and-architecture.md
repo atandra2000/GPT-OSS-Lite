@@ -1468,8 +1468,11 @@ Design notes:
 
 1. **RMS computed in FP32** via `x.detach().float()` — stabilizes BF16 forward
    without keeping a persistent FP32 copy of activations.
-2. **`detach()` on RMS** — norm statistics do not receive gradients (standard
-   pre-norm practice).
+2. **`detach()` on RMS** — norm statistics do not receive gradients. This is a
+   deliberate choice here, not the common default: HuggingFace and Megatron
+   both let gradient flow through the RMS statistic. Detaching trades exact
+   norm-statistic gradients for a smaller backward graph, which suits a
+   gradient-checkpointed run.
 3. **Learnable `weight`** initialized to ones in `_init_weights`.
 4. **`rms_norm_eps`** from config (default `1e-5`) matches LLaMA-family recipes.
 
