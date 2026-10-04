@@ -2,6 +2,11 @@
 
 Skipped when the sibling ``shared_data`` package is not importable (e.g. on a
 machine that doesn't have the other CoreProjects repos cloned next to this one).
+
+The import is guarded rather than done with ``pytest.importorskip`` so that all
+53 tests still *collect* and report as individual skips. A module-level
+``importorskip`` aborts collection for the whole file and surfaces as a single
+skip, which hides the size of the unexercised surface.
 """
 from __future__ import annotations
 
@@ -21,52 +26,60 @@ if str(_LLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_LLM_ROOT))
 
 # ``shared_data`` ships in a sibling CoreProjects repo (LLaMA-3-Lite by convention).
-# If that repo is missing, the entire data-pipeline test module is not exercisable.
-shared_data_spec = pytest.importorskip("shared_data", reason="shared_data not importable on this machine")
+# Guard the import so the module always collects; the skipif below reports each
+# test individually when the sibling repo is absent.
+try:
+    import shared_data.common as common
+    from shared_data.common import (
+        DATA_ROOT,
+        DEFAULT_EOS_TOKEN_ID,
+        DEFAULT_VOCAB_SIZE,
+        MANIFEST_PATH,
+        SHARDS_ROOT,
+        STATE_ROOT,
+        TOKENS_ROOT,
+        atomic_write_bytes,
+        atomic_write_json,
+        hash_to_bucket,
+        human_bytes,
+        load_state,
+        read_json,
+        save_state,
+        sha256_text,
+    )
+    from shared_data.manifest import (
+        MANIFEST_VERSION,
+        Manifest,
+        ShardInfo,
+        SourceInfo,
+        hash_config,
+        hash_yaml,
+    )
+    from shared_data.quality_filter import (
+        FilterStats,
+        QualityFilter,
+        digit_ratio_filter,
+        language_hint_filter,
+        length_filter,
+        punctuation_filter,
+        unique_chars_filter,
+        whitespace_filter,
+    )
+    from shared_data.shard_writer import (
+        ShardWriter,
+        TokenStream,
+        read_token_stream,
+        select_token_dtype,
+        validate_tokens,
+        verify_shard,
+    )
+    _SHARED_DATA_AVAILABLE = True
+except ImportError:
+    _SHARED_DATA_AVAILABLE = False
 
-import shared_data.common as common
-from shared_data.common import (
-    DATA_ROOT,
-    DEFAULT_EOS_TOKEN_ID,
-    DEFAULT_VOCAB_SIZE,
-    MANIFEST_PATH,
-    SHARDS_ROOT,
-    STATE_ROOT,
-    TOKENS_ROOT,
-    atomic_write_bytes,
-    atomic_write_json,
-    hash_to_bucket,
-    human_bytes,
-    load_state,
-    read_json,
-    save_state,
-    sha256_text,
-)
-from shared_data.manifest import (
-    MANIFEST_VERSION,
-    Manifest,
-    ShardInfo,
-    SourceInfo,
-    hash_config,
-    hash_yaml,
-)
-from shared_data.quality_filter import (
-    FilterStats,
-    QualityFilter,
-    digit_ratio_filter,
-    language_hint_filter,
-    length_filter,
-    punctuation_filter,
-    unique_chars_filter,
-    whitespace_filter,
-)
-from shared_data.shard_writer import (
-    ShardWriter,
-    TokenStream,
-    read_token_stream,
-    select_token_dtype,
-    validate_tokens,
-    verify_shard,
+pytestmark = pytest.mark.skipif(
+    not _SHARED_DATA_AVAILABLE,
+    reason="shared_data not importable (sibling LLM/shared_data repo not checked out)",
 )
 
 
