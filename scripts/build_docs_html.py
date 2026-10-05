@@ -56,6 +56,11 @@ DOC_FILES = [
     ("docs/RECEIPTS.md", "References", "Archify Verification Receipts"),
 ]
 
+# Repo-relative paths of every source doc the build ships a twin for. Link
+# rewriting consults this so a .md target without a generated page falls back
+# to a GitHub URL instead of becoming a dead relative href.
+MANIFEST_MD = {rel for rel, _, _ in DOC_FILES}
+
 # Pre-rendered HTML and images that Markdown pages link to but the renderer
 # does not generate. Copied verbatim into docs_html/ so those links resolve
 # offline. Kept as an explicit list: the archify maps are self-contained
@@ -165,7 +170,18 @@ def github_base_url() -> str:
         ).stdout.strip()
     except Exception:
         return ""
-    return f"{out}/blob/{branch}" if branch else ""
+    if branch:
+        return f"{out}/blob/{branch}"
+    # Detached HEAD — this is how actions/checkout materialises a pull-request
+    # merge ref. Pin to the commit so links still resolve to a real revision.
+    try:
+        rev = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True, cwd=WORKSPACE_DIR,
+        ).stdout.strip()
+    except Exception:
+        return ""
+    return f"{out}/blob/{rev}" if rev else ""
 
 
 def fix_md_links(content: str, src_rel_path: str) -> str:
@@ -201,12 +217,17 @@ def fix_md_links(content: str, src_rel_path: str) -> str:
                     # Prefer src-relative; falls through to a relative href
                     # the build still ships (harmless if unresolved).
                     repo_rel = Path(src_rel_path).parent / path_part
-            # Emit a href relative to the current output file's directory.
-            rel = os.path.relpath(WORKSPACE_DIR / repo_rel, src_dir).replace(os.sep, '/')
-            target = rel[:-3] + ".html"
-            if anchor:
-                target += "#" + anchor
-            return f"[{label}]({target})"
+            # Only rewrite to a sibling .html twin when the build actually
+            # ships that page. A .md file that is not in DOC_FILES (or has no
+            # twin) would otherwise become a link to a page that never exists.
+            if repo_rel.as_posix() in MANIFEST_MD:
+                rel = os.path.relpath(WORKSPACE_DIR / repo_rel, src_dir).replace(os.sep, '/')
+                target = rel[:-3] + ".html"
+                if anchor:
+                    target += "#" + anchor
+                return f"[{label}]({target})"
+            # No twin: fall through to a GitHub URL below.
+            path_part = repo_rel.as_posix()
         if repo_base and not path_part.startswith("/"):
             repo_rel = (src_dir / path_part).resolve().relative_to(WORKSPACE_DIR)
             return f"[{label}]({repo_base}/{repo_rel})"
@@ -1172,7 +1193,14 @@ def verify_links():
 
     Only covers pages this build generates. ``STATIC_ASSETS`` are copied
     verbatim and keep whatever link targets they were authored with.
+
+    Links to repository source files (``models/*.py``, ``LICENSE``, ...) are
+    rewritten to GitHub URLs. When no GitHub remote is reachable there is no
+    correct target to emit, so those stay relative and point outside
+    ``docs_html/``. That is an environment limitation rather than a manifest
+    defect, so it warns instead of failing; CI always has the remote.
     """
+    source_link = bool(github_base_url())
     generated = {
         OUTPUT_DIR / "index.html",
         *(
@@ -1190,6 +1218,15 @@ def verify_links():
                 continue
             if not (html_path.parent / url).exists():
                 broken.append(f"{html_path.relative_to(OUTPUT_DIR)} -> {url}")
+
+    if broken and not source_link:
+        # Without a GitHub remote the source-file links could not be rewritten,
+        # so report them without failing a legitimate offline build.
+        print(f"\nWarning: {len(broken)} link(s) point outside docs_html/ because no "
+              "GitHub remote was detected; source links were left relative.")
+        for entry in broken:
+            print(f"  {entry}")
+        return
 
     if broken:
         print("\nBroken local links (add the target to DOC_FILES or STATIC_ASSETS):")

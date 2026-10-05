@@ -167,6 +167,62 @@ def test_no_broken_local_links(built):
     assert not broken, "broken local links:\n" + "\n".join(broken)
 
 
+def test_source_links_resolve_on_detached_head(built, tmp_path, monkeypatch):
+    """Regression: actions/checkout materialises a PR as a detached merge ref,
+    where `git branch --show-current` is empty. The build must still resolve a
+    GitHub base (via the commit SHA) instead of leaving source links relative
+    into docs_html/, which made CI fail the link check."""
+    import subprocess as sp
+
+    script = (
+        "import sys; sys.path.insert(0, 'scripts'); import build_docs_html as b;"
+        "print(b.github_base_url())"
+    )
+    result = sp.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    )
+    base = result.stdout.strip()
+    assert base.startswith("https://github.com/"), f"no GitHub base resolved: {base!r}"
+    assert "/blob/" in base, f"base has no blob ref: {base!r}"
+
+    # A real source link must be absolute, not relative into docs_html/.
+    html = read("docs/concepts/attention-sinks.html")
+    assert 'href="../../models/attention.py"' not in html
+    assert "models/attention.py" in html
+    for match in re.finditer(r'href="([^"]*models/attention\.py)"', html):
+        assert match.group(1).startswith("https://"), (
+            f"source link left relative: {match.group(1)}"
+        )
+
+
+def test_manifest_link_rewrite_targets_shipped_twins(built):
+    """A .md target without a generated twin must not become a dead .html href."""
+    manifest = set(re.findall(
+        r'\("([^"]+\.md)", "(?:Core|Concepts|Guides|References)"',
+        (ROOT / "scripts" / "build_docs_html.py").read_text(encoding="utf-8"),
+    ))
+    shipped = {rel.replace(".md", ".html") for rel in manifest}
+    shipped.add("index.html")
+
+    for page in built.rglob("*.html"):
+        if page.relative_to(built).as_posix() in STATIC_HTML:
+            continue
+        for match in re.finditer(r'href="([^"#]+\.html)"', page.read_text(encoding="utf-8")):
+            href = match.group(1)
+            # Absolute URLs point at GitHub blobs, not into docs_html/.
+            if href.startswith(("http://", "https://", "//")):
+                continue
+            target = (page.parent / href).resolve()
+            if target.exists():
+                continue
+            # Only pages this build generates must exist; a static asset may
+            # legitimately link outside the site.
+            if page.relative_to(built).as_posix() in shipped:
+                rel = match.group(1)
+                raise AssertionError(f"{page.relative_to(built)} -> dead twin {rel}")
+
+
 def test_generated_pages_have_balanced_tags(built):
     """Regression: an unclosed <div class="doc-header"> left every doc page
     with unbalanced <main>/<body>/<html>, which silently changed page layout."""
