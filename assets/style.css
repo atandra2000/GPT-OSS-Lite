@@ -2762,3 +2762,198 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
     letter-spacing: 0.08em;
     text-align: center;
 }
+
+
+/* ============================================================
+   Skip link — first tab stop, hidden until focused.
+   ============================================================ */
+.skip-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10000;
+    padding: 0.6rem 1rem;
+    background: var(--paper-3);
+    color: var(--ink);
+    border: 1px solid var(--terracotta);
+    border-left: none;
+    border-top: none;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    /* Off-screen rather than display:none so it stays focusable. */
+    transform: translateY(-140%);
+    transition: transform var(--t-fast) var(--ease);
+}
+.skip-link:focus {
+    transform: translateY(0);
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+/* Sidebar and TOC are landmarks now, not bare divs/asides. */
+.sidebar-nav,
+.toc-inner {
+    display: block;
+}
+
+/* Page footer: provenance line under the prev/next pager. */
+.doc-footer {
+    margin-top: 2.6rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--rule-fine);
+}
+.doc-footer-note {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    line-height: 1.6;
+    color: var(--ink-faint);
+    letter-spacing: 0.02em;
+}
+.doc-footer-note code {
+    color: var(--ink-soft);
+    background: var(--tint-warm-04);
+    padding: 0.1em 0.35em;
+    border: 1px solid var(--rule-fine);
+    font-size: 0.94em;
+}
+.portal-footer { margin-bottom: 1rem; }
+
+/* Anchor jump: reserve the sticky header, then flash the landed heading so a
+   TOC click is visibly acknowledged. */
+:target {
+    background: var(--tint-terra-04);
+}
+.markdown-body :target {
+    animation: target-flash 1.6s var(--ease) 1;
+}
+@keyframes target-flash {
+    0%, 30% { background: var(--tint-terra-14); }
+    100%    { background: transparent; }
+}
+
+
+/* ============================================================
+   Syntax highlighting in the house palette.
+   Highlight.js ships github-dark (cool blues) which fights the warm
+   espresso/terracotta system. These tokens re-map every class it
+   emits onto existing variables, so code reads as part of the page.
+   ============================================================ */
+.code-wrapper .hljs { background: transparent; color: var(--ink); }
+.hljs-comment,
+.hljs-quote { color: var(--ink-faint); font-style: italic; }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag,
+.hljs-name { color: var(--terracotta); font-weight: 600; }
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string { color: var(--olive); }
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-template-variable,
+.hljs-variable { color: var(--rule-mark); }
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_,
+.hljs-built_in,
+.hljs-type,
+.hljs-class .hljs-title { color: var(--ink); font-weight: 600; }
+.hljs-attr,
+.hljs-property,
+.hljs-params { color: var(--ink-soft); }
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-subst { color: var(--ink-soft); }
+.hljs-deletion { color: #e8606e; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+
+
+/* ============================================================
+   Print. A dark espresso page prints as a solid black rectangle and
+   wastes toner; these rules hand the page to paper instead.
+   ============================================================ */
+@media print {
+    :root {
+        --paper: #ffffff;
+        --paper-2: #ffffff;
+        --paper-3: #f6f4ef;
+        --ink: #1a1a18;
+        --ink-soft: #3a3a36;
+        --ink-faint: #6a6a63;
+        --rule: #d8d4cb;
+        --rule-strong: #b4afa3;
+        --rule-mark: #8a6d1f;
+        --rule-fine: #e6e2d9;
+        --terracotta: #a34a17;
+        --olive: #5f5a12;
+        --code-paper: #faf9f6;
+        --header-bg: #ffffff;
+    }
+
+    /* Chrome that carries no meaning on paper. */
+    .site-header,
+    .sidebar,
+    .toc-sidebar,
+    .skip-link,
+    .mobile-toggle,
+    .boot-overlay,
+    #boot-overlay,
+    .code-actions,
+    .expand-btn,
+    .copy-btn,
+    .doc-footer-nav,
+    .hero-figure,
+    .pass-diagram,
+    .moe-playground,
+    .sink-toggle,
+    .sidebar-search { display: none !important; }
+
+    html, body {
+        background: #ffffff !important;
+        color: #1a1a18 !important;
+        font-size: 11pt;
+    }
+    .app-layout { display: block; max-width: none; }
+    .main-content { padding: 0; }
+    .content-container { max-width: none; }
+
+    a { color: #1a1a18; text-decoration: underline; }
+    /* Print the target, since a reader cannot follow the link. */
+    .markdown-body a[href^="http"]::after {
+        content: " (" attr(href) ")";
+        font-family: var(--font-mono);
+        font-size: 0.8em;
+        color: #6a6a63;
+        word-break: break-all;
+    }
+    .markdown-body a[href^="#"]::after,
+    .markdown-body a[href$=".html"]::after { content: ""; }
+
+    h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
+    .doc-table, .code-wrapper, .math-block, .callout, blockquote {
+        break-inside: avoid; page-break-inside: avoid;
+    }
+    pre, code { white-space: pre-wrap; word-wrap: break-word; }
+    .table-container { overflow: visible; }
+
+    .doc-footer { border-top-color: #d8d4cb; }
+    .doc-footer-note { color: #6a6a63; }
+
+    /* Syntax colours lose meaning on paper; keep weight and spacing only. */
+    .hljs { color: #1a1a18 !important; }
+    .hljs-keyword, .hljs-string, .hljs-number, .hljs-title,
+    .hljs-comment, .hljs-attr, .hljs-meta { color: #1a1a18 !important; }
+}
