@@ -31,10 +31,14 @@ DOC_FILES = [
     ("docs/training.md", "Core", "Training, Memory Stack & Data Pipeline"),
     ("docs/inference.md", "Core", "Inference & 128K Long Context"),
 
-    # Concepts
+    # Concepts. Order follows the reading order in docs/README.md so the
+    # sidebar, the prev/next pager, and the documented learning path agree.
     ("docs/concepts/foundations-and-architecture.md", "Concepts", "Foundations & 12-Layer Architecture"),
     ("docs/concepts/attention-sinks.md", "Concepts", "Attention Sinks & Sliding-Window Stabilization"),
     ("docs/concepts/attention-and-positional.md", "Concepts", "Attention Geometry & YaRN RoPE"),
+    ("docs/concepts/sliding-full-alternation.md", "Concepts", "Sliding-Window / Full Alternation"),
+    ("docs/concepts/learned-sinks.md", "Concepts", "Learned Attention Sinks"),
+    ("docs/concepts/yarn-scaling.md", "Concepts", "YaRN Scaling to 128K"),
     ("docs/concepts/moe.md", "Concepts", "Mixture of Experts — Top-2 of 8 + 1 Shared"),
     ("docs/concepts/kernels-and-checkpointing.md", "Concepts", "Triton MoE Kernels & Memory Checkpointing"),
     ("docs/concepts/optimizers-and-numerics.md", "Concepts", "Optimizers & Numerical Stability"),
@@ -42,10 +46,34 @@ DOC_FILES = [
 
     # Guides
     ("docs/guides/getting-started.md", "Guides", "Getting Started — From Zero to a Running Loop"),
+    ("docs/guides/learning-paths.md", "Guides", "Learning Paths — Beginner / Intermediate / Expert"),
+    ("docs/guides/glossary.md", "Guides", "Glossary"),
     ("docs/guides/operations.md", "Guides", "Operations Guide — Launch, Monitor, Resume"),
 
     # References
     ("docs/references/config-and-api.md", "References", "Configuration & API Reference"),
+    ("docs/AUDIT.md", "References", "Documentation Audit"),
+    ("docs/RECEIPTS.md", "References", "Archify Verification Receipts"),
+]
+
+# Pre-rendered HTML and images that Markdown pages link to but the renderer
+# does not generate. Copied verbatim into docs_html/ so those links resolve
+# offline. Kept as an explicit list: the archify maps are self-contained
+# (no external asset references), so copying the file is sufficient.
+STATIC_ASSETS = [
+    "docs/gpt_oss_visual_guide.html",
+    "docs/gpt-oss-lite-model-architecture.html",
+    "docs/gpt-oss-lite-optimization-stack.html",
+    "docs/gpt-oss-lite-data-pipeline.html",
+    "docs/gpt-oss-lite-training-workflow.html",
+    "docs/gpt-oss-lite-model-architecture.visual-check.1440x900.dark.png",
+    "docs/gpt-oss-lite-optimization-stack.visual-check.1440x900.dark.png",
+    "docs/gpt-oss-lite-data-pipeline.visual-check.1440x900.dark.png",
+    "docs/gpt-oss-lite-training-workflow.visual-check.1440x900.dark.png",
+    # docs/gpt_oss_visual_guide.html links to "RECEIPTS.md" verbatim. That
+    # resolves on GitHub but not inside docs_html/, so the Markdown source ships
+    # next to the guide rather than being rewritten in authored content.
+    "docs/RECEIPTS.md",
 ]
 
 # Premium-polish assets: secondary mono font, boot overlay, and a shared
@@ -530,11 +558,20 @@ def build_sidebar_html(current_rel_path: str, rel_prefix: str) -> str:
         href = rel_prefix + target_html_rel
         is_active = (rel_path == current_rel_path)
         active_cls = "active" if is_active else ""
+        current_attr = ' aria-current="page"' if is_active else ""
         sidebar_sections[category].append(
-            f'<li class="nav-item"><a href="{href}" class="nav-link {active_cls}" title="{display_title}"><span class="nav-link-text">{display_title}</span></a></li>'
+            f'<li class="nav-item"><a href="{href}" class="nav-link {active_cls}"{current_attr} '
+            f'title="{display_title}"><span class="nav-link-text">{display_title}</span></a></li>'
         )
 
-    html_out = ['<div class="sidebar-search"><input type="text" id="navSearch" placeholder="Search docs..." onkeyup="filterNav()"></div>']
+    html_out = [
+        '<div class="sidebar-search">'
+        '<label class="sr-only" for="navSearch">Filter documentation pages</label>'
+        '<input type="search" id="navSearch" placeholder="Search docs..." '
+        'autocomplete="off" oninput="filterNav()">'
+        '<span class="sr-only" id="navSearchStatus" role="status" aria-live="polite"></span>'
+        '</div>'
+    ]
 
     for cat_name, items in sidebar_sections.items():
         if items:
@@ -543,7 +580,7 @@ def build_sidebar_html(current_rel_path: str, rel_prefix: str) -> str:
             html_out.append(f'<ul class="nav-list">{"".join(items)}</ul>')
             html_out.append('</div>')
 
-    return "\n".join(html_out)
+    return f'<nav class="sidebar-nav" aria-label="Documentation pages">\n' + "\n".join(html_out) + "\n</nav>"
 
 
 def build_toc_html(toc_items: list[dict]) -> str:
@@ -641,9 +678,10 @@ def generate_html_page(rel_path: str, category: str, display_title: str):
         boot_script=BOOT_SCRIPT,
     ) + f"""<body>
     {BOOT_OVERLAY_HTML}
+    <a class="skip-link" href="#articleBody">Skip to content</a>
     <header class="site-header">
         <div class="header-left">
-            <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Toggle Sidebar">☰</button>
+            <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar">☰</button>
             <a href="{rel_prefix}index.html" class="brand-logo">
                 <span class="brand-name">GPT-OSS-Lite</span>
                 <span class="brand-badge">Docs</span>
@@ -664,11 +702,11 @@ def generate_html_page(rel_path: str, category: str, display_title: str):
         </aside>
 
         <!-- Main Content Area -->
-        <main class="main-content">
+        <main class="main-content" id="articleBody">
             <div class="content-container">
-                <div class="breadcrumb">
-                    <a href="{rel_prefix}index.html">Docs</a> &gt; <span>{category}</span> &gt; <span class="current">{display_title}</span>
-                </div>
+                <nav class="breadcrumb" aria-label="Breadcrumb">
+                    <a href="{rel_prefix}index.html">Docs</a> &gt; <span>{category}</span> &gt; <span class="current" aria-current="page">{display_title}</span>
+                </nav>
 
                 <div class="doc-header">
                     <h1 class="doc-title">{display_title}</h1>
@@ -677,26 +715,31 @@ def generate_html_page(rel_path: str, category: str, display_title: str):
                         <span class="meta-item"><span class="meta-mark">&para;</span> {word_count:,} words</span>
                         <span class="meta-item"><span class="meta-mark">&tau;</span> ~{reading_time} min read</span>
                     </div>
+                </div>
 
                 {doc_widget_html}
 
-                <article class="markdown-body" id="articleBody">
+                <article class="markdown-body">
                     {html_body}
                 </article>
 
-                <div class="doc-footer-nav">
+                <nav class="doc-footer-nav" aria-label="Previous and next page">
                     {prev_html}
                     {next_html}
-                </div>
+                </nav>
+
+                <footer class="doc-footer">
+                    <p class="doc-footer-note">Generated from <code>{rel_path}</code> by <code>scripts/build_docs_html.py</code>. Source of truth is the Markdown; edit that, then rebuild.</p>
+                </footer>
             </div>
         </main>
 
         <!-- Right Sidebar Table of Contents -->
         <aside class="toc-sidebar">
-            <div class="toc-inner">
+            <nav class="toc-inner" aria-label="On this page">
                 <div class="toc-title">On This Page</div>
                 {toc_html}
-            </div>
+            </nav>
         </aside>
     </div>
 
@@ -728,6 +771,9 @@ def generate_index_portal():
             ("docs/concepts/foundations-and-architecture.html", "C1", "Foundations & 12-Layer Architecture", "The alternating 6 SWA + 6 full-attention stack, GQA, RMSNorm, and the full wiring."),
             ("docs/concepts/attention-sinks.html", "C2", "Attention Sinks", "Why learned per-head sink bias stabilizes SWA — the rolling-buffer ↔ softmax cliff problem and the clamp."),
             ("docs/concepts/attention-and-positional.html", "C3", "Attention Geometry & YaRN", "Pruned RoPE on global layers, YaRN NTK-by-parts ramp at θ=100K, and the 128K extrapolation math."),
+            ("docs/concepts/sliding-full-alternation.html", "C3a", "Sliding-Window / Full Alternation", "One-topic primer: which layers slide, the banded mask, and the 2.00× KV-cache cut."),
+            ("docs/concepts/learned-sinks.html", "C2a", "Learned Attention Sinks", "One-topic primer: softmax mass under eviction, the zero-value sink key, and the clamp."),
+            ("docs/concepts/yarn-scaling.html", "C3b", "YaRN Scaling to 128K", "One-topic primer: the frequency ramp, mscale temperature, and per-layer RoPE pruning."),
             ("docs/concepts/moe.html", "C4", "Mixture of Experts", "Top-2 of 8 routed + 1 shared, standard aux loss, grouped dispatch, expert-load balance."),
             ("docs/concepts/kernels-and-checkpointing.html", "C5", "Triton MoE Kernels & Checkpointing", "Sanctioned fused W1/W3+silu grouped-GEMM, gradient checkpointing per 3rd layer, NaN guard."),
             ("docs/concepts/optimizers-and-numerics.html", "C6", "Optimizers & Numerical Stability", "BF16 + FP32 AdamW master, TF32, manual FP32 attention, sink-bias clamp, chunked CE."),
@@ -735,10 +781,15 @@ def generate_index_portal():
         ],
         ("GUIDES", "Guides & Playbooks"): [
             ("docs/guides/getting-started.html", "G1", "Getting Started", "From zero to a running training loop — install, verify the math, full run, resume."),
+            ("docs/guides/learning-paths.html", "G1a", "Learning Paths", "Audience-routed reading orders for beginner, intermediate, and expert tracks."),
+            ("docs/guides/glossary.html", "G1b", "Glossary", "Notation and terminology: windows, GQA, sinks, YaRN, aux loss, MixedKVCache."),
             ("docs/guides/operations.html", "G2", "Operations Guide", "Launch, monitor, NaN recovery, and resume for a production pre-training run."),
         ],
-        ("REFS", "API References"): [
+        ("REFS", "References & Verification"): [
             ("docs/references/config-and-api.html", "R1", "Config & API Reference", "ModelConfig fields, the annotated YAML, and every training/pretrain.py:TrainingConfig flag."),
+            ("docs/AUDIT.html", "R2", "Documentation Audit", "Dated verification state of the doc corpus and the findings table behind each fix."),
+            ("docs/RECEIPTS.html", "R3", "Archify Verification Receipts", "SHA-256 bindings, source pins, and the readability limits of the rendered diagrams."),
+            ("docs/gpt_oss_visual_guide.html", "R4", "Interactive Visual Systems Guide", "Four Archify maps, a KV-cache memory calculator, and a MoE router inspector."),
         ],
     }
 
@@ -778,10 +829,11 @@ def generate_index_portal():
         boot_script=BOOT_SCRIPT,
     ) + f"""<body class="index-portal">
     {BOOT_OVERLAY_HTML}
+    <a class="skip-link" href="#portalContent">Skip to content</a>
     <!-- Top Header -->
     <header class="site-header">
         <div class="header-left">
-            <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Toggle Sidebar">☰</button>
+            <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar">☰</button>
             <a href="index.html" class="brand-logo">
                 <span class="brand-name">GPT-OSS-Lite</span>
                 <span class="brand-badge">Documentation</span>
@@ -801,7 +853,7 @@ def generate_index_portal():
         </aside>
 
         <!-- Main Portal Content -->
-        <main class="main-content">
+        <main class="main-content" id="portalContent">
             <div class="content-container">
                 <div class="hero-banner">
                     <div class="hero-margin-ticks" aria-hidden="true"></div>
@@ -1073,6 +1125,10 @@ def generate_index_portal():
                 <div class="portal-content">
                     {portal_cards_html}
                 </div>
+
+                <footer class="doc-footer portal-footer">
+                    <p class="doc-footer-note">{len(DOC_FILES)} pages generated from the repository&rsquo;s Markdown by <code>scripts/build_docs_html.py</code>. Authored Markdown is the source of truth.</p>
+                </footer>
             </div>
         </main>
     </div>
@@ -1088,7 +1144,7 @@ def generate_index_portal():
 
 
 def generate_assets():
-    """Copy assets/style.css and assets/portal.js into the docs build."""
+    """Copy assets/style.css, assets/portal.js, and STATIC_ASSETS into the build."""
     assets_dir = OUTPUT_DIR / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     src_css = WORKSPACE_DIR / "assets" / "style.css"
@@ -1096,6 +1152,51 @@ def generate_assets():
     src_js = WORKSPACE_DIR / "assets" / "portal.js"
     if src_js.exists():
         shutil.copyfile(src_js, assets_dir / "portal.js")
+
+    for rel in STATIC_ASSETS:
+        src = WORKSPACE_DIR / rel
+        if not src.exists():
+            print(f"Warning: {rel} does not exist, skipping.")
+            continue
+        dest = OUTPUT_DIR / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dest)
+
+
+def verify_links():
+    """Fail the build when a generated page links to a file we did not ship.
+
+    Markdown links are rewritten to ``.html`` twins and non-Markdown links to
+    GitHub URLs, so a manifest entry that drifts out of date produces a link to
+    a page that was never generated. Nothing else catches that.
+
+    Only covers pages this build generates. ``STATIC_ASSETS`` are copied
+    verbatim and keep whatever link targets they were authored with.
+    """
+    generated = {
+        OUTPUT_DIR / "index.html",
+        *(
+            OUTPUT_DIR / rel.replace(".md", ".html")
+            for rel, _, _ in DOC_FILES
+        ),
+    }
+
+    broken = []
+    for html_path in sorted(p for p in generated if p.is_file()):
+        text = html_path.read_text(encoding="utf-8")
+        for match in re.finditer(r'(?:href|src)="([^"]+)"', text):
+            url = match.group(1).split("#")[0].split("?")[0]
+            if not url or url.startswith(("http://", "https://", "mailto:", "data:", "//")):
+                continue
+            if not (html_path.parent / url).exists():
+                broken.append(f"{html_path.relative_to(OUTPUT_DIR)} -> {url}")
+
+    if broken:
+        print("\nBroken local links (add the target to DOC_FILES or STATIC_ASSETS):")
+        for entry in broken:
+            print(f"  {entry}")
+        raise SystemExit(f"build_docs_html: {len(broken)} broken local link(s)")
+    print("Link check: OK (no broken local links)")
 
 
 def main():
@@ -1109,6 +1210,7 @@ def main():
         generate_html_page(rel_path, category, display_title)
 
     generate_index_portal()
+    verify_links()
     print("\nDocumentation build complete!")
     print(f"HTML Portal location: {OUTPUT_DIR / 'index.html'}")
 
