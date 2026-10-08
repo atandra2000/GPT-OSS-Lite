@@ -1127,7 +1127,7 @@ $$
 
 Halving the chunk size doubles the relative overhead; small chunks are the MoE norm (4096 tokens over 8 experts ≈ 512-token chunks before top-2 splitting). The W1/W3+SiLU stage is two of the expert's three GEMMs, so `models/moe.py:MoELayer._dispatch_triton` hands that stage to a single fused grouped-GEMM launch, `models/moe_triton.py:triton_moe_w1w3_silu`, which consumes the same counts/offsets layout natively: per-expert masked tiles of 16 tokens (no padding, no per-expert launch), W2 staying in PyTorch. The numeric launch-vs-compute ratios, the activation-traffic savings ($\approx 96$ MiB/layer at 4096 tokens), and the tile-shape derivation are in [triton programming](kernels-and-checkpointing.md) §6–7, with A100 rates marked `[INFERENCE]` there (`.benchmarks/` is empty).
 
-The two paths are numerically interchangeable — the Triton path is opt-in via `ModelConfig.moe_dispatch` (default `"stacked"`) and its parity is pinned by the GPU-gated tests in `tests/test_moe_triton.py`; on CPU-only machines those tests skip (repo-wide: 203 passed / 2 skipped).
+The two paths are numerically interchangeable — the Triton path is opt-in via `ModelConfig.moe_dispatch` (default `"stacked"`) and its parity is pinned by the GPU-gated tests in `tests/test_moe_triton.py`; on CPU-only machines those tests skip (repo-wide: 207 tests — 152 passed / 55 skipped; 205 passed / 2 skipped with the sibling `LLM/shared_data` repo present).
 
 ### 10. Code walkthrough
 
@@ -1214,7 +1214,7 @@ Both implement the layout of section 9.1: flatten slots, `torch.argsort(flat_idx
 pytest tests/test_moe.py -v
 ```
 
-covers every row above — 190 tests pass repo-wide / 2 skipped (the skips are the GPU-gated Triton parity tests, expected on CPU). Numerical-equality with the Triton path is additionally pinned by `pytest tests/test_moe_triton.py -v` on an sm_75+ GPU (GPU tests auto-skip on CPU). Everything derived in this chapter — (1)–(12) — is exact arithmetic on the code and config, except where marked `[INFERENCE]`: no pretraining run exists yet, so the ≥85% passkey @128K and the A100 time/MFU figures are targets and estimates, not measurements.
+covers every row above — 207 tests pass/skip repo-wide (152 passed / 55 skipped without the sibling `LLM/shared_data` repo, 205 passed / 2 skipped with it; the 2 skips are the GPU-gated Triton parity tests, expected on CPU). Numerical-equality with the Triton path is additionally pinned by `pytest tests/test_moe_triton.py -v` on an sm_75+ GPU (GPU tests auto-skip on CPU). Everything derived in this chapter — (1)–(12) — is exact arithmetic on the code and config, except where marked `[INFERENCE]`: no pretraining run exists yet, so the ≥85% passkey @128K and the A100 time/MFU figures are targets and estimates, not measurements.
 
 ---
 

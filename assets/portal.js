@@ -1568,12 +1568,15 @@
         var q = (input.value || '').toLowerCase().trim();
         var links = document.querySelectorAll('.nav-link');
         var groupHeaders = document.querySelectorAll('.nav-group');
+        var visible = 0;
 
         links.forEach(function (l) {
             var txt = l.textContent.toLowerCase();
             var item = l.closest('.nav-item');
             if (!item) return;
-            item.style.display = (!q || txt.indexOf(q) !== -1) ? '' : 'none';
+            var show = !q || txt.indexOf(q) !== -1;
+            item.style.display = show ? '' : 'none';
+            if (show) visible++;
         });
 
         // Hide empty category groups when filtered
@@ -1581,11 +1584,35 @@
             var visibleItems = grp.querySelectorAll('.nav-item:not([style*="display: none"])');
             grp.style.display = (!q || visibleItems.length > 0) ? '' : 'none';
         });
+
+        // Filtering is visual only, so the result count goes to a live region.
+        var status = document.getElementById('navSearchStatus');
+        if (status) {
+            status.textContent = q
+                ? visible + (visible === 1 ? ' page matches' : ' pages match') + ' “' + input.value.trim() + '”'
+                : '';
+        }
     };
     window.toggleSidebar = function () {
         var sb = document.getElementById('sidebar');
-        if (sb) sb.classList.toggle('open');
+        if (!sb) return;
+        var open = sb.classList.toggle('open');
+        var btn = document.querySelector('.mobile-toggle[aria-controls="sidebar"]');
+        if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     };
+
+    // Escape closes the mobile sidebar, matching the usual drawer convention.
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        var sb = document.getElementById('sidebar');
+        if (!sb || !sb.classList.contains('open')) return;
+        sb.classList.remove('open');
+        var btn = document.querySelector('.mobile-toggle[aria-controls="sidebar"]');
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+            btn.focus();
+        }
+    });
 
     // ------------------------------------------------------------------
     // 5. Table of Contents Scrollspy
