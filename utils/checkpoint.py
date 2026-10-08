@@ -41,6 +41,21 @@ class CheckpointManager:
         weights = load_file(str(weight_path), device=device)
         missing, unexpected = model.load_state_dict(weights, strict=False)
         if missing:
+            # Tied aliases (head.weight sharing embed.weight) are dropped at
+            # save time by dedup. A missing key is only real when every alias
+            # of its storage is missing.
+            # named_parameters() de-duplicates tied aliases, which would make
+            # head.weight look absent; ask for the full name list.
+            named = dict(model.named_parameters(remove_duplicate=False))
+            by_ptr: dict[int, list[str]] = {}
+            for n, p in named.items():
+                by_ptr.setdefault(p.data_ptr(), []).append(n)
+            missing = [
+                k for k in missing
+                if k not in named
+                or all(m in missing for m in by_ptr[named[k].data_ptr()])
+            ]
+        if missing:
             msg = f"[checkpoint] {len(missing)} missing key(s): {missing[:5]}{'…' if len(missing) > 5 else ''}"
             if strict:
                 raise RuntimeError(msg)

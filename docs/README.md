@@ -160,6 +160,6 @@ Every chapter file ends with a verification footer:
 | Project README | [README.md](../README.md) |
 | Agent rules | [AGENTS.md](../AGENTS.md) |
 | Workflows | [SKILLS.md](../SKILLS.md) |
-| LLM architecture skill | `../../.agents/skills/llm-architecture/SKILL.md` |
+| Architecture | `docs/concepts/foundations-and-architecture.md` |
 
 <!-- docs:verified 2026-09-21 · 41a8c94 -->
