@@ -27,6 +27,21 @@ from models.transformer import GPTOSS, ModelConfig
 from utils.checkpoint import CheckpointManager
 from utils.logging import TrainingLogger
 from utils.memory import assert_fits_in_available_gpu, estimate_model_memory_gb
+# --- bakeoff exposure accounting (tools/bakeoff) ---
+import sys as _sys
+from pathlib import Path as _Path
+_BAKEOFF = _Path(__file__).resolve().parents[2] / "tools" / "bakeoff"
+if _BAKEOFF.is_dir() and str(_BAKEOFF) not in _sys.path:
+    _sys.path.insert(0, str(_BAKEOFF))
+try:
+    from exposure_hook import load_exposure as _load_exposure
+    from exposure_hook import bind as _bind_exp, tick as _tick_exp
+except Exception:
+    _load_exposure = None
+    _bind_exp = None
+    def _tick_exp(*a, **k):
+        pass
+# --- end bakeoff import ---
 
 
 def seed_everything(seed: int) -> None:
@@ -192,8 +207,11 @@ class PretrainDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         if self.layout == "single":
-            return self._get_window_single(idx)
-        return self._get_window_sharded(idx)
+            x, y = self._get_window_single(idx)
+        else:
+            x, y = self._get_window_sharded(idx)
+        # Packed shards are uint32; nn.Embedding indices must be Long or Int.
+        return x.long(), y.long()
 
 
 def chunked_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, chunk_size: int = 4096):
@@ -293,7 +311,8 @@ def main(
         lr=train_cfg["lr"],
         betas=(train_cfg.get("beta1", 0.9), train_cfg.get("beta2", 0.95)),
         eps=1e-6,
-        foreach=True,
+        # AdamW rejects fused=True with foreach=True; pick one per device.
+        foreach=(dev.type != "cuda"),
         fused=(dev.type == "cuda"),
     )
     sched = LambdaLR(optim, make_warmup_cosine_lambda(
@@ -339,7 +358,9 @@ def main(
         print(f"[resume] Restored from step {start_step}")
         rng_path = ckpt.save_dir / f"rng_step_{resume_from}.pt"
         if rng_path.exists():
-            rng_state = torch.load(rng_path, weights_only=False, map_location=dev)
+            # map_location="cpu": torch.set_rng_state only accepts a CPU
+            # ByteTensor; mapping onto the training device breaks the load.
+            rng_state = torch.load(rng_path, weights_only=False, map_location="cpu")
             random.setstate(rng_state["python"])
             np.random.set_state(rng_state["numpy"])
             torch.set_rng_state(rng_state["torch"])
@@ -356,6 +377,18 @@ def main(
     aux_alpha = train_cfg.get("aux_loss_alpha", 0.01)
     grad_clip = train_cfg["grad_clip"]
 
+    # bakeoff exposure. Seeded from the resumed step so the token counter
+    # does not restart at zero after a checkpoint load.
+    if _load_exposure is not None:
+        _bind_exp(_load_exposure(__file__,
+            tokens_per_step=micro_bs * model_cfg.max_seq_len
+                            * train_cfg.get("gradient_accumulation_steps", 1),
+            micro_batch=micro_bs, seq_len=model_cfg.max_seq_len,
+            grad_accum=train_cfg.get("gradient_accumulation_steps", 1),
+            tokenizer="llama3", run_dir="checkpoints/exposure",
+            start_opt_steps=step,
+            start_tokens_seen=step * micro_bs * model_cfg.max_seq_len
+                              * train_cfg.get("gradient_accumulation_steps", 1)))
     pbar = tqdm(total=train_cfg["total_steps"], desc="pretrain", initial=step)
     optim.zero_grad(set_to_none=True)
     micro_step = 0
@@ -413,6 +446,7 @@ def main(
                 optim.zero_grad(set_to_none=True)
                 step += 1
                 pbar.update(1)
+                _tick_exp()   # bakeoff exposure: one complete optimizer step
 
                 if step % log_interval_safe == 0:
                     lr = sched.get_last_lr()[0]
