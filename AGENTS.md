@@ -8,7 +8,8 @@
 
 ```bash
 cd LLM/GPT-OSS-Lite
-python3 -m pytest tests/ -q                    # 203 passed / 2 skipped, ~55 s
+python3 -m pytest tests/ -q                    # 207 tests: 152 passed / 55 skipped, ~55 s
+                                              # (205 passed / 2 skipped with sibling LLM/shared_data)
 python3 scripts/kv_cache_benchmark.py          # headline: ≥ 1.8× KV-cache cut
 python3 tests/test_doc_refs.py --strict-coverage
 python3 scripts/check_docs.py --coverage
@@ -47,8 +48,8 @@ MoE routing collapsing to one expert?", "Tune window_size for KV cache."
   FP32 AdamW master weights + gradient checkpointing (every 3rd layer),
   NaN guard with rollback, aux load-balancing loss (α=0.01), chunked
   cross-entropy (chunk=4096).
-- Inference: `MixedKVCache` (windowed = ring buffer, global = exponential
-  growth → decode is O(1) per step instead of O(T)).
+- Inference: `MixedKVCache` (`inference/generate.py`) — windowed = ring buffer,
+  global = exponential growth → decode is O(1) per step instead of O(T).
   `inference/long_context.py` runs 128K passkey retrieval eval.
 
 **Triton kernel contract:**
