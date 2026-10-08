@@ -15,7 +15,9 @@
 #   - auxiliary load-balancing loss (alpha=0.01)
 
 model:
-  vocab_size:              128000
+  vocab_size:              128256
+  # 128000 was below the LLaMA-3 data's max id (128009 = <|eot_id|>), which
+  # made the embedding gather read out of bounds.
   d_model:                 768
   n_layers:                12
   n_heads:                 8

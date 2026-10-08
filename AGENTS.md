@@ -17,9 +17,8 @@ python3 scripts/check_docs.py --coverage
 > **Project:** `LLM/GPT-OSS-Lite/` · **Type:** faithful GPT-OSS reproduction
 > **Scale:** ~502M total / ~247M active · 8.0B tokens planned · 16–20h on A100 80GB
 > **Stack:** PyTorch 2.x, BF16, `torch.compile(max-autotune)`, FA2 via SDPA
-> **Architecture detail:** see `docs/concepts/foundations-and-architecture.md`; cross-architecture explainer
-> at `.agents/skills/llm-architecture/SKILL.md §2, §5`; **authoritative
-> sink-bias deep-dive at `docs/concepts/attention-sinks.md`.**
+> **Architecture detail:** see `docs/concepts/foundations-and-architecture.md`;
+> **authoritative sink-bias deep-dive at `docs/concepts/attention-sinks.md`.**
 
 ## 1. Subagent: `gptoss-long-context-engineer`
 
