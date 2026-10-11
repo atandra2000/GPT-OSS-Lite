@@ -1,9 +1,10 @@
 """Build-output contract tests for the docs_html portal in GPT-OSS-Lite.
 
-Runs the real generator once (module scope) and asserts the premium-polish
-wiring: portal.js asset, boot overlay, ASCII hero, mono-only fonts, widget
-containers. Also asserts structural integrity (balanced tags, resolvable local
-links) and the accessibility landmarks. Markdown sources are never modified.
+Runs the real generator once (module scope) and asserts the light-textbook
+wiring: portal.js asset, boot overlay, hero figure, Literata + IBM Plex Mono
+faces, widget containers. Also asserts structural integrity (balanced tags,
+resolvable local links) and the accessibility landmarks. Markdown sources are
+never modified.
 """
 
 import re
@@ -98,18 +99,22 @@ def test_nested_page_rel_prefix(built):
     assert 'src="../../assets/portal.js"' in html
 
 
-def test_font_link_mono_only(built):
+def test_font_link_prose_and_mono(built):
     html = read("README.html")
+    assert "Literata" in html
     assert "IBM+Plex+Mono" in html
-    assert "IBM+Plex+Serif" not in html
+    assert "JetBrains+Mono" not in html
 
 
-def test_index_hero_ascii_stage(built):
+def test_index_hero_figure(built):
     html = read("index.html")
     assert 'id="hero-decode"' in html
     assert 'data-title="OPENAI-GPT-OSS"' in html
     assert "bottleneck-svg" not in html
     assert "hero-title sr-only" in html
+    # Hero coordinate stamps and headline accent words are cut.
+    assert "hero-coords" not in html
+    assert "hero-title-em-accent" not in html
 
 
 def test_index_pass_widget_container(built):
@@ -133,7 +138,7 @@ def test_widgets_not_on_other_pages(built):
     assert "widget-layer-stack" not in html
 
 
-def test_dark_theme_only(built):
+def test_single_theme_only(built):
     html = read("README.html")
     assert "toggleTheme" not in html
     assert "theme-toggle" not in html
@@ -146,11 +151,33 @@ def test_dark_theme_only(built):
 def test_all_manifest_docs_have_twins(built):
     """Every DOC_FILES entry must resolve to a real markdown source."""
     source = (ROOT / "scripts" / "build_docs_html.py").read_text(encoding="utf-8")
-    manifest = re.findall(r'\("([^"]+\.md)", "(?:Core|Concepts|Guides|References)"', source)
+    manifest = re.findall(r'\("([^"]+\.md)", "Part [^"]+"', source)
     assert manifest, "no manifest entries parsed"
     for rel in manifest:
         assert (ROOT / rel).is_file(), f"manifest lists missing source: {rel}"
         assert (built / rel.replace(".md", ".html")).is_file(), f"no twin for {rel}"
+
+
+def test_raw_html_islands_pass_through(built):
+    """An allowlisted raw HTML island (README's figure wrapper) must render as
+    markup, not as visible escaped tags."""
+    html = read("README.html")
+    assert '<div align="center">' in html
+    assert "&lt;div" not in html
+
+
+def test_index_toc_matches_chapter_list(built):
+    """The index is the book's table of contents: one card per DOC_FILES
+    chapter, grouped under its part, derived from the same list the sidebar
+    uses."""
+    html = read("index.html")
+    source = (ROOT / "scripts" / "build_docs_html.py").read_text(encoding="utf-8")
+    manifest = re.findall(r'\("([^"]+\.md)", "(Part [^"]+)"', source)
+    assert manifest
+    for rel, part in manifest:
+        assert part in html, f"part heading missing on index: {part}"
+        assert f'href="{rel.replace(".md", ".html")}"' in html, f"no card for {rel}"
+    assert html.count('class="portal-card"') == len(manifest)
 
 
 def test_no_broken_local_links(built):
@@ -199,7 +226,7 @@ def test_source_links_resolve_on_detached_head(built, tmp_path, monkeypatch):
 def test_manifest_link_rewrite_targets_shipped_twins(built):
     """A .md target without a generated twin must not become a dead .html href."""
     manifest = set(re.findall(
-        r'\("([^"]+\.md)", "(?:Core|Concepts|Guides|References)"',
+        r'\("([^"]+\.md)", "Part [^"]+"',
         (ROOT / "scripts" / "build_docs_html.py").read_text(encoding="utf-8"),
     ))
     shipped = {rel.replace(".md", ".html") for rel in manifest}
@@ -289,10 +316,12 @@ def test_print_stylesheet_present(built):
     assert "page-break-inside" in print_block or "break-inside" in print_block
 
 
-def test_syntax_tokens_use_house_palette(built):
-    """github-dark ships cool blues that clash with the espresso palette;
-    local tokens must re-map highlight.js classes onto the design variables."""
+def test_syntax_theme_is_github_light(built):
+    """Code sits on the sunk cool surface, so the page loads highlight.js
+    `github.min.css` — never `github-dark` — and keeps that theme's ink
+    readable against --code-paper."""
+    html = read("README.html")
+    assert "highlight.js/11.9.0/styles/github.min.css" in html
+    assert "github-dark" not in html
     css = (OUT / "assets" / "style.css").read_text(encoding="utf-8")
-    assert ".hljs-keyword" in css
-    assert ".hljs-string" in css
-    assert ".hljs-comment" in css
+    assert ".code-wrapper .hljs" in css
