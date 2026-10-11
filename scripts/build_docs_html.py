@@ -5,9 +5,10 @@ Converts project markdown files into a responsive, beautifully-styled HTML docum
 with full LaTeX math (KaTeX) and syntax highlighting support.
 Output directory: docs_html/ (ignored by git).
 
-Design system: the "dark bench notebook" — espresso-graphite paper, warm-bone
-ink, terracotta + olive marks, one mono voice. Shares its lineage with the
-sibling LLaMA/DeepSeek/Mamba-3 Lite portals. See `assets/style.css`.
+Design system: the "light-textbook" printed reader — cool white paper,
+blue-black printing ink, Literata for prose, IBM Plex Mono for code and
+measured values. Shares its lineage with the sibling LLaMA/DeepSeek/Mamba-3
+Lite portals. See `assets/style.css`.
 """
 
 import os
@@ -22,44 +23,70 @@ from pathlib import Path
 WORKSPACE_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = WORKSPACE_DIR / "docs_html"
 
+# The book, in reading order. One list of (rel_path, part, display_title,
+# card_blurb): the sidebar groups by part, the index table of contents is
+# derived from this list, and the prev/next pager walks it. Drop a chapter
+# here and it leaves the book.
 DOC_FILES = [
-    # (relative_path_from_root, category, display_title)
-    ("README.md", "Core", "Project Overview (README)"),
-    ("AGENTS.md", "Core", "AGENTS & System Architecture"),
-    ("SKILLS.md", "Core", "Skills Reference"),
-    ("docs/README.md", "Core", "Documentation Index"),
-    ("docs/training.md", "Core", "Training, Memory Stack & Data Pipeline"),
-    ("docs/inference.md", "Core", "Inference & 128K Long Context"),
+    # Part I — Foundations
+    ("README.md", "Part I: Foundations", "Project Overview (README)",
+     "502M-param pure-PyTorch GPT-OSS reproduction: sliding-window/full "
+     "attention alternation, learned attention-sink bias, YaRN RoPE 128K, "
+     "and top-2-of-8 MoE with one sanctioned Triton kernel."),
+    ("docs/concepts/foundations-and-architecture.md", "Part I: Foundations",
+     "Foundations & 12-Layer Architecture",
+     "The alternating 6 SWA + 6 full-attention stack, GQA, RMSNorm, and the full wiring."),
+    ("docs/concepts/attention-sinks.md", "Part I: Foundations",
+     "Attention Sinks & Sliding-Window Stabilization",
+     "Why learned per-head sink bias stabilizes SWA — the rolling-buffer ↔ "
+     "softmax cliff problem and the clamp."),
+    ("docs/concepts/attention-and-positional.md", "Part I: Foundations",
+     "Attention Geometry & YaRN RoPE",
+     "Pruned RoPE on global layers, YaRN NTK-by-parts ramp at θ=100K, and the "
+     "128K extrapolation math."),
+    ("docs/concepts/sliding-full-alternation.md", "Part I: Foundations",
+     "Sliding-Window / Full Alternation",
+     "One-topic primer: which layers slide, the banded mask, and the 2.00× KV-cache cut."),
+    ("docs/concepts/learned-sinks.md", "Part I: Foundations",
+     "Learned Attention Sinks",
+     "One-topic primer: softmax mass under eviction, the zero-value sink key, and the clamp."),
+    ("docs/concepts/yarn-scaling.md", "Part I: Foundations",
+     "YaRN Scaling to 128K",
+     "One-topic primer: the frequency ramp, mscale temperature, and per-layer RoPE pruning."),
+    ("docs/concepts/moe.md", "Part I: Foundations",
+     "Mixture of Experts — Top-2 of 8 + 1 Shared",
+     "Top-2 of 8 routed + 1 shared, standard aux loss, grouped dispatch, expert-load balance."),
 
-    # Concepts. Order follows the reading order in docs/README.md so the
-    # sidebar, the prev/next pager, and the documented learning path agree.
-    ("docs/concepts/foundations-and-architecture.md", "Concepts", "Foundations & 12-Layer Architecture"),
-    ("docs/concepts/attention-sinks.md", "Concepts", "Attention Sinks & Sliding-Window Stabilization"),
-    ("docs/concepts/attention-and-positional.md", "Concepts", "Attention Geometry & YaRN RoPE"),
-    ("docs/concepts/sliding-full-alternation.md", "Concepts", "Sliding-Window / Full Alternation"),
-    ("docs/concepts/learned-sinks.md", "Concepts", "Learned Attention Sinks"),
-    ("docs/concepts/yarn-scaling.md", "Concepts", "YaRN Scaling to 128K"),
-    ("docs/concepts/moe.md", "Concepts", "Mixture of Experts — Top-2 of 8 + 1 Shared"),
-    ("docs/concepts/kernels-and-checkpointing.md", "Concepts", "Triton MoE Kernels & Memory Checkpointing"),
-    ("docs/concepts/optimizers-and-numerics.md", "Concepts", "Optimizers & Numerical Stability"),
-    ("docs/concepts/tokenization.md", "Concepts", "Tokenization — Tiktoken o200k"),
+    # Part II — The data
+    ("docs/concepts/tokenization.md", "Part II: The data",
+     "Tokenization — Tiktoken o200k",
+     "Tiktoken o200k_base, vocab 128000, the shared 8-B token data pipeline contract."),
 
-    # Guides
-    ("docs/guides/getting-started.md", "Guides", "Getting Started — From Zero to a Running Loop"),
-    ("docs/guides/learning-paths.md", "Guides", "Learning Paths — Beginner / Intermediate / Expert"),
-    ("docs/guides/glossary.md", "Guides", "Glossary"),
-    ("docs/guides/operations.md", "Guides", "Operations Guide — Launch, Monitor, Resume"),
-
-    # References
-    ("docs/references/config-and-api.md", "References", "Configuration & API Reference"),
-    ("docs/AUDIT.md", "References", "Documentation Audit"),
-    ("docs/RECEIPTS.md", "References", "Archify Verification Receipts"),
+    # Part III — The training run
+    ("docs/guides/getting-started.md", "Part III: The training run",
+     "Getting Started — From Zero to a Running Loop",
+     "From zero to a running training loop — install, verify the math, full run, resume."),
+    ("docs/training.md", "Part III: The training run",
+     "Training, Memory Stack & Data Pipeline",
+     "Mixed-precision stack, the gradient checkpointing contract, and the long-context data path end to end."),
+    ("docs/concepts/kernels-and-checkpointing.md", "Part III: The training run",
+     "Triton MoE Kernels & Memory Checkpointing",
+     "Sanctioned fused W1/W3+silu grouped-GEMM, gradient checkpointing per 3rd layer, NaN guard."),
+    ("docs/concepts/optimizers-and-numerics.md", "Part III: The training run",
+     "Optimizers & Numerical Stability",
+     "BF16 + FP32 AdamW master, TF32, manual FP32 attention, sink-bias clamp, chunked CE."),
+    ("docs/guides/operations.md", "Part III: The training run",
+     "Operations Guide — Launch, Monitor, Resume",
+     "Launch, monitor, NaN recovery, and resume for a production pre-training run."),
+    ("docs/inference.md", "Part III: The training run",
+     "Inference & 128K Long Context",
+     "MixedKVCache (ring buffer + exponential growth), 128K passkey retrieval, and O(1) decode per step."),
 ]
 
 # Repo-relative paths of every source doc the build ships a twin for. Link
 # rewriting consults this so a .md target without a generated page falls back
 # to a GitHub URL instead of becoming a dead relative href.
-MANIFEST_MD = {rel for rel, _, _ in DOC_FILES}
+MANIFEST_MD = {rel for rel, _, _, _ in DOC_FILES}
 
 # Pre-rendered HTML and images that Markdown pages link to but the renderer
 # does not generate. Copied verbatim into docs_html/ so those links resolve
@@ -81,19 +108,20 @@ STATIC_ASSETS = [
     "docs/RECEIPTS.md",
 ]
 
-# Premium-polish assets: secondary mono font, boot overlay, and a shared
+# Premium-polish assets: the two reading faces, boot overlay, and a shared
 # portal.js that holds the hero, pass-diagram, sidebar, copy/expand, and
 # TOC scrollspy logic. All pages reference the same shell.
 FONT_LINK = ('<link href="https://fonts.googleapis.com/css2?'
-             'family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400'
-             '&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400'
+             'family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;'
+             '0,7..72,600;0,7..72,700;1,7..72,400'
+             '&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400'
              '&display=swap" rel="stylesheet">')
 BOOT_OVERLAY_HTML = (
     '<div id="boot-overlay" aria-hidden="true">'
     '<div class="boot-inner">'
-    '<div class="boot-wordmark">GPT-OSS-LITE</div>'
-    '<div class="boot-line">loading weights '
-    '<span class="boot-bar">[░░░░░░░░░░░░] 0%</span>'
+    '<div class="boot-wordmark">GPT-OSS-Lite</div>'
+    '<div class="boot-line">Loading the notes'
+    '<span class="boot-bar"></span>'
     '</div></div></div>'
 )
 BOOT_SCRIPT = """<script>
@@ -118,7 +146,7 @@ HEAD_TEMPLATE = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
-    <!-- Fonts — secondary mono voice for headings/numerics, JetBrains for body. -->
+    <!-- Fonts — Literata for prose, IBM Plex Mono for code and data. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     {font_link}
@@ -130,7 +158,7 @@ HEAD_TEMPLATE = """<!DOCTYPE html>
 """
 
 DOC_EXTRA_HEAD = """    <!-- Highlight.js for Syntax Highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <!-- KaTeX for LaTeX Math -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -226,14 +254,59 @@ def fix_md_links(content: str, src_rel_path: str) -> str:
                 if anchor:
                     target += "#" + anchor
                 return f"[{label}]({target})"
-            # No twin: fall through to a GitHub URL below.
-            path_part = repo_rel.as_posix()
+            # No twin: link the GitHub source for the path we already
+            # resolved. Do not re-join it with src_dir — repo_rel is already
+            # repo-relative, and a second join mangles it.
+            if repo_base:
+                return f"[{label}]({repo_base}/{repo_rel.as_posix()})"
+            return f"[{label}]({url})"
         if repo_base and not path_part.startswith("/"):
             repo_rel = (src_dir / path_part).resolve().relative_to(WORKSPACE_DIR)
             return f"[{label}]({repo_base}/{repo_rel})"
         return f"[{label}]({url})"
 
     return re.sub(r'\[([^\]]+)\]\(([^)]+)\)', link_replacer, content)
+
+
+# Raw HTML islands — a figure wrapper in README.md, say — pass through with a
+# tag and attribute allowlist. Prose that merely mentions a tag ("a < b") stays
+# escaped text; a line whose first tag is allowlisted is an island.
+RAW_ALLOWED_TAGS = {"div", "a", "img", "p", "em", "strong", "br", "span", "sub", "sup", "code"}
+_RAW_TAG_RE = re.compile(r'<(/?)([a-zA-Z][\w-]*)((?:[^>"\']|"[^"]*"|\'[^\']*\')*)(/?)>')
+_RAW_ATTR_RE = re.compile(r'([a-zA-Z-]+)\s*=\s*"([^"]*)"')
+_RAW_ALLOWED_ATTRS = {
+    "*": {"class", "id", "align"},
+    "a": {"href"},
+    "img": {"src", "alt", "width", "height"},
+}
+
+
+def sanitize_raw_html_line(raw: str) -> str | None:
+    """One allowlisted HTML line, or None when the line is not an island."""
+    stripped = raw.strip()
+    first = _RAW_TAG_RE.match(stripped)
+    if not first or first.group(2).lower() not in RAW_ALLOWED_TAGS:
+        return None
+
+    def escape_text(text: str) -> str:
+        text = re.sub(r'&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#[0-9]+|#x[0-9a-fA-F]+);)', '&amp;', text)
+        return text.replace('<', '&lt;').replace('>', '&gt;')
+
+    out, pos = [], 0
+    for m in _RAW_TAG_RE.finditer(stripped):
+        out.append(escape_text(stripped[pos:m.start()]))
+        pos = m.end()
+        closing, tag, attrs_raw = m.group(1), m.group(2).lower(), m.group(3) or ''
+        if tag not in RAW_ALLOWED_TAGS:
+            continue
+        if closing:
+            out.append(f'</{tag}>')
+            continue
+        allowed = _RAW_ALLOWED_ATTRS["*"] | _RAW_ALLOWED_ATTRS.get(tag, set())
+        kept = [(n, html.escape(v, quote=True)) for n, v in _RAW_ATTR_RE.findall(attrs_raw) if n.lower() in allowed]
+        out.append(f'<{tag}' + ''.join(f' {n}="{v}"' for n, v in kept) + '>')
+    out.append(escape_text(stripped[pos:]))
+    return ''.join(out)
 
 
 def parse_markdown_to_html(md_text: str, src_rel_path: str) -> tuple[str, list[dict]]:
@@ -349,6 +422,7 @@ def parse_markdown_to_html(md_text: str, src_rel_path: str) -> tuple[str, list[d
         """Escape `<`, `>` and stray `&`, but leave valid HTML entities intact."""
         text = re.sub(r'&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#[0-9]+|#x[0-9a-fA-F]+);)', '&amp;', text)
         return text.replace('<', '&lt;').replace('>', '&gt;')
+
 
     def render_inline_formatting(text: str) -> str:
         text = escape_preserving_entities(text)
@@ -503,6 +577,16 @@ def parse_markdown_to_html(md_text: str, src_rel_path: str) -> tuple[str, list[d
             i += 1
             continue
 
+        # Raw HTML island passes through; anything else becomes a paragraph.
+        raw_html = sanitize_raw_html_line(stripped)
+        if raw_html is not None:
+            flush_table()
+            flush_list()
+            flush_blockquote()
+            html_lines.append(raw_html)
+            i += 1
+            continue
+
         # Standard Paragraph
         flush_table()
         flush_list()
@@ -571,16 +655,16 @@ def compute_rel_prefix(target_rel_path: str) -> str:
 
 
 def build_sidebar_html(current_rel_path: str, rel_prefix: str) -> str:
-    """Build the navigation sidebar HTML."""
-    sidebar_sections = {"Core": [], "Concepts": [], "Guides": [], "References": []}
+    """Build the navigation sidebar HTML, grouped by book part."""
+    sidebar_sections: dict[str, list[str]] = {}
 
-    for rel_path, category, display_title in DOC_FILES:
+    for rel_path, part, display_title, _blurb in DOC_FILES:
         target_html_rel = rel_path.replace(".md", ".html")
         href = rel_prefix + target_html_rel
         is_active = (rel_path == current_rel_path)
         active_cls = "active" if is_active else ""
         current_attr = ' aria-current="page"' if is_active else ""
-        sidebar_sections[category].append(
+        sidebar_sections.setdefault(part, []).append(
             f'<li class="nav-item"><a href="{href}" class="nav-link {active_cls}"{current_attr} '
             f'title="{display_title}"><span class="nav-link-text">{display_title}</span></a></li>'
         )
@@ -617,7 +701,7 @@ def build_toc_html(toc_items: list[dict]) -> str:
     return f'<ul class="toc-list">{"".join(toc_links)}</ul>'
 
 
-def generate_html_page(rel_path: str, category: str, display_title: str):
+def generate_html_page(rel_path: str, part: str, display_title: str, _blurb: str):
     """Generate single HTML file for a markdown document."""
     src_file = WORKSPACE_DIR / rel_path
     if not src_file.exists():
@@ -726,15 +810,15 @@ def generate_html_page(rel_path: str, category: str, display_title: str):
         <main class="main-content" id="articleBody">
             <div class="content-container">
                 <nav class="breadcrumb" aria-label="Breadcrumb">
-                    <a href="{rel_prefix}index.html">Docs</a> &gt; <span>{category}</span> &gt; <span class="current" aria-current="page">{display_title}</span>
+                    <a href="{rel_prefix}index.html">Docs</a><span>{part}</span><span class="current" aria-current="page">{display_title}</span>
                 </nav>
 
                 <div class="doc-header">
                     <h1 class="doc-title">{display_title}</h1>
                     <div class="doc-meta">
-                        <span class="meta-item"><span class="meta-mark">&sect;</span> {rel_path}</span>
-                        <span class="meta-item"><span class="meta-mark">&para;</span> {word_count:,} words</span>
-                        <span class="meta-item"><span class="meta-mark">&tau;</span> ~{reading_time} min read</span>
+                        <span class="meta-item">{rel_path}</span>
+                        <span class="meta-item">{word_count:,} words</span>
+                        <span class="meta-item">~{reading_time} min read</span>
                     </div>
                 </div>
 
@@ -779,62 +863,32 @@ def generate_index_portal():
     """Generate interactive index.html home portal."""
     sidebar_html = build_sidebar_html("index.html", "./")
 
-    categories = {
-        ("CORE", "Core Architecture"): [
-            ("README.html", "README", "Project Overview", "502M-param pure-PyTorch GPT-OSS reproduction: sliding-window/full attention alternation, learned attention-sink bias, YaRN RoPE 128K, and top-2-of-8 MoE with one sanctioned Triton kernel."),
-            ("AGENTS.html", "AGENTS", "System Architecture", "Codebase contracts, hard rules, the sliding-window invariant, and the standard (non-aux-free) MoE balancing loss."),
-            ("SKILLS.html", "SKILLS", "Skills Map", "Day-to-day developer workflows and agent competencies for this repo."),
-            ("docs/README.html", "DOCS", "Documentation Index", "A map of the concepts, guides, and API references in this portal."),
-            ("docs/training.html", "CORE", "Training Pipeline", "Mixed-precision stack, the gradient checkpointing contract, and the long-context data path end to end."),
-            ("docs/inference.html", "INF", "Inference & 128K", "MixedKVCache (ring buffer + exponential growth), 128K passkey retrieval, and O(1) decode per step."),
-        ],
-        ("CONCEPTS", "Architecture & Concepts"): [
-            ("docs/concepts/foundations-and-architecture.html", "C1", "Foundations & 12-Layer Architecture", "The alternating 6 SWA + 6 full-attention stack, GQA, RMSNorm, and the full wiring."),
-            ("docs/concepts/attention-sinks.html", "C2", "Attention Sinks", "Why learned per-head sink bias stabilizes SWA — the rolling-buffer ↔ softmax cliff problem and the clamp."),
-            ("docs/concepts/attention-and-positional.html", "C3", "Attention Geometry & YaRN", "Pruned RoPE on global layers, YaRN NTK-by-parts ramp at θ=100K, and the 128K extrapolation math."),
-            ("docs/concepts/sliding-full-alternation.html", "C3a", "Sliding-Window / Full Alternation", "One-topic primer: which layers slide, the banded mask, and the 2.00× KV-cache cut."),
-            ("docs/concepts/learned-sinks.html", "C2a", "Learned Attention Sinks", "One-topic primer: softmax mass under eviction, the zero-value sink key, and the clamp."),
-            ("docs/concepts/yarn-scaling.html", "C3b", "YaRN Scaling to 128K", "One-topic primer: the frequency ramp, mscale temperature, and per-layer RoPE pruning."),
-            ("docs/concepts/moe.html", "C4", "Mixture of Experts", "Top-2 of 8 routed + 1 shared, standard aux loss, grouped dispatch, expert-load balance."),
-            ("docs/concepts/kernels-and-checkpointing.html", "C5", "Triton MoE Kernels & Checkpointing", "Sanctioned fused W1/W3+silu grouped-GEMM, gradient checkpointing per 3rd layer, NaN guard."),
-            ("docs/concepts/optimizers-and-numerics.html", "C6", "Optimizers & Numerical Stability", "BF16 + FP32 AdamW master, TF32, manual FP32 attention, sink-bias clamp, chunked CE."),
-            ("docs/concepts/tokenization.html", "C7", "Tokenization", "Tiktoken o200k_base, vocab 128000, the shared 8-B token data pipeline contract."),
-        ],
-        ("GUIDES", "Guides & Playbooks"): [
-            ("docs/guides/getting-started.html", "G1", "Getting Started", "From zero to a running training loop — install, verify the math, full run, resume."),
-            ("docs/guides/learning-paths.html", "G1a", "Learning Paths", "Audience-routed reading orders for beginner, intermediate, and expert tracks."),
-            ("docs/guides/glossary.html", "G1b", "Glossary", "Notation and terminology: windows, GQA, sinks, YaRN, aux loss, MixedKVCache."),
-            ("docs/guides/operations.html", "G2", "Operations Guide", "Launch, monitor, NaN recovery, and resume for a production pre-training run."),
-        ],
-        ("REFS", "References & Verification"): [
-            ("docs/references/config-and-api.html", "R1", "Config & API Reference", "ModelConfig fields, the annotated YAML, and every training/pretrain.py:TrainingConfig flag."),
-            ("docs/AUDIT.html", "R2", "Documentation Audit", "Dated verification state of the doc corpus and the findings table behind each fix."),
-            ("docs/RECEIPTS.html", "R3", "Archify Verification Receipts", "SHA-256 bindings, source pins, and the readability limits of the rendered diagrams."),
-            ("docs/gpt_oss_visual_guide.html", "R4", "Interactive Visual Systems Guide", "Four Archify maps, a KV-cache memory calculator, and a MoE router inspector."),
-        ],
-    }
-
-    portal_cards_html = ""
-    for (cat_tag, cat_title), items in categories.items():
-        cards = ""
-        for href, tag, title, desc in items:
-            cards += f"""
-            <a href="{href}" class="portal-card">
-                <span class="card-tag">{tag}</span>
+    # The index is the book's table of contents. It is derived from DOC_FILES
+    # so the sidebar and the index cannot disagree about the chapter list.
+    parts: dict[str, list[str]] = {}
+    chapter_no = 0
+    for rel_path, part, display_title, blurb in DOC_FILES:
+        chapter_no += 1
+        parts.setdefault(part, []).append(f"""
+            <a href="{rel_path.replace('.md', '.html')}" class="portal-card">
+                <span class="card-tag">Ch {chapter_no}</span>
                 <div class="card-body">
-                    <h3 class="card-heading">{title}</h3>
-                    <p class="card-desc">{desc}</p>
+                    <h3 class="card-heading">{display_title}</h3>
+                    <p class="card-desc">{blurb}</p>
                 </div>
             </a>
-            """
+            """)
+
+    portal_cards_html = ""
+    for part, cards in parts.items():
+        n = len(cards)
         portal_cards_html += f"""
         <section class="portal-section">
             <header class="portal-section-head">
-                <span class="portal-section-mark">&sect; {cat_tag.lower()}</span>
-                <h2 class="portal-section-title">{cat_title}</h2>
-                <span class="portal-section-meta">{len(items)} entries</span>
+                <span class="portal-section-mark">{n} {'chapter' if n == 1 else 'chapters'}</span>
+                <h2 class="portal-section-title">{part}</h2>
             </header>
-            <div class="portal-grid">{cards}</div>
+            <div class="portal-grid">{''.join(cards)}</div>
         </section>
         """
 
@@ -877,20 +931,7 @@ def generate_index_portal():
         <main class="main-content" id="portalContent">
             <div class="content-container">
                 <div class="hero-banner">
-                    <div class="hero-margin-ticks" aria-hidden="true"></div>
-
-                    <div class="hero-coords" aria-hidden="true">
-                        <span class="coord">FIG &middot; A0</span>
-                        <span class="coord-sep">/</span>
-                        <span class="coord">PARAM 502M</span>
-                        <span class="coord-sep">/</span>
-                        <span class="coord">12 LAYERS</span>
-                        <span class="coord-sep">/</span>
-                        <span class="coord">CTX 128K YaRN</span>
-                        <span class="coord-sep">/</span>
-                        <span class="coord">W=128 SWA</span>
-                    </div>
-                    <h1 class="hero-title">GPT-OSS<span class="hero-title-em">-</span><span class="hero-title-em-accent">Lite</span></h1>
+                    <h1 class="hero-title">GPT-OSS-Lite</h1>
                     <!-- Screen-reader-friendly full title (the visual h1 is
                          clipped for style; tests assert on data-title attr). -->
                     <h1 class="hero-title sr-only" data-title="OPENAI-GPT-OSS">OpenAI GPT-OSS-Lite</h1>
@@ -1004,7 +1045,7 @@ def generate_index_portal():
 
                     <div class="mechanism-section" aria-label="Interactive GPT-OSS-Lite Core Mechanisms">
                         <div class="mechanism-section-head">
-                            <span class="mechanism-section-title">&sect; GPT-OSS-LITE CORE MECHANISMS &middot; INTERACTIVE BENCHMARK LABS</span>
+                            <span class="mechanism-section-title">GPT-OSS-Lite core mechanisms &middot; interactive benchmark labs</span>
                         </div>
                         <div class="mechanism-grid">
                             <!-- Card 1: SWA KV Cache Calculator -->
@@ -1205,7 +1246,7 @@ def verify_links():
         OUTPUT_DIR / "index.html",
         *(
             OUTPUT_DIR / rel.replace(".md", ".html")
-            for rel, _, _ in DOC_FILES
+            for rel, _, _, _ in DOC_FILES
         ),
     }
 
@@ -1238,13 +1279,17 @@ def verify_links():
 
 def main():
     print("Building GPT-OSS-Lite HTML Documentation...")
+    # Wipe the output directory first so a dropped chapter cannot linger as a
+    # dead page.
+    if OUTPUT_DIR.exists():
+        shutil.rmtree(OUTPUT_DIR)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     generate_assets()
 
-    for rel_path, category, display_title in DOC_FILES:
+    for rel_path, part, display_title, blurb in DOC_FILES:
         print(f"Generating: {rel_path} -> docs_html/{rel_path.replace('.md', '.html')}")
-        generate_html_page(rel_path, category, display_title)
+        generate_html_page(rel_path, part, display_title, blurb)
 
     generate_index_portal()
     verify_links()

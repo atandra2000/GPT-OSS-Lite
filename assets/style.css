@@ -1,26 +1,18 @@
-/* Mamba-3-Lite documentation — "dark bench notebook" design system.
+/* GPT-OSS-Lite documentation — light-textbook / printed-reader design system.
    ---------------------------------------------------------------------
-   The engineer's clipboard translated to night mode: espresso-graphite
-   paper, warm-bone ink, and the two warm marks kept from the daylight
-   edition —
+   The pages are read, not operated. Cool white paper, blue-black printing
+   ink, one reading face.
 
-     • terracotta   the "one active anomaly" mark: active nav tick,
-                    model number, hover arrows. Used sparingly.
-     • olive        the structural warm (coordinate stamps, § prefixes,
-                    hairlines on critical paths).
+     • Literata sets headings and prose.
+     • IBM Plex Mono is code, identifiers, and measured values. Never prose.
 
-     • One typeface: JetBrains Mono runs everything — headings, prose,
-       labels, coordinates, code. This is a code-centric portal.
+   Three low-chroma marks, one job each:
+     • accent     the current thing (links, active nav, focus)
+     • structure  quiet structural stamps (coords, keys, tags)
+     • mark       the third categorical mark (callout rules, card tags)
 
-     • The index hero is a Breathing Field: the complex-SSD recurrence
-       h_t = exp((A+iB)·dt)·h traced as a double logarithmic spiral of
-       phasors (the 32 conjugate pairs), perpetually rotating with a
-       state-pulse riding the arm. Below the datasheet sits the
-       interactive chunkwise-SSD pass figure. Both are the page's
-       signatures.
-
-   Dark-only by design; there is no light theme. This file is the single
-   source of truth; `scripts/build_docs_html.py` copies it into
+   One theme. No switcher, no dark variant. This file is the single source
+   of truth; `scripts/build_docs_html.py` copies it into
    `docs_html/assets/style.css` during the build. */
 
 
@@ -29,74 +21,77 @@
    1. TOKENS
    ===================================================================== */
 
+/* Light-textbook / printed-reader design system — the exact token block.
+   Copy verbatim. Single source of truth for color, type, measure, depth.
+   Worked example: assets/style.css at commit c8c0344 in
+   github.com/atandra2000/LLaMA-3-Lite */
+
 :root {
-    /* Espresso-graphite paper, three planes deep. */
-    --paper:         #12100d;     /* page */
-    --paper-2:       #161310;     /* card / sidebar plane */
-    --paper-3:       #1a1712;     /* raised plane */
-    --ink:           #d8ccb4;     /* warm-bone ink */
-    --ink-soft:      #b3a68c;
-    --ink-faint:     #7a7160;
+    /* Cool paper, three planes deep. A reading surface, so the ink is
+       blue-black printing ink and every plane stays near-neutral. */
+    --paper:         #FBFBFA;     /* page */
+    --paper-2:       #F4F5F5;     /* card / sidebar plane */
+    --paper-3:       #ECEEEE;     /* raised plane */
+    --ink:           #16191D;     /* blue-black text ink */
+    --ink-soft:      #4B5359;
+    --ink-faint:     #78818A;
 
-    /* Hairlines, ticks, the structural lines. */
-    --rule:          #2c261c;     /* warm graphite hairline */
-    --rule-strong:   #3a3226;     /* the structural rule */
-    --rule-mark:     #c9a35c;     /* dim gold for printed marks */
+    /* Hairlines. Structure, never texture. */
+    --rule:          #E4E7E8;     /* hairline */
+    --rule-strong:   #D2D7D9;     /* the structural rule */
+    --rule-fine:     #EDEFF0;     /* nested structure */
+    --rule-fade:     rgba(210, 215, 217, 0.55);
 
-    /* Two warm marks, carried over from the daylight edition. */
-    --terracotta:    #e07a3f;     /* the "one active anomaly" mark */
-    --terracotta-tint: rgba(224, 122, 63, 0.10);
-    --terracotta-glow: rgba(224, 122, 63, 0.35);
-    --olive:         #9a9440;     /* structural olive (AA on graphite) */
-    --olive-tint:    rgba(154, 148, 64, 0.12);
+    /* Three marks, low chroma, one job each. */
+    --accent:         #1F4A73;    /* the current thing */
+    --accent-tint:    rgba(31, 74, 115, 0.07);
+    --accent-glow:    rgba(31, 74, 115, 0.18);
+    --structure:      #5C6B5F;    /* quiet structural stamps */
+    --structure-tint: rgba(92, 107, 95, 0.10);
+    --mark:           #8A6A2E;    /* third categorical mark */
 
     /* Math/code surface — sunk one plane below the body paper. */
-    --code-paper:    #0e0c0a;
-    --code-rule:     #2c261c;
-
-    /* Header chrome */
-    --header-bg:     rgba(18, 16, 13, 0.88);
+    --code-paper:    #F3F5F5;
+    --code-rule:     #E1E5E6;
 
     /* Status callouts */
-    --callout-note-bg:    rgba(201, 163, 92, 0.06);
-    --callout-note-rule:  #c9a35c;
-    --callout-tip-bg:     rgba(224, 122, 63, 0.07);
-    --callout-tip-rule:   #e07a3f;
-    --callout-warn-bg:    rgba(232, 96, 110, 0.07);
-    --callout-warn-rule:  #e8606e;
+    --callout-note-bg:    rgba(138, 106, 46, 0.05);
+    --callout-note-rule:  #8A6A2E;
+    --callout-tip-bg:     rgba(31, 74, 115, 0.05);
+    --callout-tip-rule:   #1F4A73;
+    --callout-warn-bg:    rgba(150, 52, 52, 0.05);
+    --callout-warn-rule:  #963434;
 
-    /* Subtle warm tints — used for hover, code chips, table hover, etc.
-       These are the *paper* tones, not the ink marks. */
-    --tint-warm-04:   rgba(216, 204, 180, 0.04);
-    --tint-warm-08:   rgba(216, 204, 180, 0.08);
-    --tint-warm-12:   rgba(216, 204, 180, 0.12);
-    --tint-terra-04:  rgba(224, 122, 63, 0.05);
-    --tint-terra-14:  rgba(224, 122, 63, 0.18);
-    --tint-ink-04:    rgba(216, 204, 180, 0.05);
+    /* Ink tints — hover, chips, table rows. One hue, four strengths. */
+    --tint-ink-03:    rgba(22, 25, 29, 0.030);
+    --tint-ink-05:    rgba(22, 25, 29, 0.048);
+    --tint-ink-08:    rgba(22, 25, 29, 0.075);
+    --tint-accent-06: rgba(31, 74, 115, 0.06);
+    --tint-accent-14: rgba(31, 74, 115, 0.12);
 
-    /* Hairline at finer weights, for nested structure (cards within a grid,
-       rows within a card, etc.). */
-    --rule-fine:       #221d15;
-    --rule-fade:       rgba(58, 50, 38, 0.5);
+    /* Inset paper — the recessed plane for figures, spec cells and code. */
+    --paper-inset:    #F1F3F3;
 
-    /* Inset paper — the "even more recessed" plane used for the spec sheet
-       cells, code blocks, callouts, and any element that sits below the
-       main paper surface. */
-    --paper-inset:    #0e0c0a;
+    /* Depth. Soft and low-contrast: this surface is paper, not glass. */
+    --shadow-1:  0 1px 2px rgba(22, 25, 29, 0.05);
+    --shadow-2:  0 2px 8px rgba(22, 25, 29, 0.06);
+    --shadow-3:  0 6px 20px rgba(22, 25, 29, 0.09);
 
     /* Motion: one consistent timing voice. Slow enough to feel deliberate,
        fast enough not to drag. */
     --t-fast:    140ms;
     --t-base:    200ms;
-    --t-slow:    350ms;
     --ease:      cubic-bezier(0.4, 0, 0.2, 1);
 
     /* Focus ring — explicit, never rely on the UA default. */
-    --focus-ring:    0 0 0 2px var(--paper), 0 0 0 4px var(--terracotta);
+    --focus-ring:    0 0 0 2px var(--paper), 0 0 0 4px var(--accent);
 
-    /* Type families — one voice: JetBrains Mono runs everything. */
-    --font-mono:     'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --font-prose:    var(--font-mono);
+    /* Type families. Literata sets prose; mono is for code and data only. */
+    --font-mono:     'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --font-prose:    'Literata', Georgia, 'Iowan Old Style', serif;
+
+    /* Reading measure — about 68 characters of Literata at 17px. */
+    --measure:       41rem;
 
     /* Mono features shared by every label/number/coord role: tabular figures
        so columns line up, slashed zero so "0" doesn't read as "O". */
@@ -141,24 +136,6 @@ body {
 /* Faint ruled grid like a notebook — vertical lines every 32px and a
    horizontal line every 36px, only visible at very low opacity. Gives
    the page its "engineer's paper" texture without dominating it. */
-body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 1;
-    background-image:
-        repeating-linear-gradient(to right,
-            transparent 0,
-            transparent 31px,
-            rgba(216, 204, 180, 0.025) 31px,
-            rgba(216, 204, 180, 0.025) 32px),
-        repeating-linear-gradient(to bottom,
-            transparent 0,
-            transparent 35px,
-            rgba(216, 204, 180, 0.02) 35px,
-            rgba(216, 204, 180, 0.02) 36px);
-}
 
 .site-header, .app-layout, .hero-banner, .toc-sidebar, .sidebar {
     position: relative;
@@ -182,21 +159,19 @@ body::before {
 }
 .boot-inner { text-align: center; }
 .boot-wordmark {
-    font-size: 1.1rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
+    font-family: var(--font-prose);
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--ink);
-    margin-bottom: 0.8rem;
-    font-feature-settings: var(--mono-feats);
+    margin-bottom: 0.5rem;
 }
 .boot-line {
-    font-size: 0.76rem;
+    font-family: var(--font-prose);
+    font-size: 0.85rem;
     color: var(--ink-faint);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    font-feature-settings: var(--mono-feats);
 }
-.boot-bar { color: var(--terracotta); font-weight: 600; }
+.boot-bar { color: var(--accent); font-weight: 600; }
 .boot-fading { opacity: 0; pointer-events: none; }
 
 
@@ -205,43 +180,45 @@ body::before {
    3. TYPE
    ===================================================================== */
 
-.brand-name, .doc-title, .hero-title, .hero-coords, .ascii-hero,
-.portal-section-mark, .portal-section-title,
-.portal-section-meta, .card-heading, .card-tag, .nav-card .card-title,
-.nav-card .card-label, .nav-group-title, .nav-link, .toc-title,
-.toc-link, .breadcrumb, .doc-meta, .meta-item,
+.hero-coords, .ascii-hero, .portal-section-mark, .portal-section-meta,
+.card-tag, .card-label, .doc-meta, .meta-item,
 .code-header, .code-lang, .copy-btn, .code-wrapper pre,
 .inline-code, .math-block,
 .spec-sheet-rule, .spec-key, .spec-val, .spec-val .unit,
-.heading-anchor, .hero-subtitle,
-.callout-header, .callout-title,
-.brand-badge, .header-link,
-.mobile-toggle, .sidebar-search input,
-.doc-footer-nav {
+.callout-header, .brand-badge, .sidebar-search input,
+.fig-badge, .fig-btn, .fig-dim, .hud-corner, .probe-card,
+.pass-badge, .pass-btn, .pass-hud-chip, .st-card,
+.tc-badge, .tc-val, .msb-row, .mch-tag, .mch-stat-box,
+.chunk-badge, .chunk-pipeline-box, .mimo-cell,
+.breadcrumb, .toc-empty, .mp-tag, .mp-title, .mp-meta, .mp-hud-chip, .mph-lbl, .mph-val, .st-tag, .st-title, .st-meta, .sth-lbl, .sth-val, .moe-mini-cell, .sink-bar-label, .sink-bar-val {
     font-family: var(--font-mono);
 }
 
-.markdown-body p,
-.markdown-body li,
-.markdown-body blockquote,
-.hero-subtitle,
-.card-desc {
+.brand-name, .doc-title, .hero-title,
+.portal-section-title, .card-heading, .card-title,
+.nav-group-title, .nav-link, .toc-title, .toc-link,
+.heading-anchor, .hero-subtitle, .callout-title,
+.header-link, .mobile-toggle, .doc-footer-nav, .mch-action-btn,
+.card-desc, .card-body, .tc-desc, .mch-title, .mch-explainer,
+.markdown-body p, .markdown-body li, .markdown-body blockquote,
+.doc-footer-note, .mp-hint, .st-hint, .legend-label, .task-item {
     font-family: var(--font-prose);
 }
+
 
 p { margin: 0 0 1.1em 0; }
 
 a {
-    color: var(--rule-mark);
+    color: var(--accent);
     text-decoration: underline;
     text-underline-offset: 3px;
     text-decoration-thickness: 1px;
-    text-decoration-color: var(--rule);
+    text-decoration-color: var(--rule-strong);
     transition: color var(--t-fast) var(--ease), text-decoration-color var(--t-fast) var(--ease);
 }
-a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
+a:hover { color: var(--ink); text-decoration-color: var(--accent); }
 
-::selection { background: var(--tint-warm-12); color: var(--ink); }
+::selection { background: var(--tint-accent-14); color: var(--ink); }
 
 /* Global focus ring — never rely on the UA default. */
 :focus-visible {
@@ -256,7 +233,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 .header-link:focus-visible,
 .mobile-toggle:focus-visible,
 .copy-btn:focus-visible {
-    box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--terracotta);
+    box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--accent);
 }
 
 /* Visually hidden, but available to screen readers and search engines. */
@@ -285,15 +262,10 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.65rem 1.6rem;
-    background: var(--header-bg);
-    backdrop-filter: blur(14px) saturate(1.05);
-    -webkit-backdrop-filter: blur(14px) saturate(1.05);
+    padding: 0.7rem 1.6rem;
+    background: var(--paper);
     border-bottom: 1px solid var(--rule);
-    /* A second, finer olive hairline below the warm tan one — reads as
-       "the page above is the field, the page below is the body of the
-       notebook" without being a heavy double border. */
-    box-shadow: inset 0 -1px 0 var(--rule-fine);
+    box-shadow: var(--shadow-1);
 }
 
 .header-left {
@@ -311,37 +283,33 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     position: relative;
 }
 .brand-logo::before {
-    /* small olive tick to the left of the brand — same family as the
-       terracotta active state, just quieter. */
+    /* small structure tick to the left of the brand — same family as the
+       accent active state, just quieter. */
     content: "";
     display: inline-block;
     width: 3px;
     height: 0.95rem;
-    background: var(--olive);
+    background: var(--structure);
     margin-right: 0.45rem;
     transform: translateY(2px);
     opacity: 0.75;
 }
 
 .brand-name {
-    font-size: 0.95rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    font-feature-settings: var(--mono-feats);
+    font-family: var(--font-prose);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.012em;
 }
 
 .brand-badge {
-    font-size: 0.62rem;
-    padding: 3px 8px;
-    border: 1px solid var(--rule-strong);
+    font-size: 0.66rem;
+    padding: 2px 8px;
+    border: 1px solid var(--rule);
     color: var(--ink-faint);
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    border-radius: 0;
-    background: var(--tint-warm-04);
-    font-feature-settings: var(--mono-feats);
-    /* Stamped look — same as the spec sheet key */
+    font-weight: 400;
+    border-radius: 2px;
+    background: transparent;
     position: relative;
     top: -1px;
 }
@@ -349,39 +317,46 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 .header-right { display: flex; align-items: center; gap: 1.1rem; }
 
 .header-link {
-    color: var(--ink-faint);
+    color: var(--ink-soft);
     text-decoration: none;
-    font-size: 0.82rem;
-    font-weight: 500;
+    font-size: 0.86rem;
+    font-weight: 400;
     padding: 4px 2px;
     border-bottom: 1px solid transparent;
     transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
-    font-feature-settings: var(--mono-feats);
 }
-.header-link:hover { color: var(--terracotta); border-bottom-color: var(--terracotta); }
+.header-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
 .mobile-toggle {
-    background: var(--tint-warm-04);
+    background: transparent;
     border: 1px solid var(--rule-strong);
-    color: var(--ink-faint);
+    color: var(--ink-soft);
     padding: 5px 11px;
-    border-radius: 0;
+    border-radius: 2px;
     cursor: pointer;
-    font-size: 0.74rem;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    font-family: var(--font-mono);
-    font-feature-settings: var(--mono-feats);
+    font-size: 0.82rem;
+    font-weight: 400;
+    font-family: var(--font-prose);
     transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
 .mobile-toggle:hover {
     color: var(--ink);
-    border-color: var(--rule-mark);
-    background: var(--tint-warm-08);
+    border-color: var(--accent);
+    background: var(--tint-ink-05);
 }
 
-.mobile-toggle { display: none; }
+.mobile-toggle {
+    background: transparent;
+    border: 1px solid var(--rule-strong);
+    color: var(--ink-soft);
+    padding: 5px 11px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 400;
+    font-family: var(--font-prose);
+    transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
 
 
 
@@ -469,28 +444,20 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     outline: none;
     transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
-.sidebar-search input:focus { border-color: var(--rule-mark); background: var(--paper-inset); }
+.sidebar-search input:focus { border-color: var(--mark); background: var(--paper-inset); }
 .sidebar-search input::placeholder { color: var(--ink-faint); }
 
 .nav-group { margin-bottom: 1.6rem; }
 
 .nav-group-title {
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--ink-faint);
+    color: var(--ink-soft);
     margin-bottom: 0.5rem;
-    padding: 2px 0 2px 10px;
-    border-left: 2px solid var(--rule-strong);
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-feature-settings: var(--mono-feats);
+    padding: 0 0 0 10px;
 }
 .nav-group-title::after {
-    /* a fine olive hairline that fills the rest of the row, so the group
+    /* a fine structure hairline that fills the rest of the row, so the group
        title looks stamped onto a ruled bar. */
     content: "";
     flex: 1;
@@ -504,17 +471,15 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 .nav-link {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
-    padding: 6px 10px;
-    color: var(--ink-faint);
+    gap: 0.5rem;
+    padding: 5px 8px 5px 9px;
+    color: var(--ink-soft);
     text-decoration: none;
-    font-size: 0.82rem;
+    font-size: 0.86rem;
     font-weight: 400;
     line-height: 1.4;
-    border-left: 2px solid transparent;
-    margin-left: -2px;
+    border-left: 1px solid transparent;
     transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
-    position: relative;
     min-width: 0;
 }
 .nav-link-text {
@@ -534,21 +499,18 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     font-feature-settings: var(--mono-feats);
     transition: color var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
 }
-.nav-link:hover {
-    color: var(--ink);
-    background: var(--tint-warm-04);
-}
+.nav-link:hover { color: var(--ink); background: var(--tint-ink-05); }
 .nav-link:hover::before { opacity: 0.95; }
 
 .nav-link.active {
-    color: var(--terracotta);
-    border-left-color: var(--terracotta);
-    background: var(--tint-terra-04);
+    color: var(--ink);
+    border-left-color: var(--accent);
+    background: var(--tint-accent-06);
     font-weight: 500;
 }
-.nav-link.active::before { color: var(--terracotta); opacity: 1; }
+.nav-link.active::before { color: var(--accent); opacity: 1; }
 .nav-link.active::after {
-    /* tiny terracotta dot at the right edge — a printer's mark, anchors
+    /* tiny accent dot at the right edge — a printer's mark, anchors
        the active item even when the text gets truncated. */
     content: "";
     position: absolute;
@@ -556,7 +518,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     top: 50%;
     width: 4px;
     height: 4px;
-    background: var(--terracotta);
+    background: var(--accent);
     transform: translateY(-50%);
     border-radius: 0;
 }
@@ -572,67 +534,47 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 .toc-inner { position: relative; }
 .toc-title {
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--ink-faint);
-    margin-bottom: 0.8rem;
-    padding-bottom: 0.55rem;
-    border-bottom: 1px solid var(--rule-fine);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-feature-settings: var(--mono-feats);
-}
-.toc-title::before {
-    /* a small § mark on every TOC title, matching the heading prefix. */
-    content: "§";
-    color: var(--olive);
-    font-size: 0.9em;
-    font-weight: 400;
+    color: var(--ink-soft);
+    margin-bottom: 0.7rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rule);
 }
 .toc-list { list-style: none; margin: 0; padding: 0; }
-.toc-list li { margin-bottom: 2px; }
+.toc-list li { margin-bottom: 1px; }
 .toc-link {
     color: var(--ink-faint);
     text-decoration: none;
-    font-size: 0.76rem;
+    font-size: 0.82rem;
     line-height: 1.45;
     display: block;
-    padding: 3px 0 3px 8px;
-    border-left: 2px solid transparent;
-    margin-left: -2px;
+    padding: 3px 0 3px 9px;
+    border-left: 1px solid transparent;
     transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
-    font-feature-settings: var(--mono-feats);
 }
-.toc-link:hover { color: var(--ink); background: var(--tint-warm-04); }
+.toc-link:hover { color: var(--ink); background: var(--tint-ink-05); }
 .toc-link.active {
-    color: var(--terracotta);
-    border-left-color: var(--terracotta);
-    background: var(--tint-terra-04);
+    color: var(--ink);
+    border-left-color: var(--accent);
+    background: var(--tint-accent-06);
     font-weight: 500;
 }
-.toc-h3 { padding-left: 0.85rem; }
-.toc-h3 .toc-link { color: var(--ink-faint); opacity: 0.85; font-size: 0.73rem; }
-.toc-h3 .toc-link.active { color: var(--terracotta); opacity: 1; }
+.toc-h3 { padding-left: 0.9rem; }
+.toc-h3 .toc-link { color: var(--ink-faint); font-size: 0.79rem; }
+.toc-h3 .toc-link.active { color: var(--ink); }
 .toc-empty {
-    font-family: var(--font-mono);
-    font-size: 0.74rem;
+    font-family: var(--font-prose);
+    font-size: 0.82rem;
     color: var(--ink-faint);
     font-style: italic;
-    opacity: 0.7;
     padding: 0.4rem 0 0.2rem;
 }
 
 .main-content {
-    padding: 2.5rem 3rem 4rem;
+    padding: 2.75rem 3rem 4rem;
     overflow-x: hidden;
     background: var(--paper);
-    /* A barely-there vertical olive guide running the full content
-       column — it sits on the left margin of the prose and reads as
-       a "ruled margin" of the notebook page. */
-    position: relative;
 }
 .main-content::before {
     content: "";
@@ -646,19 +588,22 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     opacity: 0.6;
 }
 
-.content-container { max-width: 760px; margin: 0 auto; position: relative; z-index: 1; }
+.content-container {
+    max-width: var(--measure);
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
 
 .breadcrumb {
-    font-size: 0.72rem;
+    font-family: var(--font-prose);
+    font-size: 0.8rem;
     color: var(--ink-faint);
-    margin-bottom: 0.9rem;
-    letter-spacing: 0.04em;
+    margin-bottom: 1rem;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 0;
-    text-transform: uppercase;
-    font-feature-settings: var(--mono-feats);
 }
 .breadcrumb a {
     color: var(--ink-faint);
@@ -666,13 +611,12 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     border-bottom: 1px solid transparent;
     transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
-.breadcrumb a:hover { color: var(--ink); border-bottom-color: var(--terracotta); }
+.breadcrumb a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 .breadcrumb .current { color: var(--ink); font-weight: 500; }
-.breadcrumb span + span::before {
+.breadcrumb > * + *::before {
     content: "›";
-    margin: 0 0.5rem;
+    margin: 0 0.45rem;
     color: var(--ink-faint);
-    opacity: 0.55;
     font-weight: 400;
 }
 
@@ -683,60 +627,29 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
    ===================================================================== */
 
 .doc-header {
-    border-top: 1px solid var(--rule);
+    padding: 0 0 1.5rem;
+    margin-bottom: 2.5rem;
     border-bottom: 1px solid var(--rule);
-    padding: 1.7rem 0 1.4rem;
-    margin-bottom: 2.3rem;
-    position: relative;
 }
 
-.doc-header::before {
-    content: "§ FIELD NOTE · " attr(data-doc-tag, page);
-    position: absolute;
-    top: -0.7rem;
-    left: 0;
-    background: var(--paper);
-    padding: 0 0.6rem;
-    color: var(--olive);
-    font-family: var(--font-mono);
-    font-size: 0.66rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    font-weight: 500;
-    font-feature-settings: var(--mono-feats);
-}
-.doc-header::after {
-    /* a small terracotta tick at the right end of the doc-header rule —
-       ties the page to the same accent as the active nav item. */
-    content: "";
-    position: absolute;
-    right: 0;
-    top: -3px;
-    width: 6px;
-    height: 6px;
-    background: var(--terracotta);
-    border-radius: 0;
-}
 
 .doc-title {
-    font-size: 2.05rem;
+    font-size: 2.4rem;
     font-weight: 600;
-    line-height: 1.12;
-    letter-spacing: -0.018em;
-    margin: 0 0 1rem;
+    line-height: 1.16;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.9rem;
     color: var(--ink);
-    font-feature-settings: "kern", "liga";
+    text-wrap: balance;
 }
 
 .doc-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 1.3rem;
-    font-size: 0.7rem;
+    gap: 0.3rem 1.4rem;
+    font-family: var(--font-prose);
+    font-size: 0.8rem;
     color: var(--ink-faint);
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    font-feature-settings: var(--mono-feats);
 }
 .doc-meta .meta-item {
     display: inline-flex;
@@ -745,7 +658,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     padding: 3px 9px 3px 0;
 }
 .doc-meta .meta-mark {
-    color: var(--olive);
+    color: var(--structure);
     font-weight: 600;
     font-size: 0.78rem;
 }
@@ -762,111 +675,40 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
    ===================================================================== */
 
 .hero-banner {
-    padding: 2.4rem 2.6rem 2.2rem;
-    background: var(--paper-2);
-    border: 1px solid var(--rule-strong);
-    border-radius: 0;
-    margin-bottom: 1.8rem;
-    position: relative;
-    overflow: hidden;
-    /* a soft inner olive tint to push the hero off the body paper without
-       using a different background colour. */
-    box-shadow: inset 0 0 0 1px var(--tint-warm-04);
+    padding: 0 0 2.2rem;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 2.4rem;
 }
 
 /* Ruled-margin tabs across the top, like a notebook hole-punch row. */
-.hero-margin-ticks {
-    position: absolute;
-    top: 8px;
-    left: 0;
-    right: 0;
-    height: 10px;
-    background:
-        radial-gradient(circle, var(--rule-strong) 1.2px, transparent 1.4px) 0 0 / 36px 10px;
-    opacity: 0.55;
-}
-.hero-margin-ticks::after {
-    /* A second, finer row at half intensity, so the binder row reads as
-       printed rather than stamped. */
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 2px;
-    height: 6px;
-    background:
-        radial-gradient(circle, var(--rule) 0.9px, transparent 1.1px) 0 0 / 36px 6px;
-    opacity: 0.45;
-}
 
-.hero-coords {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 0;
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    color: var(--olive);
-    letter-spacing: 0.1em;
-    margin-bottom: 1.3rem;
-    margin-top: 0.6rem;
-    text-transform: uppercase;
-    padding-bottom: 0.7rem;
-    border-bottom: 1px dashed var(--rule);
-    font-feature-settings: var(--mono-feats);
-}
-.hero-coords .coord { color: var(--ink-faint); display: inline-flex; align-items: center; gap: 0.3rem; }
-.hero-coords .coord::before { content: "·"; color: var(--ink-faint); opacity: 0.4; margin-right: 0.3rem; }
-.hero-coords .coord:first-child::before { display: none; }
-.hero-coords .coord-sep { display: none; }
 
 .hero-title {
-    font-family: var(--font-mono);
-    font-size: 2.8rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1.1;
-    margin: 0 0 0.65rem;
-    color: var(--ink);
-    font-feature-settings: "tnum" 1, "ss01" 1;
-}
-.hero-title-em { color: var(--ink-faint); font-weight: 500; }
-.hero-title-em-accent {
-    color: var(--terracotta);
+    font-size: 3rem;
     font-weight: 600;
-    position: relative;
-    padding: 0 1px;
-}
-.hero-title-em-accent::after {
-    /* a hairline underline below "-Lite" — the only place in the design
-       where the hero title gets a decorative mark, and it's so subtle it
-       could be missed. */
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -0.1em;
-    height: 1px;
-    background: var(--terracotta);
-    opacity: 0.5;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    margin: 0 0 1rem;
+    color: var(--ink);
 }
 
 .hero-subtitle {
-    font-family: var(--font-prose);
-    font-size: 1.08rem;
+    font-size: 1.12rem;
     color: var(--ink-soft);
-    line-height: 1.6;
-    max-width: 1080px;
+    line-height: 1.62;
+    max-width: var(--measure);
     margin: 0 0 2rem;
-    font-feature-settings: "kern", "liga";
 }
 
 /* ----- FIG. A0 — Complex State-Space Dynamics (Precision Instrument) - */
 .hero-figure {
     margin: 0.8rem 0 1.8rem;
-    border: 1px solid var(--rule-strong);
-    background: var(--paper-inset);
+    border: 1px solid var(--rule);
+    background: var(--paper);
     position: relative;
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--shadow-2);
 }
 
 .hero-figure-header {
@@ -893,18 +735,17 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--olive);
-    box-shadow: 0 0 8px var(--olive);
+    background: var(--structure);
     animation: figDotPulse 2.4s infinite ease-in-out;
 }
 
 @keyframes figDotPulse {
-    0%, 100% { opacity: 0.4; transform: scale(0.9); }
-    50% { opacity: 1.0; transform: scale(1.15); filter: drop-shadow(0 0 3px var(--olive)); }
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 1; }
 }
 
 .fig-tag {
-    color: var(--olive);
+    color: var(--structure);
     font-weight: 700;
 }
 
@@ -946,16 +787,16 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 
 .fig-btn:hover {
-    background: var(--tint-terra-04);
+    background: var(--tint-accent-06);
     color: var(--ink);
-    border-color: var(--rule-mark);
+    border-color: var(--mark);
 }
 
 .fig-btn.active {
-    background: var(--tint-terra-14);
-    color: var(--terracotta);
-    border-color: var(--terracotta);
-    box-shadow: 0 0 8px var(--terracotta-tint);
+    background: var(--tint-accent-14);
+    color: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-tint);
 }
 
 .fig-btn-icon {
@@ -968,7 +809,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     position: relative;
     width: 100%;
     height: 360px;
-    background: radial-gradient(ellipse at center, #17130f 0%, #0e0c0a 70%, #080706 100%);
+    background: var(--paper-inset);
     overflow: hidden;
     cursor: crosshair;
 }
@@ -988,10 +829,8 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 .hud-corner {
     position: absolute;
     padding: 0.45rem 0.7rem;
-    background: rgba(18, 16, 13, 0.90);
-    border: 1px solid var(--rule-strong);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    background: var(--paper);
+    border: 1px solid var(--rule);
     font-family: var(--font-mono);
     line-height: 1.35;
     border-radius: 2px;
@@ -1021,7 +860,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 
 .hud-val .num {
-    color: var(--terracotta);
+    color: var(--accent);
     font-weight: 700;
 }
 
@@ -1034,9 +873,9 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 
 .probe-card {
-    background: rgba(22, 19, 16, 0.96);
-    border: 1px solid var(--gold);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 10px rgba(201, 163, 92, 0.25);
+    background: var(--paper);
+    border: 1px solid var(--mark);
+    box-shadow: var(--shadow-2);
     padding: 0.45rem 0.75rem;
     border-radius: 2px;
     font-family: var(--font-mono);
@@ -1046,7 +885,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 
 .probe-tag {
     display: block;
-    color: var(--gold);
+    color: var(--mark);
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.1em;
@@ -1064,7 +903,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 
 .probe-sub {
     display: block;
-    color: var(--olive);
+    color: var(--structure);
     font-size: 0.64rem;
     margin-top: 2px;
     letter-spacing: 0.04em;
@@ -1094,9 +933,9 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 
 .fig-formula .formula-sym { color: var(--ink); font-weight: 600; }
 .fig-formula .formula-op { color: var(--ink-faint); margin: 0 0.1rem; }
-.fig-formula .formula-term { color: var(--rule-mark); font-weight: 500; }
-.fig-formula .term-a { color: var(--olive); font-weight: 600; }
-.fig-formula .term-b { color: var(--terracotta); font-weight: 600; }
+.fig-formula .formula-term { color: var(--mark); font-weight: 500; }
+.fig-formula .term-a { color: var(--structure); font-weight: 600; }
+.fig-formula .term-b { color: var(--accent); font-weight: 600; }
 .fig-formula .formula-dot { color: var(--ink-faint); }
 .fig-formula .f-sub, .fig-legend .f-sub {
     font-size: 0.58rem;
@@ -1127,18 +966,16 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 
 .legend-swatch.olive {
-    background: var(--olive);
-    box-shadow: 0 0 5px var(--olive);
+    background: var(--structure);
+    box-shadow: 0 0 5px var(--structure);
 }
 
 .legend-swatch.terra {
-    background: var(--terracotta);
-    box-shadow: 0 0 5px var(--terracotta);
+    background: var(--accent);
 }
 
 .legend-swatch.core {
-    background: #fffaf0;
-    box-shadow: 0 0 6px var(--terracotta-glow);
+    background: var(--ink);
 }
 
 .legend-hint {
@@ -1153,7 +990,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     border: 1px solid var(--rule-strong);
     background: var(--paper-inset);
     position: relative;
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--shadow-2);
 }
 
 .pass-widget-header {
@@ -1181,18 +1018,18 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--terracotta);
-    box-shadow: 0 0 8px var(--terracotta);
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
     animation: passDotPulse 2.4s infinite ease-in-out;
 }
 
 @keyframes passDotPulse {
     0%, 100% { opacity: 0.4; transform: scale(0.9); }
-    50% { opacity: 1.0; transform: scale(1.15); filter: drop-shadow(0 0 3px var(--terracotta)); }
+    50% { opacity: 1.0; transform: scale(1.15); filter: drop-shadow(0 0 3px var(--accent)); }
 }
 
 .pass-tag {
-    color: var(--terracotta);
+    color: var(--accent);
     font-weight: 700;
 }
 
@@ -1234,16 +1071,16 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 
 .pass-btn:hover {
-    background: var(--tint-terra-04);
+    background: var(--tint-accent-06);
     color: var(--ink);
-    border-color: var(--rule-mark);
+    border-color: var(--mark);
 }
 
 .pass-btn.active {
-    background: var(--tint-terra-14);
-    color: var(--terracotta);
-    border-color: var(--terracotta);
-    box-shadow: 0 0 8px var(--terracotta-tint);
+    background: var(--tint-accent-14);
+    color: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-tint);
 }
 
 .pass-btn-icon {
@@ -1256,7 +1093,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     position: relative;
     width: 100%;
     height: 270px;
-    background: radial-gradient(ellipse at center, #17130f 0%, #0e0c0a 70%, #080706 100%);
+    background: var(--paper-inset);
     overflow: hidden;
     cursor: crosshair;
 }
@@ -1275,10 +1112,8 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 .pass-hud-chip {
     position: absolute;
     padding: 0.45rem 0.7rem;
-    background: rgba(18, 16, 13, 0.90);
-    border: 1px solid var(--rule-strong);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    background: var(--paper);
+    border: 1px solid var(--rule);
     font-family: var(--font-mono);
     line-height: 1.35;
     border-radius: 2px;
@@ -1311,28 +1146,29 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     pointer-events: none;
     transition: opacity 0.12s ease;
     z-index: 10;
-    max-width: calc(100% - 24px);
 }
 
 .st-card {
-    background: rgba(22, 19, 16, 0.96);
-    border: 1px solid var(--gold);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 10px rgba(201, 163, 92, 0.25);
-    padding: 0.5rem 0.8rem;
+    background: var(--paper);
+    border: 1px solid var(--mark);
+    box-shadow: var(--shadow-3);
+    padding: 0.6rem 0.95rem;
     border-radius: 2px;
     font-family: var(--font-mono);
-    line-height: 1.35;
+    line-height: 1.4;
+    max-width: 320px;
     white-space: normal;
     word-break: break-word;
-    max-width: 420px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 .st-tag {
     display: block;
-    color: var(--gold);
-    font-size: 0.68rem;
+    color: var(--mark);
+    font-size: 0.70rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     margin-bottom: 2px;
 }
@@ -1340,24 +1176,25 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 .st-op {
     display: block;
     color: var(--ink);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
     font-feature-settings: var(--mono-feats);
+    text-shadow: none;
 }
 
 .st-shape {
     display: block;
-    color: var(--terracotta);
-    font-size: 0.65rem;
-    font-weight: 500;
-    margin-top: 2px;
+    color: var(--accent);
+    font-size: 0.68rem;
+    font-weight: 600;
+    margin-top: 3px;
 }
 
 .st-desc {
     display: block;
-    color: var(--olive);
-    font-size: 0.62rem;
-    margin-top: 2px;
+    color: var(--ink);
+    font-size: 0.66rem;
+    margin-top: 3px;
     letter-spacing: 0.02em;
 }
 /* Footer: Ticker & Legend */
@@ -1384,7 +1221,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 
 .ticker-beacon {
-    color: var(--terracotta);
+    color: var(--accent);
     font-size: 1.1em;
 }
 
@@ -1401,8 +1238,8 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 
 .legend-swatch.gold {
-    background: var(--rule-mark);
-    box-shadow: 0 0 5px var(--rule-mark);
+    background: var(--mark);
+    box-shadow: 0 0 5px var(--mark);
 }
 /* ----- The datasheet / spec sheet ------------------------------------- */
 .spec-sheet { margin-top: 0; }
@@ -1421,15 +1258,15 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     font-feature-settings: var(--mono-feats);
 }
 .spec-sheet-rule::before {
-    /* a small terracotta tick at the left end of the rule — marks the
+    /* a small accent tick at the left end of the rule — marks the
        sheet as "checked" in the same printer's-tick language as the
        nav active state. */
     content: "✓";
-    color: var(--terracotta);
+    color: var(--accent);
     margin-right: 0.5rem;
     font-weight: 600;
 }
-.spec-rule-key { color: var(--olive); font-weight: 600; }
+.spec-rule-key { color: var(--structure); font-weight: 600; }
 .spec-rule-meta { color: var(--ink-faint); font-size: 0.64rem; font-weight: 400; }
 
 .spec-grid {
@@ -1453,13 +1290,13 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 .spec-cell:hover { background: var(--paper-inset); }
 .spec-cell::before {
-    /* a small olive tick in the upper-left of every cell — the
+    /* a small structure tick in the upper-left of every cell — the
        "checked-off" stamp, scaled down. */
     content: "·";
     position: absolute;
     top: 4px;
     left: 5px;
-    color: var(--olive);
+    color: var(--structure);
     font-family: var(--font-mono);
     font-size: 0.85em;
     opacity: 0;
@@ -1509,47 +1346,25 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     margin-bottom: 1.4rem;
     position: relative;
 }
-.portal-section-head::before {
-    /* a small terracotta tick that hangs off the top-left of every
-       section head — like a binder clip. */
-    content: "";
-    position: absolute;
-    top: -3px;
-    left: 0;
-    width: 8px;
-    height: 2px;
-    background: var(--terracotta);
-}
 
 .portal-section-mark {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--olive);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    font-feature-settings: var(--mono-feats);
+    font-size: 0.68rem;
+    font-weight: 400;
+    color: var(--ink-faint);
 }
 
 .portal-section-title {
-    font-size: 1.1rem;
-    font-weight: 700;
+    font-size: 1.2rem;
+    font-weight: 600;
     color: var(--ink);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.014em;
     margin: 0;
 }
 
 .portal-section-meta {
     margin-left: auto;
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     color: var(--ink-faint);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    opacity: 0.75;
-    font-feature-settings: var(--mono-feats);
-    padding: 2px 8px;
-    border: 1px solid var(--rule-fine);
-    background: var(--tint-warm-04);
 }
 
 .portal-grid {
@@ -1569,55 +1384,46 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 1.4rem 1.25rem 1.25rem;
+    padding: 1.5rem 1.4rem;
     background: var(--paper);
     text-decoration: none;
     color: var(--ink);
-    transition: background var(--t-base) var(--ease), border-color var(--t-base) var(--ease), transform var(--t-base) var(--ease);
-    border-left: 2px solid transparent;
-    position: relative;
+    transition: background var(--t-base) var(--ease);
     border: 1px solid transparent;
 }
 .portal-card::after {
-    /* a small terracotta arrow that appears on hover, top-right */
+    /* a small accent arrow that appears on hover, top-right */
     content: "→";
     position: absolute;
     top: 0.95rem;
     right: 1.1rem;
-    color: var(--terracotta);
+    color: var(--accent);
     font-family: var(--font-mono);
     font-size: 0.85rem;
     opacity: 0;
     transform: translateX(-3px);
     transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
 }
-.portal-card:hover {
-    background: var(--paper-2);
-    border-left-color: var(--terracotta);
-    border-color: var(--rule);
-    transform: translateY(-2px);
-}
+.portal-card:hover { background: var(--paper-2); border-color: var(--rule); }
 .portal-card:hover::after { opacity: 1; transform: translateX(0); }
-.portal-card:focus-visible { outline: 1px solid var(--terracotta); outline-offset: -1px; }
+.portal-card:focus-visible { outline: none; box-shadow: var(--focus-ring); outline-offset: -1px; }
 
 .card-heading {
-    font-family: var(--font-mono);
-    font-size: 0.94rem;
+    font-family: var(--font-prose);
+    font-size: 1.05rem;
     font-weight: 600;
     color: var(--ink);
-    margin: 0 0 5px 0;
-    letter-spacing: -0.01em;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.014em;
     line-height: 1.3;
     transition: color var(--t-fast) var(--ease);
-    padding-right: 1.1rem; /* room for the hover arrow */
 }
-.portal-card:hover .card-heading { color: var(--terracotta); }
+.portal-card:hover .card-heading { color: var(--accent); }
 
 .card-desc {
-    font-family: var(--font-prose);
-    font-size: 0.86rem;
-    color: var(--ink-faint);
-    line-height: 1.5;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    line-height: 1.55;
     margin: 0;
 }
 
@@ -1627,62 +1433,43 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
    9. PROSE — markdown body
    ===================================================================== */
 
-.markdown-body { font-size: 1.02rem; }
+.markdown-body { font-size: 1.06rem; }
 .markdown-body > *:first-child { margin-top: 0; }
 
 .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
-    font-family: var(--font-mono);
+    font-family: var(--font-prose);
     color: var(--ink);
     font-weight: 600;
-    line-height: 1.22;
-    margin-top: 2.3rem;
-    margin-bottom: 0.95rem;
+    line-height: 1.24;
+    margin-top: 2.6rem;
+    margin-bottom: 0.7rem;
     scroll-margin-top: 80px;
-    position: relative;
+    text-wrap: balance;
 }
 
 .markdown-body h2::before,
 .markdown-body h3::before,
 .markdown-body h4::before {
-    color: var(--olive);
+    color: var(--structure);
     font-weight: 400;
     margin-right: 0.45rem;
     font-feature-settings: var(--mono-feats);
     display: inline-block;
 }
-.markdown-body h2::before { content: "\00a7"; font-size: 0.82em; opacity: 0.8; }
-.markdown-body h3::before { content: "\00a7\00a7"; font-size: 0.72em; opacity: 0.65; }
-.markdown-body h4::before { content: "\00a7\00a7\00a7"; font-size: 0.65em; opacity: 0.55; }
 .markdown-body h2 {
-    font-size: 1.34rem;
-    padding-bottom: 0.5rem;
+    font-size: 1.5rem;
+    letter-spacing: -0.015em;
+    padding-bottom: 0.45rem;
     border-bottom: 1px solid var(--rule);
-    letter-spacing: -0.012em;
-    margin-top: 2.5rem;
-}
-.markdown-body h2::after {
-    /* a small terracotta tick on the bottom rule of h2 */
-    content: "";
-    position: absolute;
-    left: 0;
-    bottom: -1px;
-    width: 22px;
-    height: 2px;
-    background: var(--terracotta);
+    margin-top: 3rem;
 }
 .markdown-body h3 {
-    font-size: 1.1rem;
-    color: var(--ink);
-    letter-spacing: -0.006em;
+    font-size: 1.16rem;
+    letter-spacing: -0.008em;
 }
 .markdown-body h4 {
-    font-size: 0.9rem;
-    color: var(--ink-soft);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding-bottom: 0.3rem;
-    border-bottom: 1px dashed var(--rule);
-    font-feature-settings: var(--mono-feats);
+    font-size: 1rem;
+    color: var(--ink);
 }
 
 .heading-anchor .anchor-link {
@@ -1699,8 +1486,8 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 }
 .heading-anchor:hover .anchor-link { opacity: 1; }
 .heading-anchor .anchor-link:hover {
-    color: var(--terracotta);
-    border-color: var(--terracotta);
+    color: var(--accent);
+    border-color: var(--accent);
 }
 
 .markdown-body p {
@@ -1720,7 +1507,7 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
     padding-left: 0.15rem;
 }
 .markdown-body li::marker {
-    color: var(--rule-mark);
+    color: var(--mark);
     font-family: var(--font-mono);
     font-feature-settings: var(--mono-feats);
 }
@@ -1732,77 +1519,44 @@ a:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
 .inline-code {
     background: var(--code-paper);
     border: 1px solid var(--code-rule);
-    padding: 1px 6px;
-    font-size: 0.85em;
+    padding: 1px 5px;
+    font-size: 0.86em;
     color: var(--ink);
-    border-radius: 0;
+    border-radius: 2px;
     font-family: var(--font-mono);
     font-feature-settings: var(--mono-feats);
-    box-shadow: inset 0 -1px 0 var(--tint-warm-08);
     transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
-.markdown-body .inline-code:hover { background: var(--paper-inset); border-color: var(--rule-strong); }
+.markdown-body .inline-code:hover { border-color: var(--rule-strong); }
 
 .doc-link {
-    color: var(--rule-mark);
+    color: var(--mark);
     text-decoration: underline;
     text-underline-offset: 3px;
     text-decoration-thickness: 1px;
     text-decoration-color: var(--rule);
     transition: color var(--t-fast) var(--ease), text-decoration-color var(--t-fast) var(--ease);
 }
-.doc-link:hover { color: var(--terracotta); text-decoration-color: var(--terracotta); }
+.doc-link:hover { color: var(--accent); text-decoration-color: var(--accent); }
 
 .doc-hr {
     border: none;
     border-top: 1px solid var(--rule);
     margin: 2.5rem auto;
     width: 30%;
-    position: relative;
-}
-.doc-hr::before, .doc-hr::after {
-    content: "✕";
-    position: absolute;
-    top: -0.6em;
-    color: var(--ink-faint);
-    font-size: 0.7em;
-    font-family: var(--font-mono);
-    background: var(--paper);
-    padding: 0 0.4rem;
 }
 .doc-hr::before { left: 0; }
 .doc-hr::after { right: 0; }
 
 blockquote {
-    border-left: 2px solid var(--rule-strong);
-    padding: 0.6rem 1rem 0.4rem 1.1rem;
-    margin: 1.5rem 0;
+    border-left: 1px solid var(--rule-strong);
+    padding: 0.2rem 0 0.2rem 1.15rem;
+    margin: 1.6rem 0;
     color: var(--ink-soft);
     font-style: italic;
-    font-family: var(--font-prose);
-    background: var(--paper-2);
-    position: relative;
-    font-size: 1rem;
-    line-height: 1.6;
-}
-blockquote::before {
-    /* a single, oversized § glyph anchoring the left margin of every
-       pull-quote — keeps the blockquote in the same editorial family
-       as the heading §2 / §3 prefixes. */
-    content: "§";
-    position: absolute;
-    top: 0.4rem;
-    left: -0.55rem;
-    width: 1rem;
-    height: 1rem;
-    background: var(--paper);
-    color: var(--olive);
-    font-family: var(--font-mono);
-    font-size: 0.95rem;
-    font-weight: 600;
-    text-align: center;
-    line-height: 1rem;
-    font-style: normal;
+    background: transparent;
+    font-size: 1.02rem;
+    line-height: 1.62;
 }
 blockquote p:last-child { margin-bottom: 0; }
 
@@ -1814,7 +1568,7 @@ blockquote p:last-child { margin-bottom: 0; }
     margin: 1.5rem 0;
     overflow: hidden;
     position: relative;
-    box-shadow: inset 0 0 0 1px var(--tint-warm-04);
+    box-shadow: inset 0 0 0 1px var(--tint-ink-05);
 }
 .code-header {
     display: flex;
@@ -1825,67 +1579,43 @@ blockquote p:last-child { margin-bottom: 0; }
     border-bottom: 1px solid var(--code-rule);
     font-size: 0.7rem;
     color: var(--ink-faint);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    font-feature-settings: var(--mono-feats);
     position: relative;
 }
-.code-header::before {
-    /* three small "traffic lights" on the left of the code header, drawn
-       with pseudo-elements so we don't ship three span tags per block. */
-    content: "";
-    display: inline-block;
-    width: 8px; height: 8px;
-    background: var(--terracotta);
-    margin-right: 0.55rem;
-    box-shadow:
-        12px 0 0 var(--olive),
-        24px 0 0 var(--rule-strong);
-    vertical-align: middle;
-    opacity: 0.85;
-}
 .code-lang {
-    font-weight: 600;
-    color: var(--rule-mark);
-    background: var(--tint-warm-08);
-    border: 1px solid var(--code-rule);
-    padding: 1px 7px;
-    margin-left: 0.4rem;
-    font-size: 0.66rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 0.68rem;
 }
 .copy-btn {
     background: transparent;
     border: 1px solid var(--code-rule);
-    color: var(--ink-faint);
-    padding: 2px 9px;
-    border-radius: 0;
+    color: var(--ink-soft);
+    padding: 3px 10px;
+    border-radius: 2px;
     cursor: pointer;
-    font-size: 0.66rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    font-family: var(--font-mono);
-    font-weight: 500;
-    font-feature-settings: var(--mono-feats);
+    font-size: 0.72rem;
+    font-family: var(--font-prose);
+    font-weight: 400;
     transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
-.copy-btn:hover, .expand-btn:hover { border-color: var(--rule-mark); color: var(--rule-mark); background: var(--tint-warm-04); }
-.copy-btn.copied { border-color: var(--terracotta); color: var(--terracotta); background: var(--tint-terra-04); }
+.copy-btn:hover, .expand-btn:hover { border-color: var(--accent); color: var(--ink); background: var(--tint-ink-05); }
+.copy-btn.copied { border-color: var(--accent); color: var(--accent); background: var(--tint-accent-06); }
 
 /* Long-block collapse: a faded cutoff with an expand affordance. */
 .code-actions { display: inline-flex; align-items: center; gap: 6px; }
 .expand-btn {
     background: transparent;
     border: 1px solid var(--code-rule);
-    color: var(--ink-faint);
-    padding: 2px 9px;
-    border-radius: 0;
+    color: var(--ink-soft);
+    padding: 3px 10px;
+    border-radius: 2px;
     cursor: pointer;
-    font-size: 0.66rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    font-family: var(--font-mono);
-    font-weight: 500;
-    font-feature-settings: var(--mono-feats);
+    font-size: 0.72rem;
+    font-family: var(--font-prose);
+    font-weight: 400;
     transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
 .code-wrapper.collapsed pre {
@@ -1919,28 +1649,12 @@ blockquote p:last-child { margin-bottom: 0; }
 /* KaTeX display blocks */
 .math-block {
     overflow-x: auto;
-    margin: 1.5rem 0;
-    padding: 1.2rem 1rem 1.1rem;
+    margin: 1.6rem 0;
+    padding: 1.3rem 1rem 1.2rem;
     background: var(--paper-2);
     border: 1px solid var(--rule);
-    border-left: 2px solid var(--olive);
-    border-radius: 0;
     text-align: center;
     font-family: var(--font-prose);
-    position: relative;
-}
-.math-block::before {
-    /* a small olive tick on the right of every math block — a marginal
-       signpost, in the same family as the § on the blockquote. */
-    content: "ƒ";
-    position: absolute;
-    top: 0.3rem;
-    right: 0.5rem;
-    color: var(--olive);
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    opacity: 0.6;
-    font-style: italic;
 }
 .math-inline { font-size: 1.02em; }
 
@@ -1955,33 +1669,30 @@ blockquote p:last-child { margin-bottom: 0; }
 .doc-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.86rem;
-    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-family: var(--font-prose);
+    font-variant-numeric: tabular-nums;
     text-align: left;
     background: var(--paper);
-    font-feature-settings: var(--mono-feats);
 }
-.doc-table thead { border-bottom: 2px solid var(--rule-strong); }
+.doc-table thead { border-bottom: 1px solid var(--rule-strong); }
 .doc-table th {
     background: var(--paper-2);
-    padding: 10px 14px;
+    padding: 9px 14px;
     font-weight: 600;
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-size: 0.8rem;
     border-bottom: 1px solid var(--rule);
     color: var(--ink-soft);
-    position: relative;
 }
 .doc-table th::after {
-    /* a small terracotta tick below the active/hovered column */
+    /* a small accent tick below the active/hovered column */
     content: "";
     position: absolute;
     left: 14px;
     right: 14px;
     bottom: -1px;
     height: 1px;
-    background: var(--terracotta);
+    background: var(--accent);
     opacity: 0;
     transition: opacity var(--t-fast) var(--ease);
 }
@@ -1991,28 +1702,23 @@ blockquote p:last-child { margin-bottom: 0; }
     border-bottom: 1px solid var(--rule-fine);
     color: var(--ink);
     transition: background var(--t-fast) var(--ease);
+    vertical-align: top;
 }
 .doc-table tbody tr:last-child td { border-bottom: none; }
-.doc-table tbody tr {
-    position: relative;
-    transition: background var(--t-fast) var(--ease);
-}
-.doc-table tbody tr:hover td { background: var(--tint-warm-04); }
+.doc-table tbody tr { transition: background var(--t-fast) var(--ease); }
+.doc-table tbody tr:hover td { background: var(--tint-ink-03); }
 .doc-table tbody tr:hover td:first-child {
-    box-shadow: inset 2px 0 0 var(--terracotta);
+    box-shadow: inset 2px 0 0 var(--accent);
 }
 
 /* Callouts */
 .callout {
-    padding: 0.95rem 1.2rem 0.95rem 1.3rem;
-    border-left: 2px solid;
-    border-top: 1px solid var(--rule-fine);
-    border-right: 1px solid var(--rule-fine);
-    border-bottom: 1px solid var(--rule-fine);
-    border-radius: 0;
-    margin: 1.6rem 0;
+    padding: 1rem 1.2rem;
+    border: 1px solid var(--rule);
+    border-left: 1px solid;
+    border-radius: 2px;
+    margin: 1.7rem 0;
     background: var(--paper-2);
-    position: relative;
 }
 .callout-note { background: var(--callout-note-bg); border-color: var(--callout-note-rule); }
 .callout-tip  { background: var(--callout-tip-bg);  border-color: var(--callout-tip-rule); }
@@ -2020,24 +1726,11 @@ blockquote p:last-child { margin-bottom: 0; }
 .callout-header {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
-    font-size: 0.68rem;
+    gap: 0.5rem;
+    font-size: 0.82rem;
     font-weight: 600;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    margin-bottom: 0.55rem;
+    margin-bottom: 0.45rem;
     color: var(--ink);
-    font-feature-settings: var(--mono-feats);
-    padding-bottom: 0.4rem;
-    border-bottom: 1px dashed var(--rule);
-}
-.callout-header::before {
-    /* the "stamp" — a small ▸ glyph that visually anchors the header
-       and matches the § signpost in the blockquote. */
-    content: "▸";
-    color: var(--callout-note-rule);
-    font-size: 0.95em;
-    font-weight: 600;
 }
 .callout-tip .callout-header::before { color: var(--callout-tip-rule); }
 .callout-warn .callout-header::before,
@@ -2068,21 +1761,6 @@ blockquote p:last-child { margin-bottom: 0; }
     margin-top: 4rem;
     position: relative;
 }
-.doc-footer-nav::before {
-    content: "§ END OF NOTE";
-    position: absolute;
-    top: -0.7rem;
-    left: 0;
-    background: var(--paper);
-    padding: 0 0.55rem;
-    color: var(--olive);
-    font-family: var(--font-mono);
-    font-size: 0.62rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    font-weight: 500;
-    font-feature-settings: var(--mono-feats);
-}
 
 .nav-card {
     display: flex;
@@ -2098,22 +1776,19 @@ blockquote p:last-child { margin-bottom: 0; }
     border-right: 2px solid transparent;
 }
 .nav-card:hover { background: var(--paper-2); border-color: var(--rule-strong); }
-.nav-card:focus-visible { outline: 1px solid var(--terracotta); outline-offset: -1px; }
+.nav-card:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 .nav-card.next-card { text-align: right; align-items: flex-end; }
 
 .card-label {
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     color: var(--ink-faint);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
+    font-weight: 400;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    font-feature-settings: var(--mono-feats);
 }
-.prev-card .card-label::before { content: "←"; color: var(--terracotta); font-size: 0.9em; }
-.next-card .card-label::after { content: "→"; color: var(--terracotta); font-size: 0.9em; }
+.prev-card .card-label::before { content: "←"; color: var(--accent); font-size: 0.9em; }
+.next-card .card-label::after { content: "→"; color: var(--accent); font-size: 0.9em; }
 .card-title {
     font-size: 0.92rem;
     color: var(--ink);
@@ -2121,7 +1796,7 @@ blockquote p:last-child { margin-bottom: 0; }
     letter-spacing: -0.003em;
     transition: color var(--t-fast) var(--ease);
 }
-.nav-card:hover .card-title { color: var(--terracotta); }
+.nav-card:hover .card-title { color: var(--accent); }
 
 /* =====================================================================
    10b. GPT-OSS-LITE TELEMETRY RIBBON & MECHANISM EXPLORERS
@@ -2138,12 +1813,13 @@ blockquote p:last-child { margin-bottom: 0; }
 
 .telemetry-card {
     background: var(--paper-2);
-    padding: 0.85rem 1rem;
+    padding: 1rem 1.1rem 0.9rem;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
     position: relative;
     overflow: hidden;
+    min-height: 5.5rem;
 }
 
 .telemetry-card::before {
@@ -2156,15 +1832,15 @@ blockquote p:last-child { margin-bottom: 0; }
     background: var(--rule);
 }
 
-.telemetry-card.terra::before { background: var(--terracotta); }
-.telemetry-card.olive::before { background: var(--olive); }
-.telemetry-card.gold::before { background: var(--rule-mark); }
+.telemetry-card.terra::before { background: var(--accent); }
+.telemetry-card.olive::before { background: var(--structure); }
+.telemetry-card.gold::before { background: var(--mark); }
 .telemetry-card.ink::before { background: var(--ink-soft); }
 
 .tc-badge {
-    font-size: 0.60rem;
+    font-size: 0.58rem;
     font-weight: 700;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--ink-faint);
     display: flex;
@@ -2178,74 +1854,66 @@ blockquote p:last-child { margin-bottom: 0; }
     height: 5px;
     border-radius: 50%;
     background: var(--ink-faint);
+    flex-shrink: 0;
 }
 
-.telemetry-card.terra .tc-badge-dot { background: var(--terracotta); box-shadow: 0 0 6px var(--terracotta-glow); }
-.telemetry-card.olive .tc-badge-dot { background: var(--olive); box-shadow: 0 0 6px var(--olive-tint); }
-.telemetry-card.gold .tc-badge-dot { background: var(--rule-mark); box-shadow: 0 0 6px rgba(201, 163, 92, 0.4); }
+.telemetry-card.terra .tc-badge-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+.telemetry-card.olive .tc-badge-dot { background: var(--structure); box-shadow: 0 0 6px var(--structure-tint); }
+.telemetry-card.gold .tc-badge-dot { background: var(--mark); }
 .telemetry-card.ink .tc-badge-dot { background: var(--ink-soft); }
 
 .tc-val {
-    font-size: 1.18rem;
+    font-size: 1.22rem;
     font-weight: 700;
     color: var(--ink);
     letter-spacing: -0.02em;
     display: flex;
     align-items: baseline;
-    gap: 4px;
+    gap: 5px;
     font-feature-settings: var(--mono-feats);
+    margin: 2px 0 1px;
 }
 
 .tc-val .unit {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 500;
     color: var(--ink-soft);
+    letter-spacing: 0.04em;
 }
 
 .tc-desc {
-    font-size: 0.66rem;
+    font-size: 0.64rem;
     color: var(--ink-faint);
-    line-height: 1.35;
+    line-height: 1.4;
+    margin-top: auto;
 }
 
 /* Mechanism Exploder Section */
 .mechanism-section {
-    margin: 2.2rem 0;
+    margin: 2.5rem 0 2rem;
 }
 
 .mechanism-section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid var(--rule-strong);
+    border-bottom: 1px solid var(--rule);
     padding-bottom: 0.55rem;
-    margin-bottom: 1.2rem;
-    position: relative;
-}
-.mechanism-section-head::before {
-    content: "";
-    position: absolute;
-    top: -3px;
-    left: 0;
-    width: 8px;
-    height: 2px;
-    background: var(--terracotta);
+    margin-bottom: 1.4rem;
 }
 
 .mechanism-section-title {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: var(--olive);
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    font-feature-settings: var(--mono-feats);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--ink);
 }
 
 .mechanism-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-    margin-bottom: 1.5rem;
+    gap: 16px;
+    margin-bottom: 1.8rem;
+    align-items: stretch;
 }
 
 .mechanism-card {
@@ -2256,37 +1924,37 @@ blockquote p:last-child { margin-bottom: 0; }
     flex-direction: column;
     overflow: hidden;
     position: relative;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-1);
+    transition: border-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
 }
 
 .mechanism-card-head {
-    padding: 0.65rem 0.85rem;
+    padding: 0.7rem 0.9rem;
     background: var(--paper-2);
     border-bottom: 1px solid var(--rule);
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
 }
 
 .mch-tag {
-    font-size: 0.62rem;
-    font-weight: 700;
-    color: var(--terracotta);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    font-feature-settings: var(--mono-feats);
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--accent);
 }
-.mechanism-card.card-sink .mch-tag { color: var(--olive); }
-.mechanism-card.card-moe .mch-tag { color: var(--rule-mark); }
+.mechanism-card.card-sink .mch-tag { color: var(--structure); }
+.mechanism-card.card-moe .mch-tag { color: var(--mark); }
 
 .mch-title {
-    font-size: 0.75rem;
+    font-size: 0.92rem;
     font-weight: 600;
     color: var(--ink);
+    line-height: 1.3;
 }
 
 .mechanism-card-body {
-    padding: 0.85rem;
+    padding: 0.9rem;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -2294,9 +1962,9 @@ blockquote p:last-child { margin-bottom: 0; }
 }
 
 .mch-explainer {
-    font-size: 0.72rem;
+    font-size: 0.86rem;
     color: var(--ink-soft);
-    line-height: 1.45;
+    line-height: 1.55;
     margin: 0;
 }
 
@@ -2304,78 +1972,79 @@ blockquote p:last-child { margin-bottom: 0; }
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.68rem;
+    font-size: 0.66rem;
     color: var(--ink-faint);
 }
 
 .mch-slider {
     width: 100%;
     margin: 4px 0 8px;
-    accent-color: var(--terracotta);
+    accent-color: var(--accent);
     cursor: pointer;
+    height: 4px;
 }
 
 .mch-stat-box {
     background: var(--paper-2);
     border: 1px solid var(--rule);
-    padding: 0.55rem 0.7rem;
+    padding: 0.6rem 0.75rem;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     font-family: var(--font-mono);
+    margin-top: auto;
 }
 
 .msb-row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    font-size: 0.68rem;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 0.72rem;
     color: var(--ink-soft);
     font-feature-settings: var(--mono-feats);
+    padding: 1px 0;
 }
 
 .msb-row.highlight {
-    color: var(--terracotta);
+    color: var(--accent);
     font-weight: 700;
     border-top: 1px dashed var(--rule);
-    padding-top: 3px;
-    margin-top: 2px;
+    padding-top: 4px;
+    margin-top: 3px;
 }
 
 .mch-action-btn {
-    background: var(--paper-3);
+    background: var(--paper-2);
     border: 1px solid var(--rule);
     color: var(--ink);
-    font-family: var(--font-mono);
-    font-size: 0.66rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.4rem 0.75rem;
+    font-family: var(--font-prose);
+    font-size: 0.8rem;
+    font-weight: 400;
+    padding: 0.45rem 0.75rem;
     cursor: pointer;
-    transition: all var(--t-fast) var(--ease);
+    transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
     width: 100%;
-    margin-top: auto;
     border-radius: 2px;
 }
 
 .mch-action-btn:hover {
-    background: var(--tint-terra-04);
-    border-color: var(--terracotta);
-    color: var(--terracotta);
+    background: var(--tint-accent-06);
+    border-color: var(--accent);
+    color: var(--accent);
 }
 .mechanism-card.card-sink .mch-action-btn:hover {
-    border-color: var(--olive);
-    color: var(--olive);
-    background: var(--olive-tint);
+    border-color: var(--structure);
+    color: var(--structure);
+    background: var(--structure-tint);
 }
 .mechanism-card.card-moe .mch-action-btn:hover {
-    border-color: var(--rule-mark);
-    color: var(--rule-mark);
+    border-color: var(--mark);
+    color: var(--mark);
     background: var(--callout-note-bg);
 }
 
@@ -2445,24 +2114,24 @@ blockquote p:last-child { margin-bottom: 0; }
 }
 
 .moe-mini-cell.active {
-    background: var(--tint-terra-14);
-    border-color: var(--terracotta);
-    color: var(--terracotta);
+    background: var(--tint-accent-14);
+    border-color: var(--accent);
+    color: var(--accent);
     font-weight: 700;
-    box-shadow: 0 0 6px var(--terracotta-glow);
+    box-shadow: 0 0 6px var(--accent-glow);
 }
 
 .moe-mini-cell.shared {
-    background: rgba(201, 163, 92, 0.15);
-    border-color: var(--rule-mark);
-    color: var(--rule-mark);
+    background: rgba(138, 106, 46, 0.10);
+    border-color: var(--mark);
+    color: var(--mark);
     font-weight: 700;
     grid-column: 1 / -1;
     margin-top: 2px;
 }
 
 @media (max-width: 1024px) {
-    .gptoss-telemetry-ribbon { grid-template-columns: repeat(2, 1fr); }
+    .mamba-telemetry-ribbon, .llama-telemetry-ribbon, .deepseek-telemetry-ribbon, .gptoss-telemetry-ribbon { grid-template-columns: repeat(2, 1fr); }
     .mechanism-grid { grid-template-columns: 1fr; }
 }
 
@@ -2496,7 +2165,7 @@ blockquote p:last-child { margin-bottom: 0; }
         background: var(--paper-2);
         border-right: 1px solid var(--rule);
         height: calc(100vh - 50px);
-        box-shadow: 4px 0 14px rgba(0, 0, 0, 0.5);
+        box-shadow: var(--shadow-3);
     }
     .sidebar.open { display: block; }
     .mobile-toggle { display: inline-block; }
@@ -2526,13 +2195,24 @@ blockquote p:last-child { margin-bottom: 0; }
     .spec-cell:nth-child(2n) { border-right: none; }
     .spec-cell:nth-last-child(-n+4) { border-bottom: 1px solid var(--rule); }
     .spec-cell:nth-last-child(-n+2) { border-bottom: none; }
+    .mamba-telemetry-ribbon, .llama-telemetry-ribbon, .deepseek-telemetry-ribbon, .gptoss-telemetry-ribbon { grid-template-columns: repeat(2, 1fr); }
+    .mimo-matrix-grid { grid-template-columns: repeat(8, 1fr); }
     .doc-meta .meta-item { border-right: none; padding-right: 0; }
     .portal-card::after { display: none; }
     .portal-card:hover .card-heading { color: var(--ink); }
-    .gptoss-telemetry-ribbon { grid-template-columns: repeat(2, 1fr); }
-    .mechanism-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
+    /* The brand + right-hand links together exceed a 390px viewport and push
+       the document into horizontal scroll. Let the header wrap and drop the
+       badge rather than letting either clip. */
+    .site-header {
+        flex-wrap: wrap;
+        row-gap: 0.5rem;
+        padding: 0.6rem 1rem;
+    }
+    .header-left { gap: 0.7rem; min-width: 0; }
+    .header-right { gap: 0.8rem; }
+    .brand-badge { display: none; }
     .hero-figure-header {
         flex-direction: column;
         align-items: stretch;
@@ -2577,9 +2257,6 @@ blockquote p:last-child { margin-bottom: 0; }
         padding: 0.25rem 0.2rem;
         font-size: 0.52rem;
     }
-    .gptoss-telemetry-ribbon { grid-template-columns: 1fr 1fr; }
-    .tc-val { font-size: 1rem; }
-    .mechanism-grid { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2599,7 +2276,7 @@ blockquote p:last-child { margin-bottom: 0; }
 .widget-layer-stack {
     margin: 1.5rem 0 2rem;
     border: 1px solid var(--rule);
-    border-left: 3px solid var(--rule-mark);
+    border-left: 3px solid var(--mark);
     background: var(--paper-2);
     padding: 1rem 1.2rem 1.1rem;
     font-family: var(--font-mono);
@@ -2618,13 +2295,13 @@ blockquote p:last-child { margin-bottom: 0; }
     padding-bottom: 0.55rem;
     border-bottom: 1px dashed var(--rule);
 }
-.widget-layer-stack-header .ls-tag { color: var(--terracotta); font-weight: 700; }
+.widget-layer-stack-header .ls-tag { color: var(--accent); font-weight: 700; }
 .widget-layer-stack-header .ls-title { color: var(--ink); font-weight: 600; }
 .widget-layer-stack-header .ls-meta { color: var(--ink-soft); font-size: 0.56rem; }
 pre.ascii-stack {
     margin: 0;
     padding: 0.85rem 1rem;
-    background: var(--paper-1);
+    background: var(--paper);
     border: 1px solid var(--rule);
     border-radius: 2px;
     color: var(--ink-soft);
@@ -2651,7 +2328,7 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
 .moe-playground {
     margin: 1.5rem 0 2rem;
     border: 1px solid var(--rule);
-    border-left: 3px solid var(--terracotta);
+    border-left: 3px solid var(--accent);
     background: var(--paper-2);
     padding: 1rem 1.2rem 1.1rem;
     border-radius: 2px;
@@ -2669,28 +2346,28 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
     padding-bottom: 0.55rem;
     border-bottom: 1px dashed var(--rule);
 }
-.mp-tag { color: var(--terracotta); font-weight: 700; }
+.mp-tag { color: var(--accent); font-weight: 700; }
 .mp-title { color: var(--ink); font-weight: 600; }
 .mp-meta { color: var(--ink-soft); font-size: 0.56rem; }
 .mp-canvas-wrap {
     position: relative;
     width: 100%;
     height: 240px;
-    background: radial-gradient(ellipse at center, #17130f 0%, #0e0c0a 70%, #080706 100%);
+    background: var(--paper-inset);
     overflow: hidden;
-    border-radius: 2px;
+    border: 1px solid var(--rule);
+    cursor: crosshair;
 }
 .mp-canvas { display: block; width: 100%; height: 100%; }
 .mp-overlay-hud { position: absolute; inset: 0; pointer-events: none; }
 .mp-hud-chip {
     position: absolute;
-    padding: 0.4rem 0.6rem;
-    background: rgba(18, 16, 13, 0.90);
-    border: 1px solid var(--rule-strong);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    padding: 0.45rem 0.7rem;
+    background: var(--paper);
+    border: 1px solid var(--rule);
     font-family: var(--font-mono);
     line-height: 1.35;
+    border-radius: 2px;
 }
 .mp-hud-chip.top-left { top: 8px; left: 8px; }
 .mp-hud-chip.top-right { top: 8px; right: 8px; text-align: right; }
@@ -2709,7 +2386,7 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
 .sink-toggle {
     margin: 1.5rem 0 2rem;
     border: 1px solid var(--rule);
-    border-left: 3px solid var(--olive);
+    border-left: 3px solid var(--structure);
     background: var(--paper-2);
     padding: 1rem 1.2rem 1.1rem;
     border-radius: 2px;
@@ -2727,28 +2404,36 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
     padding-bottom: 0.55rem;
     border-bottom: 1px dashed var(--rule);
 }
-.st-tag { color: var(--olive); font-weight: 700; }
+.st-tag {
+    display: block;
+    color: var(--mark);
+    font-size: 0.70rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
 .st-title { color: var(--ink); font-weight: 600; }
 .st-meta { color: var(--ink-soft); font-size: 0.56rem; }
 .st-canvas-wrap {
     position: relative;
     width: 100%;
     height: 220px;
-    background: radial-gradient(ellipse at center, #17130f 0%, #0e0c0a 70%, #080706 100%);
+    background: var(--paper-inset);
     overflow: hidden;
-    border-radius: 2px;
+    border: 1px solid var(--rule);
+    cursor: crosshair;
 }
 .st-canvas { display: block; width: 100%; height: 100%; }
 .st-overlay-hud { position: absolute; inset: 0; pointer-events: none; }
 .st-hud-chip {
     position: absolute;
-    padding: 0.4rem 0.6rem;
-    background: rgba(18, 16, 13, 0.90);
-    border: 1px solid var(--rule-strong);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    padding: 0.45rem 0.7rem;
+    background: var(--paper);
+    border: 1px solid var(--rule);
     font-family: var(--font-mono);
     line-height: 1.35;
+    border-radius: 2px;
 }
 .st-hud-chip.top-left { top: 8px; left: 8px; }
 .st-hud-chip.top-right { top: 8px; right: 8px; text-align: right; }
@@ -2775,7 +2460,7 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
     padding: 0.6rem 1rem;
     background: var(--paper-3);
     color: var(--ink);
-    border: 1px solid var(--terracotta);
+    border: 1px solid var(--accent);
     border-left: none;
     border-top: none;
     font-family: var(--font-mono);
@@ -2815,7 +2500,7 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
 }
 .doc-footer-note code {
     color: var(--ink-soft);
-    background: var(--tint-warm-04);
+    background: var(--tint-ink-03);
     padding: 0.1em 0.35em;
     border: 1px solid var(--rule-fine);
     font-size: 0.94em;
@@ -2825,82 +2510,44 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
 /* Anchor jump: reserve the sticky header, then flash the landed heading so a
    TOC click is visibly acknowledged. */
 :target {
-    background: var(--tint-terra-04);
+    background: var(--tint-accent-06);
 }
 .markdown-body :target {
     animation: target-flash 1.6s var(--ease) 1;
 }
 @keyframes target-flash {
-    0%, 30% { background: var(--tint-terra-14); }
+    0%, 30% { background: var(--tint-accent-14); }
     100%    { background: transparent; }
 }
 
 
 /* ============================================================
-   Syntax highlighting in the house palette.
-   Highlight.js ships github-dark (cool blues) which fights the warm
-   espresso/terracotta system. These tokens re-map every class it
-   emits onto existing variables, so code reads as part of the page.
+   Syntax highlighting sits on the sunk code surface. The page loads
+   highlight.js `github.min.css`; this keeps that theme's ink readable
+   against --code-paper.
    ============================================================ */
 .code-wrapper .hljs { background: transparent; color: var(--ink); }
-.hljs-comment,
-.hljs-quote { color: var(--ink-faint); font-style: italic; }
-.hljs-keyword,
-.hljs-selector-tag,
-.hljs-literal,
-.hljs-section,
-.hljs-doctag,
-.hljs-name { color: var(--terracotta); font-weight: 600; }
-.hljs-string,
-.hljs-regexp,
-.hljs-addition,
-.hljs-attribute,
-.hljs-meta .hljs-string { color: var(--olive); }
-.hljs-number,
-.hljs-symbol,
-.hljs-bullet,
-.hljs-link,
-.hljs-selector-attr,
-.hljs-selector-pseudo,
-.hljs-template-variable,
-.hljs-variable { color: var(--rule-mark); }
-.hljs-title,
-.hljs-title.class_,
-.hljs-title.function_,
-.hljs-built_in,
-.hljs-type,
-.hljs-class .hljs-title { color: var(--ink); font-weight: 600; }
-.hljs-attr,
-.hljs-property,
-.hljs-params { color: var(--ink-soft); }
-.hljs-meta,
-.hljs-meta .hljs-keyword,
-.hljs-subst { color: var(--ink-soft); }
-.hljs-deletion { color: #e8606e; }
-.hljs-emphasis { font-style: italic; }
-.hljs-strong { font-weight: 700; }
 
 
 /* ============================================================
-   Print. A dark espresso page prints as a solid black rectangle and
-   wastes toner; these rules hand the page to paper instead.
+   Print. The chrome that carries no meaning on paper goes; the reading
+   surface prints as white paper and blue-black ink.
    ============================================================ */
 @media print {
     :root {
         --paper: #ffffff;
         --paper-2: #ffffff;
-        --paper-3: #f6f4ef;
-        --ink: #1a1a18;
-        --ink-soft: #3a3a36;
-        --ink-faint: #6a6a63;
-        --rule: #d8d4cb;
-        --rule-strong: #b4afa3;
-        --rule-mark: #8a6d1f;
-        --rule-fine: #e6e2d9;
-        --terracotta: #a34a17;
-        --olive: #5f5a12;
-        --code-paper: #faf9f6;
-        --header-bg: #ffffff;
+        --paper-3: #f4f5f5;
+        --ink: #16191D;
+        --ink-soft: #4B5359;
+        --ink-faint: #78818A;
+        --rule: #E4E7E8;
+        --rule-strong: #D2D7D9;
+        --rule-fine: #EDEFF0;
+        --accent: #1F4A73;
+        --structure: #5C6B5F;
+        --mark: #8A6A2E;
+        --code-paper: #F3F5F5;
     }
 
     /* Chrome that carries no meaning on paper. */
@@ -2922,21 +2569,21 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
     .sidebar-search { display: none !important; }
 
     html, body {
-        background: #ffffff !important;
-        color: #1a1a18 !important;
+        background: #FBFBFA !important;
+        color: #16191D !important;
         font-size: 11pt;
     }
     .app-layout { display: block; max-width: none; }
     .main-content { padding: 0; }
     .content-container { max-width: none; }
 
-    a { color: #1a1a18; text-decoration: underline; }
+    a { color: #16191D; text-decoration: underline; }
     /* Print the target, since a reader cannot follow the link. */
     .markdown-body a[href^="http"]::after {
         content: " (" attr(href) ")";
         font-family: var(--font-mono);
         font-size: 0.8em;
-        color: #6a6a63;
+        color: #4B5359;
         word-break: break-all;
     }
     .markdown-body a[href^="#"]::after,
@@ -2949,11 +2596,11 @@ pre.ascii-stack code { font: inherit; color: inherit; background: transparent; }
     pre, code { white-space: pre-wrap; word-wrap: break-word; }
     .table-container { overflow: visible; }
 
-    .doc-footer { border-top-color: #d8d4cb; }
-    .doc-footer-note { color: #6a6a63; }
+    .doc-footer { border-top-color: var(--rule-strong); }
+    .doc-footer-note { color: var(--ink-faint); }
 
     /* Syntax colours lose meaning on paper; keep weight and spacing only. */
-    .hljs { color: #1a1a18 !important; }
+    .hljs { color: #16191D !important; }
     .hljs-keyword, .hljs-string, .hljs-number, .hljs-title,
-    .hljs-comment, .hljs-attr, .hljs-meta { color: #1a1a18 !important; }
+    .hljs-comment, .hljs-attr, .hljs-meta { color: #16191D !important; }
 }
